@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CMS Highlighter — Options</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+ 
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    h2 { font-size: 16px; margin: 20px 0 8px; }
+    h3 { font-size: 14px; margin: 16px 0 6px; color: #555; }
+ 
+    .section {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+ 
+    .row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .row label { min-width: 120px; font-weight: 500; }
+ 
+    input[type="text"], textarea, select {
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    input[type="text"] { width: 300px; }
+    textarea { width: 100%; min-height: 200px; font-family: monospace; font-size: 12px; resize: vertical; }
+ 
+    button {
+      padding: 6px 14px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { background: #f0f0f0; }
+    button.primary { background: #3498db; color: #fff; border-color: #2980b9; }
+    button.primary:hover { background: #2980b9; }
+    button.danger { background: #e74c3c; color: #fff; border-color: #c0392b; }
+    button.danger:hover { background: #c0392b; }
+ 
+    .cat-editor {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .cat-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      background: #f9f9f9;
+      border-bottom: 1px solid #eee;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .cat-header:hover { background: #f0f0f0; }
+    .cat-arrow {
+      transition: transform 0.2s;
+      font-size: 12px;
+      color: #999;
+    }
+    .cat-arrow.open { transform: rotate(90deg); }
+    .cat-header-name {
+      flex: 1;
+      font-weight: 500;
+    }
+    .cat-header-count {
+      font-size: 12px;
+      color: #999;
+    }
+    .cat-body {
+      display: none;
+      padding: 12px;
+    }
+    .cat-body.open { display: block; }
+ 
+    .word-list {
+      width: 100%;
+      min-height: 150px;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+ 
+    .add-word-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    .add-word-row input[type="text"] { flex: 1; }
+ 
+    .color-picker-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .color-picker-row input[type="color"] {
+      width: 40px;
+      height: 28px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+ 
+    .msg {
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .msg.success { display: block; background: #d5f5e3; color: #1e8449; border: 1px solid #82e0aa; }
+    .msg.error { display: block; background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
+ 
+    .ignore-section textarea { min-height: 250px; }
+ 
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+ 
+    .new-cat-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .new-cat-form input[type="text"] { width: 200px; }
+ 
+    #importFile { display: none; }
+  </style>
+</head>
+<body>
+  <h1>CMS Highlighter — Dictionary Editor</h1>
+ 
+  <div id="msg" class="msg"></div>
+ 
+  <!-- Import / Export -->
+  <div class="section">
+    <h2>Import / Export</h2>
+    <div class="toolbar">
+      <button id="btnExport">Export Dictionary (JSON)</button>
+      <button id="btnImportHT">Import HighlightThis Backup</button>
+      <button id="btnImportJSON">Import CMS Highlighter JSON</button>
+      <input type="file" id="importFile" accept=".json,*">
+    </div>
+    <p style="font-size: 12px; color: #777;">
+      Import your existing HighlightThis backup file, or a previously exported CMS Highlighter dictionary.
+    </p>
+  </div>
+ 
+  <!-- Ignore List -->
+  <div class="section ignore-section">
+    <h2>Ignore List <span id="ignoreCount" style="font-size:12px; color:#999;"></span></h2>
+    <p style="font-size: 12px; color: #777; margin-bottom: 8px;">
+      Words here block highlights from all categories. One per line. Wildcards (* ?) work.
+    </p>
+    <textarea id="ignoreListArea" class="word-list" spellcheck="false"></textarea>
+    <div style="margin-top: 8px;">
+      <button class="primary" id="btnSaveIgnore">Save Ignore List</button>
+    </div>
+  </div>
+ 
+  <!-- Categories -->
+  <div class="section">
+    <h2>Categories</h2>
+ 
+    <div class="new-cat-form">
+      <input type="text" id="newCatName" placeholder="New category name">
+      <input type="color" id="newCatColor" value="#FF9900">
+      <button class="primary" id="btnAddCat">Add Category</button>
+    </div>
+ 
+    <div id="catEditors"></div>
+  </div>
+ 
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #333;
+      background: #f9f9f9;
+    }
+
+    .header {
+      padding: 12px;
+      background: #2c3e50;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 15px; font-weight: 650; }
+
+    .toggle-switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #ccc;
+      border-radius: 22px;
+      transition: 0.2s;
+    }
+    .toggle-slider:before {
+      content: "";
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: #27ae60; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+
+    .stats {
+      padding: 8px 12px;
+      background: #ecf0f1;
+      font-size: 12px;
+      color: #7f8c8d;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .search-bar {
+      padding: 8px 12px;
+      background: #f3f6f8;
+      border-bottom: 1px solid #ddd;
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 9px 10px;
+      font-size: 14px;
+      border: 1px solid #cfd8dc;
+      border-radius: 6px;
+      background: #fff;
+      color: #333;
+    }
+
+    .cat-list {
+      max-height: 420px;
+      overflow-y: auto;
+      background: #fff;
+    }
+
+    .cat-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+      gap: 10px;
+      cursor: grab;
+      background: #fff;
+    }
+    .cat-item:hover { background: #f0f0f0; }
+    .cat-item.dragging { opacity: 0.5; }
+    .cat-item.drag-over { border-top: 2px solid #3498db; }
+
+    /* Bigger, clearer category color indicator */
+    .cat-accent {
+      width: 18px;
+      height: 30px;
+      border-radius: 5px;
+      flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,0.25);
+    }
+
+    .cat-grip {
+      color: #bbb;
+      font-size: 15px;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .cat-color-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .cat-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #2d3436;
+    }
+
+    .cat-count {
+      font-size: 11px;
+      color: #999;
+      flex-shrink: 0;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    .cat-edit-btn {
+      flex-shrink: 0;
+      padding: 5px 10px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      color: #34495e;
+    }
+    .cat-edit-btn:hover { background: #ecf0f1; }
+
+    .cat-toggle { flex-shrink: 0; }
+
+    /* Inline editor */
+    .cat-editor {
+      border-bottom: 1px solid #eee;
+      padding: 10px 12px 12px 12px;
+      background: #fafafa;
+      display: none;
+    }
+    .cat-editor.open { display: block; }
+
+    .cat-editor .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .cat-editor input[type="text"] {
+      flex: 1;
+      padding: 7px 9px;
+      border: 1px solid #cfd8dc;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      color: #333;
+    }
+
+    .cat-editor button {
+      padding: 7px 10px;
+      border: 1px solid #bdc3c7;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .cat-editor button:hover { background: #ecf0f1; }
+
+    .flags {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      color: #566;
+      user-select: none;
+    }
+    .flags label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+
+    .word-list {
+      margin-top: 10px;
+      border: 1px solid #e0e0e0;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .word-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+    .word-row:last-child { border-bottom: none; }
+
+    .word-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #2d3436;
+    }
+
+    .word-remove {
+      flex-shrink: 0;
+      border: 1px solid #d0d7de;
+      background: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 5px 9px;
+      font-size: 12px;
+      color: #8e2b2b;
+    }
+    .word-remove:hover { background: #fbeaea; }
+
+    /* Ignore panel (bottom) */
+    .ignore-panel {
+      padding: 10px 12px;
+      border-top: 1px solid #ddd;
+      background: #f7f9fa;
+    }
+
+    .ignore-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .ignore-panel input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid #cfd8dc;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: #fff;
+      color: #333;
+    }
+
+    .ignore-list {
+      max-height: 140px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .ignore-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      font-size: 13px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .ignore-row:last-child { border-bottom: none; }
+
+    .ignore-row span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ignore-row button {
+      font-size: 12px;
+      padding: 5px 9px;
+      border: 1px solid #d0d7de;
+      background: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #8e2b2b;
+    }
+    .ignore-row button:hover { background: #fbeaea; }
+
+    .ignore-add {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .ignore-add input[type="text"] {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    .ignore-add button {
+      padding: 8px 10px;
+      border: 1px solid #bdc3c7;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .ignore-add button:hover { background: #ecf0f1; }
+
+    .footer {
+      padding: 8px 12px;
+      background: #ecf0f1;
+      border-top: 1px solid #ddd;
+      display: flex;
+      gap: 8px;
+    }
+    .footer button {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #bdc3c7;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .footer button:hover { background: #ecf0f1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>CMS Highlighter</h1>
+    <label class="toggle-switch">
+      <input type="checkbox" id="masterToggle" checked>
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="stats" id="stats">Loading...</div>
+
+  <div class="search-bar">
+    <input type="text" id="popupSearch" placeholder="Search categories and words">
+  </div>
+
+  <div class="cat-list" id="catList"></div>
+
+  <div class="ignore-panel">
+    <div class="ignore-title">Ignore List (global)</div>
+
+    <input type="text" id="ignoreSearch" placeholder="Search ignore list">
+    <div id="ignoreList" class="ignore-list"></div>
+
+    <div class="ignore-add">
+      <input type="text" id="ignoreAddInput" placeholder="Add word or pattern">
+      <button id="ignoreAddBtn">Add</button>
+    </div>
+
+    <div class="flags">
+      <label><input type="checkbox" id="ignoreExact"> Exact</label>
+      <label><input type="checkbox" id="ignoreCS"> CS</label>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button id="btnRefresh" title="Re-highlight the current page">Refresh</button>
+    <button id="btnOptions" title="Open full dictionary editor">Options</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+/* =============================================================================
+   CMS Highlighter — Highlight Styles
+   ============================================================================= */
+ 
+/* Every highlighted span gets this class. The background-color and color
+   are set inline per-match (from the category's color config). */
+.cms-hl {
+  padding: 0 1px;
+  margin: 0 1px;
+  border-radius: 3px;
+  /* Slight outline so highlights are visible even on colored backgrounds */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 0.5px 0 rgba(0, 0, 0, 0.25);
+}
+ 
+/* Tooltip showing category name on hover */
+/* The parent span needs relative positioning for the tooltip */
+.cms-hl[data-hl-cat] {
+  position: relative;
+  cursor: default;
+}
+
