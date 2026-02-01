@@ -1,0 +1,3 @@
+# editor / manual backups
+*.bak.*
+*_bak/
