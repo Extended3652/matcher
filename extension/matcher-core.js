@@ -71,6 +71,15 @@
 
   // ---------------------------------------------------------------------------
   // STEP 2: Convert a glob pattern into a regex fragment string.
+  //
+  // Edge wildcards (* at start/end) use [^\s\p{P}]* — they stop at both
+  // whitespace AND punctuation, giving precise token-level matching.
+  // E.g. *escent matches "fluorescent" (not "non-fluorescent" as a unit).
+  //
+  // Middle wildcards (* not at edges) in patterns WITHOUT literal spaces
+  // use [^\s]*? — they cross punctuation (hyphens, apostrophes) so that
+  // patterns like fast*drying match "fast-drying" and sh*t matches "sh't".
+  // Patterns WITH literal spaces always use [\s\S]*? to span across words.
   // ---------------------------------------------------------------------------
   function globToRegexFragment(pattern) {
     let result = "";
@@ -84,13 +93,16 @@
 
       if (ch === "*") {
         if (isFirst || isLast) {
-          // IMPORTANT: wildcard should carry until next whitespace (not stop at punctuation)
+          // Edge wildcard: stop at whitespace AND punctuation (token boundary)
           result += "[^\\s\\p{P}]*";
         } else {
-          result += hasLiteralSpace ? "[\\s\\S]*?" : "[^\\s\\p{P}]*?";
+          // Middle wildcard: with spaces spans anything; without spaces
+          // spans within a whitespace-delimited token (crosses punctuation)
+          result += hasLiteralSpace ? "[\\s\\S]*?" : "[^\\s]*?";
         }
       } else if (ch === "?") {
-        result += hasLiteralSpace ? "[\\s\\S]" : "[^\\s\\p{P}]";
+        // Same logic: edge-like single char vs middle single char
+        result += hasLiteralSpace ? "[\\s\\S]" : "[^\\s]";
       } else {
         result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       }
