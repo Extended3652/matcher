@@ -2,3 +2,4 @@
 *.bak.*
 *_bak/
 extension/bench.js
+extension/bench.js
