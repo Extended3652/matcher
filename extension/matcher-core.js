@@ -119,42 +119,48 @@
 
   // ---------------------------------------------------------------------------
   // STEP 4: Compile one category into RegExp(s).
-  // Words are split into case-sensitive and case-insensitive groups,
-  // each getting their own regex, so flags can differ.
+  // Words are split into four buckets:
+  //   case-sensitive / insensitive  ×  simple / wildcard
   //
-  // NOTE: We wrap each fragment in a capturing group so we can recover
-  // which entry matched (needed for wildcard precedence rules).
+  // Simple (non-wildcard) patterns use NON-CAPTURING groups — no need to
+  // scan capture groups to identify the match because isWildcard is always
+  // false for these.  Wildcard patterns also use non-capturing groups
+  // because isWildcard is always true for them.  This eliminates the O(N)
+  // capture-group scan that was the main per-match bottleneck.
   // ---------------------------------------------------------------------------
   function compileCategory(category) {
-    const groups = { sensitive: [], insensitive: [] };
+    const buckets = {
+      sensitive_simple: [],
+      sensitive_wild: [],
+      insensitive_simple: [],
+      insensitive_wild: [],
+    };
 
     for (const rawWord of category.words) {
       const parsed = parseWordEntry(rawWord);
       if (!parsed) continue;
 
       const fragment = compileWordToRegexFragment(parsed);
-      const bucket = parsed.caseSensitive ? "sensitive" : "insensitive";
-      groups[bucket].push({ fragment, parsed });
+      const cs = parsed.caseSensitive ? "sensitive" : "insensitive";
+      const wc = parsed.hasWildcard ? "wild" : "simple";
+      buckets[`${cs}_${wc}`].push({ fragment, parsed });
     }
 
     const regexes = [];
 
-    for (const [key, items] of Object.entries(groups)) {
+    for (const [key, items] of Object.entries(buckets)) {
       if (items.length === 0) continue;
 
       // Longer patterns first for longest-match preference at same start
       items.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
 
-      // Wrap each in a CAPTURE group so we can identify which matched
-      const combined = items.map(f => "(" + f.fragment + ")").join("|");
-      const metas = items.map(f => ({
-        hasWildcard: !!f.parsed.hasWildcard,
-        patternLen: f.parsed.pattern.length
-      }));
+      // Non-capturing groups — identification comes from which bucket matched
+      const combined = items.map(f => "(?:" + f.fragment + ")").join("|");
+      const flags = key.startsWith("sensitive") ? "gu" : "giu";
+      const isWildcard = key.endsWith("_wild");
 
-      const flags = key === "sensitive" ? "gu" : "giu";
       try {
-        regexes.push({ re: new RegExp(combined, flags), metas });
+        regexes.push({ re: new RegExp(combined, flags), isWildcard });
       } catch (e) {
         console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
       }
@@ -226,7 +232,7 @@
   function findMatches(text, compiled) {
     const { ignoreCompiled, compiledCategories } = compiled;
 
-    // --- Collect Ignore List match ranges ---
+    // --- Collect Ignore List match ranges (sorted by start for binary search) ---
     const ignoreRanges = [];
     if (ignoreCompiled) {
       for (const rx of ignoreCompiled.regexes) {
@@ -238,6 +244,7 @@
           ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
         }
       }
+      ignoreRanges.sort((a, b) => a.start - b.start);
     }
 
     // --- Collect all category matches ---
@@ -247,21 +254,10 @@
 
       for (const rx of cat.regexes) {
         const re = rx.re;
-        const metas = rx.metas;
-
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
           if (m[0].length === 0) { re.lastIndex++; continue; }
-
-          // Identify which capture group matched
-          let meta = null;
-          for (let gi = 1; gi < m.length; gi++) {
-            if (m[gi] !== undefined) {
-              meta = metas[gi - 1];
-              break;
-            }
-          }
 
           allMatches.push({
             start:    m.index,
@@ -270,17 +266,34 @@
             color:    cat.color,
             fColor:   cat.fColor,
             priority: i,
-            isWildcard: meta ? !!meta.hasWildcard : false,
+            isWildcard: rx.isWildcard,
           });
         }
       }
     }
 
     // --- Remove matches that overlap with any Ignore range ---
+    // Uses binary search on sorted ignoreRanges: O(matches × log(ignoreRanges))
     let filtered = allMatches;
     if (ignoreRanges.length > 0) {
       filtered = allMatches.filter(match => {
-        return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
+        // Binary search for first ignore range whose end > match.start
+        let lo = 0, hi = ignoreRanges.length - 1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (ignoreRanges[mid].end <= match.start) {
+            lo = mid + 1;
+          } else {
+            hi = mid - 1;
+          }
+        }
+        // Check from lo onward — any range starting before match.end overlaps
+        for (let k = lo; k < ignoreRanges.length; k++) {
+          const ig = ignoreRanges[k];
+          if (ig.start >= match.end) break;  // no more possible overlaps
+          if (match.start < ig.end && match.end > ig.start) return false;
+        }
+        return true;
       });
     }
 

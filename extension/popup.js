@@ -482,37 +482,34 @@
           e.preventDefault();
           e.stopPropagation();
 
-          const excludeCatId =
-            (catIndex == null ? null : currentDict.categories[catIndex]?.id) || null;
+          // Capture source by OBJECT REFERENCE before the async dialog —
+          // catIndex can go stale if categories are reordered via drag.
+          const sourceCat = (scope === "ignore")
+            ? null
+            : (catIndex != null ? currentDict.categories[catIndex] : null);
+          const excludeCatId = sourceCat?.id || null;
 
           showMoveToCategoryDialog(excludeCatId).then((destCat) => {
             if (!destCat) return;
 
             if (!destCat.words) destCat.words = [];
 
-            // Avoid duplicates (by raw string)
-            if (!destCat.words.includes(raw)) {
-              // Insert alphabetically into destination
-              insertAlphabetically(destCat.words, raw);
-            }
-
-            // Remove from source BY VALUE, not by index.
-            // We can't use onRemove() here — it splices by the entryIndex
-            // captured at render time, but insertAlphabetically may have
-            // already shifted indices if dest and source are the same array.
-            // onRemove also does its own save/render/setOpenEditor which
-            // would fight with ours below. So we do it directly.
+            // Remove from source FIRST (before insert) to handle the
+            // edge case where source and dest could be the same array.
             if (scope === "ignore") {
               const srcIdx = currentDict.ignoreList.indexOf(raw);
               if (srcIdx !== -1) currentDict.ignoreList.splice(srcIdx, 1);
-            } else {
-              const srcWords = currentDict.categories[catIndex].words;
-              const srcIdx = srcWords.indexOf(raw);
-              if (srcIdx !== -1) srcWords.splice(srcIdx, 1);
+            } else if (sourceCat && sourceCat.words) {
+              const srcIdx = sourceCat.words.indexOf(raw);
+              if (srcIdx !== -1) sourceCat.words.splice(srcIdx, 1);
+            }
+
+            // Insert alphabetically into destination (skip if already there)
+            if (!destCat.words.includes(raw)) {
+              insertAlphabetically(destCat.words, raw);
             }
 
             // Find the destination's current index so we can open its editor.
-            // Editor keys are "cat:INDEX", not the category's uuid.
             const destIndex = currentDict.categories.indexOf(destCat);
 
             // One save, one render, one editor open.
@@ -674,12 +671,13 @@
               // Avoid duplicate raw strings
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                // do nothing, keep original
                 renderAll();
                 setOpenEditor("ignore");
                 return;
               }
-              currentDict.ignoreList[item2.entryIndex] = nextRaw;
+              // Remove old entry and re-insert to maintain alphabetical order
+              currentDict.ignoreList.splice(item2.entryIndex, 1);
+              insertAlphabetically(currentDict.ignoreList, nextRaw);
               saveDictionaryAndRefresh();
               renderAll();
               setOpenEditor("ignore");
@@ -922,7 +920,9 @@
                 setOpenEditor(key);
                 return;
               }
-              cat.words[item2.entryIndex] = nextRaw;
+              // Remove old entry and re-insert to maintain alphabetical order
+              cat.words.splice(item2.entryIndex, 1);
+              insertAlphabetically(cat.words, nextRaw);
               saveDictionaryAndRefresh();
               renderAll();
               setOpenEditor(key);
