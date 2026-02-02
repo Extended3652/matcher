@@ -11,6 +11,7 @@
 //   - Click category row to open/close editor (no Edit buttons)
 //   - Inline edit for entries: click to edit, Enter save, Esc cancel
 //   - Shift+click to remove (no Remove buttons)
+//   - Alt+click to move entry to another category (inserts alphabetically)
 // =============================================================================
 
 (function() {
@@ -30,6 +31,22 @@
   // Track which entry is being edited
   // shape: { scope: "ignore" | "cat", catIndex?: number, entryIndex: number }
   let editing = null;
+
+  // ---------------------------------------------------------------------------
+  // Alphabetical insert helper
+  // ---------------------------------------------------------------------------
+  // Strips CS: and // prefixes so that "CS://HP" sorts by "hp", not the prefix.
+  function sortKey(raw) {
+    return String(raw || "").replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
+  }
+
+  // Inserts word into arr at the correct alphabetical position (by bare word).
+  function insertAlphabetically(arr, word) {
+    const key = sortKey(word);
+    let i = 0;
+    while (i < arr.length && sortKey(arr[i]) < key) i++;
+    arr.splice(i, 0, word);
+  }
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -475,15 +492,35 @@
 
             // Avoid duplicates (by raw string)
             if (!destCat.words.includes(raw)) {
-              destCat.words.push(raw);
+              // Insert alphabetically into destination
+              insertAlphabetically(destCat.words, raw);
             }
 
-            // Remove from source
-            onRemove();
+            // Remove from source BY VALUE, not by index.
+            // We can't use onRemove() here — it splices by the entryIndex
+            // captured at render time, but insertAlphabetically may have
+            // already shifted indices if dest and source are the same array.
+            // onRemove also does its own save/render/setOpenEditor which
+            // would fight with ours below. So we do it directly.
+            if (scope === "ignore") {
+              const srcIdx = currentDict.ignoreList.indexOf(raw);
+              if (srcIdx !== -1) currentDict.ignoreList.splice(srcIdx, 1);
+            } else {
+              const srcWords = currentDict.categories[catIndex].words;
+              const srcIdx = srcWords.indexOf(raw);
+              if (srcIdx !== -1) srcWords.splice(srcIdx, 1);
+            }
 
+            // Find the destination's current index so we can open its editor.
+            // Editor keys are "cat:INDEX", not the category's uuid.
+            const destIndex = currentDict.categories.indexOf(destCat);
+
+            // One save, one render, one editor open.
             saveDictionaryAndRefresh();
             renderAll();
-            setOpenEditor(destCat.id);
+            if (destIndex !== -1) {
+              setOpenEditor(`cat:${destIndex}`);
+            }
           });
 
           return;
@@ -673,7 +710,8 @@
           return;
         }
 
-        currentDict.ignoreList.push(raw);
+        // Insert alphabetically instead of appending
+        insertAlphabetically(currentDict.ignoreList, raw);
         addInput.value = "";
         saveDictionaryAndRefresh();
 
@@ -915,7 +953,8 @@
           return;
         }
 
-        cat.words.push(raw);
+        // Insert alphabetically instead of appending
+        insertAlphabetically(cat.words, raw);
         addInput.value = "";
         saveDictionaryAndRefresh();
 

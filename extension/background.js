@@ -1,5 +1,3 @@
-console.log("CMS Highlighter background.js LOADED vFix1", new Date().toISOString());
-
 // =============================================================================
 // CMS Highlighter — Background Service Worker
 // =============================================================================
@@ -20,6 +18,22 @@ const MENU_IGNORE_ID = "cms-hl-ignore";
 
 let menuBuildInProgress = false;
 let menuBuildQueued = false;
+
+// ---------------------------------------------------------------------------
+// Alphabetical insert helper
+// ---------------------------------------------------------------------------
+// Strips CS: and // prefixes so that "CS://HP" sorts by "hp", not the prefix.
+function sortKey(raw) {
+  return String(raw || "").replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
+}
+
+// Inserts word into arr at the correct alphabetical position (by bare word).
+function insertAlphabetically(arr, word) {
+  const key = sortKey(word);
+  let i = 0;
+  while (i < arr.length && sortKey(arr[i]) < key) i++;
+  arr.splice(i, 0, word);
+}
 
 // ---------------------------------------------------------------------------
 // Small helpers to make contextMenus idempotent and avoid duplicate-id errors
@@ -231,7 +245,8 @@ function addWordToCategory(text, catIndex, tab) {
       return;
     }
 
-    dict.categories[catIndex].words.push(word);
+    // Insert alphabetically instead of appending
+    insertAlphabetically(dict.categories[catIndex].words, word);
 
     chrome.storage.local.set({ dictionary: dict }, () => {
       notifyTab(
@@ -241,7 +256,6 @@ function addWordToCategory(text, catIndex, tab) {
       if (tab && tab.id) {
         chrome.tabs.sendMessage(tab.id, { action: "refresh" });
       }
-      // menu labels depend on toggles only, but rebuild is cheap and keeps things consistent
       buildContextMenu();
     });
   });
@@ -262,7 +276,8 @@ function addWordToIgnoreList(text, tab) {
       return;
     }
 
-    dict.ignoreList.push(text);
+    // Insert alphabetically instead of appending
+    insertAlphabetically(dict.ignoreList, text);
 
     chrome.storage.local.set({ dictionary: dict }, () => {
       notifyTab(tab, `Added "${text}" to Ignore List`);

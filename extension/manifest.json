@@ -5,8 +5,7 @@
   "description": "Highlight words and phrases by category on CMS sites",
   "permissions": [
     "storage",
-    "contextMenus",
-    "activeTab"
+    "contextMenus"
   ],
   "host_permissions": [
     "https://cms.bazaarvoice.com/*",
@@ -37,4 +36,3 @@
     "128": "icons/icon128.png"
   }
 }
- 

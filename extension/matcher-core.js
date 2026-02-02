@@ -198,15 +198,15 @@
 
   function pickBetterOverlap(a, b) {
     // Rule:
-    // 1) wildcard beats non-wildcard
-    // 2) if both wildcard, category priority wins (lower number = higher priority)
-    // 3) if neither wildcard, category priority wins
-    // 4) tie-break: longer wins
-    // 5) final tie-break: earlier start wins, then earlier end
+    // 1) Non-wildcard (specific) beats wildcard (vague)
+    // 2) if both wildcard or both non-wildcard, category priority wins (lower number = higher priority)
+    // 3) tie-break: longer wins
+    // 4) final tie-break: earlier start wins, then earlier end
     const aWild = !!a.isWildcard;
     const bWild = !!b.isWildcard;
 
-    if (aWild !== bWild) return aWild ? a : b;
+    // FIX: specific (non-wildcard) beats vague (wildcard)
+    if (aWild !== bWild) return aWild ? b : a;
 
     if (a.priority !== b.priority) return (a.priority < b.priority) ? a : b;
 
