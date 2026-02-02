@@ -1,12 +1,9 @@
 // =============================================================================
-// CMS Highlighter — Content Script
-// =============================================================================
-// This runs on the target CMS pages. It:
-//   1. Loads the dictionary from chrome.storage.local
-//   2. Compiles it once using MatcherEngine
-//   3. Walks all text nodes and wraps matches in <span> tags
-//   4. Watches for DOM changes (Angular SPA) and re-highlights new content
-//   5. Listens for messages from popup/background to toggle/refresh
+// CMS Highlighter — Content Script (simple rewrite)
+// - Walk text nodes
+// - Wrap matches in spans
+// - Exactly one decision point: which matcher to use based on region
+// - Client-only categories apply only in clientbar, and win there
 // =============================================================================
 
 (function() {
@@ -15,127 +12,25 @@
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
 
-  // Guardrails to prevent broken matcher output from creating huge spans
-  const MAX_SPAN_LEN = 80;    // prevent pathological spans from slowing DOM work
-  const LOG_GUARDS = true;    // set false to silence guard logs
+  // Categories that should ONLY affect the client field area (clientbar)
+  // Add more later if you create other client-only category types.
+  const CLIENT_ONLY_CATEGORIES = ["IMG Clients"];
 
-  let compiled = null;
+  // Guardrails
+  const MAX_SPAN_LEN = 120;
+
   let globalEnabled = true;
-  let debounceTimer = null;
-  // Accumulates snapshotted nodes across debounced mutation batches
-  let pendingNodes = [];
+
+  // Compiled matchers
+  let compiledClientOnly = null; // only CLIENT_ONLY_CATEGORIES
+  let compiledNonClientOnly = null; // everything except CLIENT_ONLY_CATEGORIES
+
+  // Priority map from original dictionary category order (lower = higher priority)
+  let priorityByName = new Map();
 
   // ---------------------------------------------------------------------------
-  // PERF COUNTERS (dev toggle)
+  // Route guard
   // ---------------------------------------------------------------------------
-  const PERF = (() => {
-    const WINDOW = 20;
-    const state = {
-      enabled: false,
-      depth: 0,
-      current: null,
-      runs: [],
-    };
-
-    function now() {
-      return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    }
-
-    function begin(trigger) {
-      if (!state.enabled) return;
-      state.depth++;
-      if (state.depth > 1) return; // nested work, count into the outer run
-
-      state.current = {
-        trigger: trigger || "unknown",
-        t0: now(),
-        msWalk: 0,
-        msMatch: 0,
-        msDom: 0,
-        textNodesSeen: 0,
-        textNodesProcessed: 0,
-        matchesFound: 0,
-        spansApplied: 0,
-        errors: 0,
-      };
-    }
-
-    function addTime(key, ms) {
-      if (!state.enabled || !state.current) return;
-      state.current[key] += ms;
-    }
-
-    function addCount(key, n) {
-      if (!state.enabled || !state.current) return;
-      state.current[key] += (n || 0);
-    }
-
-    function error() {
-      if (!state.enabled || !state.current) return;
-      state.current.errors += 1;
-    }
-
-    function end() {
-      if (!state.enabled) return;
-      if (state.depth === 0) return;
-
-      state.depth--;
-      if (state.depth > 0) return; // end inner nesting
-
-      const cur = state.current;
-      if (!cur) return;
-
-      const total = now() - cur.t0;
-      state.runs.push({ ...cur, msTotal: total });
-      if (state.runs.length > WINDOW) state.runs.shift();
-
-      // rolling averages
-      const n = state.runs.length;
-      let aTotal = 0, aWalk = 0, aMatch = 0, aDom = 0;
-      for (const r of state.runs) {
-        aTotal += r.msTotal;
-        aWalk += r.msWalk;
-        aMatch += r.msMatch;
-        aDom += r.msDom;
-      }
-      aTotal /= n; aWalk /= n; aMatch /= n; aDom /= n;
-
-      // one line per run
-      const msg =
-        `CMSHL PERF | ${cur.trigger} | ` +
-        `total ${total.toFixed(1)}ms (avg ${aTotal.toFixed(1)}ms) | ` +
-        `walk ${cur.msWalk.toFixed(1)} (avg ${aWalk.toFixed(1)}) | ` +
-        `match ${cur.msMatch.toFixed(1)} (avg ${aMatch.toFixed(1)}) | ` +
-        `dom ${cur.msDom.toFixed(1)} (avg ${aDom.toFixed(1)}) | ` +
-        `seen ${cur.textNodesSeen} | processed ${cur.textNodesProcessed} | ` +
-        `matches ${cur.matchesFound} | spans ${cur.spansApplied}` +
-        (cur.errors ? ` | errors ${cur.errors}` : "");
-
-      // warn on slow runs (tweak threshold if you want)
-      if (total >= 50) {
-        console.warn(msg);
-      } else {
-        console.log(msg);
-      }
-
-      state.current = null;
-    }
-
-    function setEnabled(v) {
-      state.enabled = !!v;
-      if (!state.enabled) {
-        state.depth = 0;
-        state.current = null;
-      }
-    }
-
-    function isEnabled() {
-      return !!state.enabled;
-    }
-
-    return { now, begin, end, addTime, addCount, error, setEnabled, isEnabled };
-  })();
-
   function isModStatusRoute() {
     return (
       location.hostname === "cms.bazaarvoice.com" &&
@@ -145,49 +40,78 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Load dictionary from storage, compile, and highlight
+  // Region detection
   // ---------------------------------------------------------------------------
-  function init() {
-    if (isModStatusRoute()) {
-      console.log("CMS Highlighter: disabled on modstatus route");
-      return;
-    }
+  function getReviewRoot() {
+    return (
+      document.querySelector("div.ugcAndDetails") ||
+      document.querySelector("dd.moderatable") ||
+      document.querySelector("div.read") ||
+      null
+    );
+  }
 
-    chrome.storage.local.get(["dictionary", "enabled", "perfEnabled"], (result) => {
-      if (chrome.runtime.lastError) {
-        console.error("CMS Highlighter: storage error", chrome.runtime.lastError);
-        return;
-      }
+  function getNodeRegion(node) {
+    const el = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    if (!el || !el.closest) return "other";
 
-      globalEnabled = result.enabled !== false; // default true
-      PERF.setEnabled(result.perfEnabled === true);
+    // Client panel area (real CMS navbar-inner, fake CMS sidebar)
+    if (el.closest(".navbar-inner") || el.closest(".sidebar")) return "clientbar";
 
-      const dict = result.dictionary;
-      if (!dict || !dict.categories) {
-        console.log("CMS Highlighter: no dictionary found in storage.");
-        return;
-      }
+    // Review area
+    const reviewRoot = getReviewRoot();
+    if (reviewRoot && (el === reviewRoot || reviewRoot.contains(el))) return "review";
 
-      compiled = MatcherEngine.compileAll(dict);
-      console.log(
-        `CMS Highlighter: compiled ${compiled.compiledCategories.length} categories, ` +
-        `ignore list: ${compiled.ignoreCompiled ? "active" : "none"}`
-      );
-
-      if (globalEnabled) {
-        PERF.begin("init-full");
-        try {
-          highlightAll();
-        } finally {
-          PERF.end();
-        }
-        startObserver();
-      }
-    });
+    return "other";
   }
 
   // ---------------------------------------------------------------------------
-  // DOM Walking — find all text nodes under a root element
+  // Dictionary helpers
+  // ---------------------------------------------------------------------------
+  function cloneDict(dict) {
+    return JSON.parse(JSON.stringify(dict));
+  }
+
+  function getCategoryName(cat) {
+    return (cat && (cat.name || cat.categoryName || cat.title || cat.label))
+      ? String(cat.name || cat.categoryName || cat.title || cat.label)
+      : "";
+  }
+
+  function normalizeName(s) {
+    return String(s || "").trim();
+  }
+
+  function buildPriorityMapFromDict(dict) {
+    const map = new Map();
+    const cats = Array.isArray(dict.categories) ? dict.categories : [];
+    for (let i = 0; i < cats.length; i++) {
+      const name = normalizeName(getCategoryName(cats[i]));
+      if (name && !map.has(name)) {
+        map.set(name, i);
+      }
+    }
+    return map;
+  }
+
+  function dictOnlyClientOnly(dict) {
+    const d = cloneDict(dict);
+    if (Array.isArray(d.categories)) {
+      d.categories = d.categories.filter(c => CLIENT_ONLY_CATEGORIES.includes(normalizeName(getCategoryName(c))));
+    }
+    return d;
+  }
+
+  function dictWithoutClientOnly(dict) {
+    const d = cloneDict(dict);
+    if (Array.isArray(d.categories)) {
+      d.categories = d.categories.filter(c => !CLIENT_ONLY_CATEGORIES.includes(normalizeName(getCategoryName(c))));
+    }
+    return d;
+  }
+
+  // ---------------------------------------------------------------------------
+  // DOM walking
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
     const nodes = [];
@@ -196,23 +120,29 @@
       NodeFilter.SHOW_TEXT,
       {
         acceptNode: function(node) {
+          if (!node || !node.parentElement) return NodeFilter.FILTER_REJECT;
+
           // Skip nodes inside our own highlights
-          if (node.parentElement && node.parentElement.classList.contains(HL_CLASS)) {
+          if (node.parentElement.classList.contains(HL_CLASS)) {
             return NodeFilter.FILTER_REJECT;
           }
-          // Skip script/style/textarea/input
-          const tag = node.parentElement ? node.parentElement.tagName : "";
+
+          // Skip script/style/textarea/input/select/noscript
+          const tag = node.parentElement.tagName || "";
           if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
             return NodeFilter.FILTER_REJECT;
           }
+
           // Skip already-processed parents
-          if (node.parentElement && node.parentElement.hasAttribute(MARKER_ATTR)) {
+          if (node.parentElement.hasAttribute(MARKER_ATTR)) {
             return NodeFilter.FILTER_REJECT;
           }
-          // Only process nodes with actual visible text
-          if (node.textContent.trim().length === 0) {
+
+          // Only process nodes with visible text
+          if (!node.textContent || node.textContent.trim().length === 0) {
             return NodeFilter.FILTER_REJECT;
           }
+
           return NodeFilter.FILTER_ACCEPT;
         }
       }
@@ -225,97 +155,107 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Highlight a single text node by splitting it and wrapping matches
+  // Match choosing and overlap resolution
   // ---------------------------------------------------------------------------
-  function highlightTextNode(textNode) {
-    if (isModStatusRoute()) return;
-    if (!compiled || !globalEnabled) return;
+  function getPriority(catName, region) {
+    const name = normalizeName(catName);
 
-    // Node may have been removed from DOM by Angular between snapshot and now
-    if (!textNode.parentNode) return;
-
-    const text = textNode.textContent;
-    if (!text || text.trim().length === 0) return;
-
-    const tMatch0 = PERF.now();
-    let matches = MatcherEngine.findMatches(text, compiled);
-    PERF.addTime("msMatch", PERF.now() - tMatch0);
-
-    if (!Array.isArray(matches) || matches.length === 0) return;
-
-    // Sanitize matcher output so we never create runaway spans
-    // - enforce numeric bounds
-    // - sort by start/end
-    // - drop overlaps
-    // - drop absurdly long spans
-    matches = matches
-      .filter(m =>
-        m &&
-        Number.isFinite(m.start) &&
-        Number.isFinite(m.end) &&
-        m.start >= 0 &&
-        m.end > m.start &&
-        m.end <= text.length
-      )
-      .sort((a, b) => (a.start - b.start) || (a.end - b.end));
-
-    const cleaned = [];
-    let lastEnd = -1;
-
-    for (const m of matches) {
-      const spanLen = m.end - m.start;
-
-      if (spanLen > MAX_SPAN_LEN) {
-        if (LOG_GUARDS) {
-          console.warn(
-            "CMSHL GUARD: dropping huge span " +
-            "len=" + spanLen +
-            " cat=" + m.categoryName +
-            " sample=" + JSON.stringify(
-              text.slice(m.start, Math.min(m.end, m.start + 80))
-            )
-          );
-        }
-        continue;
-      }
-
-      // Drop overlaps (keeps earlier match, prevents nested/giant rendering issues)
-      if (m.start < lastEnd) {
-        if (LOG_GUARDS) {
-          console.warn("CMSHL GUARD: dropping overlap", {
-            prevEnd: lastEnd,
-            start: m.start,
-            end: m.end,
-            cat: m.categoryName
-          });
-        }
-        continue;
-      }
-
-      cleaned.push(m);
-      lastEnd = m.end;
+    // In clientbar, client-only categories always win
+    if (region === "clientbar" && CLIENT_ONLY_CATEGORIES.includes(name)) {
+      return -100000;
     }
 
-    matches = cleaned;
-    if (matches.length === 0) return;
+    const p = priorityByName.get(name);
+    return Number.isFinite(p) ? p : 999999;
+  }
 
-    PERF.addCount("textNodesProcessed", 1);
-    PERF.addCount("matchesFound", matches.length);
-    PERF.addCount("spansApplied", matches.length);
+  function betterMatch(a, b, region) {
+    // Returns true if a is better than b
+    const pa = getPriority(a.categoryName, region);
+    const pb = getPriority(b.categoryName, region);
+    if (pa !== pb) return pa < pb;
 
-    const tDom0 = PERF.now();
+    const la = (a.end - a.start);
+    const lb = (b.end - b.start);
+    if (la !== lb) return la > lb;
 
-    // Build a document fragment with text and highlighted spans
+    // If still tied, prefer earlier start
+    if (a.start !== b.start) return a.start < b.start;
+
+    // Finally, prefer earlier end
+    return a.end < b.end;
+  }
+
+  function sanitizeMatches(matches, textLen) {
+    if (!Array.isArray(matches) || matches.length === 0) return [];
+
+    const out = [];
+    for (const m of matches) {
+      if (!m) continue;
+      const s = m.start, e = m.end;
+      if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+      if (s < 0 || e <= s || e > textLen) continue;
+      if ((e - s) > MAX_SPAN_LEN) continue;
+      if (!m.categoryName) continue;
+      out.push(m);
+    }
+    return out;
+  }
+
+  function resolveOverlaps(matches, region) {
+    if (!Array.isArray(matches) || matches.length === 0) return [];
+
+    // Sort by start asc, then prefer better match first
+    matches.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      // better first
+      if (betterMatch(a, b, region)) return -1;
+      if (betterMatch(b, a, region)) return 1;
+      return (b.end - b.start) - (a.end - a.start);
+    });
+
+    const picked = [];
+    for (const m of matches) {
+      if (picked.length === 0) {
+        picked.push(m);
+        continue;
+      }
+
+      const last = picked[picked.length - 1];
+
+      if (m.start >= last.end) {
+        picked.push(m);
+        continue;
+      }
+
+      // Overlap: keep the better one
+      if (betterMatch(m, last, region)) {
+        picked[picked.length - 1] = m;
+      }
+      // else keep last
+    }
+
+    // After replacement, picked might be slightly out of order in edge cases.
+    picked.sort((a, b) => a.start - b.start || a.end - b.end);
+    return picked;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rendering
+  // ---------------------------------------------------------------------------
+  function renderMatchesIntoNode(textNode, matches) {
+    if (!textNode || !textNode.parentNode) return;
+    const text = textNode.textContent || "";
+    if (!text) return;
+
     const frag = document.createDocumentFragment();
     let lastIndex = 0;
 
     for (const match of matches) {
-      // Text before this match
       if (match.start > lastIndex) {
         frag.appendChild(document.createTextNode(text.slice(lastIndex, match.start)));
       }
 
-      // The highlighted span
       const span = document.createElement("span");
       span.className = HL_CLASS;
       span.style.backgroundColor = match.color || "#FFFF00";
@@ -327,34 +267,68 @@
       lastIndex = match.end;
     }
 
-    // Remaining text after last match
     if (lastIndex < text.length) {
       frag.appendChild(document.createTextNode(text.slice(lastIndex)));
     }
 
-    // Mark the parent so we don't reprocess
     const parent = textNode.parentNode;
     if (parent) {
       parent.setAttribute(MARKER_ATTR, "1");
       parent.replaceChild(frag, textNode);
     }
-
-    PERF.addTime("msDom", PERF.now() - tDom0);
   }
 
   // ---------------------------------------------------------------------------
-  // Highlight all text nodes on the page (or under a specific root)
+  // One decision point: which matcher to use based on region
   // ---------------------------------------------------------------------------
+  function findMatchesForNode(text, region) {
+    if (!text) return [];
+
+    // Review: never use client-only categories
+    if (region === "review") {
+      return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
+    }
+
+    // Clientbar: run client-only and non-client-only, then resolve overlaps
+    if (region === "clientbar") {
+      const a = MatcherEngine.findMatches(text, compiledClientOnly) || [];
+      const b = MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
+      return a.concat(b);
+    }
+
+    // Other: treat like review
+    return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
+  }
+
+  function highlightTextNode(textNode) {
+    if (isModStatusRoute()) return;
+    if (!globalEnabled) return;
+    if (!compiledNonClientOnly) return;
+
+    if (!textNode || !textNode.parentNode) return;
+
+    const text = textNode.textContent;
+    if (!text || text.trim().length === 0) return;
+
+    const region = getNodeRegion(textNode);
+
+    let matches = findMatchesForNode(text, region);
+    matches = sanitizeMatches(matches, text.length);
+    if (matches.length === 0) return;
+
+    matches = resolveOverlaps(matches, region);
+    if (matches.length === 0) return;
+
+    renderMatchesIntoNode(textNode, matches);
+  }
+
   function highlightAll(root) {
     if (isModStatusRoute()) return;
-    if (!compiled || !globalEnabled) return;
+    if (!globalEnabled) return;
+    if (!compiledNonClientOnly) return;
 
     const target = root || document.body;
-
-    const tWalk0 = PERF.now();
     const textNodes = getTextNodes(target);
-    PERF.addTime("msWalk", PERF.now() - tWalk0);
-    PERF.addCount("textNodesSeen", textNodes.length);
 
     for (const node of textNodes) {
       highlightTextNode(node);
@@ -362,29 +336,27 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Remove all highlights (restore original text)
+  // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     const spans = document.querySelectorAll("." + HL_CLASS);
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
-      // Replace the span with its text content
-      const textNode = document.createTextNode(span.textContent);
-      parent.replaceChild(textNode, span);
-      // Merge adjacent text nodes
+      parent.replaceChild(document.createTextNode(span.textContent), span);
       parent.normalize();
     });
 
-    // Remove all processed markers
-    const marked = document.querySelectorAll(`[${MARKER_ATTR}]`);
+    const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
   }
 
   // ---------------------------------------------------------------------------
-  // MutationObserver — watch for Angular DOM changes
+  // Observer
   // ---------------------------------------------------------------------------
   let observer = null;
+  let debounceTimer = null;
+  let pendingNodes = [];
 
   function startObserver() {
     if (observer) return;
@@ -392,8 +364,6 @@
     observer = new MutationObserver((mutations) => {
       if (isModStatusRoute()) return;
 
-      // SNAPSHOT immediately — don't wait for debounce to read addedNodes,
-      // because Angular may have already replaced them by then.
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
@@ -407,37 +377,28 @@
         }
       }
 
-      // Debounce the actual highlighting work
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const batch = pendingNodes;
         pendingNodes = [];
 
-        PERF.begin("mutation-batch");
-        try {
-          for (const item of batch) {
-            // Re-check: node might have been removed by Angular during the 80ms wait
-            if (!item.node.parentNode) continue;
+        for (const item of batch) {
+          if (!item.node || !item.node.parentNode) continue;
 
-            if (item.type === "element") {
-              highlightAll(item.node);
+          if (item.type === "element") {
+            if (item.node === document.body || item.node === document.documentElement) {
+              highlightAll(document.body);
             } else {
-              highlightTextNode(item.node);
+              highlightAll(item.node);
             }
+          } else {
+            highlightTextNode(item.node);
           }
-        } catch (e) {
-          PERF.error();
-          console.error("CMSHL PERF: error during mutation batch", e);
-        } finally {
-          PERF.end();
         }
       }, 80);
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function stopObserver() {
@@ -449,73 +410,83 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Message listener — communicate with popup and background script
+  // Init + messages
   // ---------------------------------------------------------------------------
+  function init() {
+    if (isModStatusRoute()) {
+      console.log("CMS Highlighter: disabled on modstatus route");
+      return;
+    }
+
+    chrome.storage.local.get(["dictionary", "enabled"], (result) => {
+      if (chrome.runtime.lastError) {
+        console.error("CMS Highlighter: storage error", chrome.runtime.lastError);
+        return;
+      }
+
+      globalEnabled = result.enabled !== false;
+
+      const dict = result.dictionary;
+      if (!dict || !dict.categories) {
+        console.log("CMS Highlighter: no dictionary found in storage.");
+        return;
+      }
+
+      priorityByName = buildPriorityMapFromDict(dict);
+
+      // Compile two matchers
+      const dictClientOnly = dictOnlyClientOnly(dict);
+      const dictNonClientOnly = dictWithoutClientOnly(dict);
+
+      compiledClientOnly = MatcherEngine.compileAll(dictClientOnly);
+      compiledNonClientOnly = MatcherEngine.compileAll(dictNonClientOnly);
+
+      console.log(
+        "CMS Highlighter: compiled non-client-only cats=" + (compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0) +
+        ", client-only cats=" + (compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0)
+      );
+
+      if (globalEnabled) {
+        highlightAll(document.body);
+        startObserver();
+      }
+    });
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || !message.action) {
+      sendResponse({ ok: false });
+      return true;
+    }
+
     switch (message.action) {
-      case "notify":
-        console.log("CMS Highlighter:", message.message);
+      case "toggle":
+        globalEnabled = !!message.enabled;
+        if (globalEnabled) {
+          removeAllHighlights();
+          highlightAll(document.body);
+          startObserver();
+        } else {
+          stopObserver();
+          removeAllHighlights();
+        }
         sendResponse({ ok: true });
         break;
 
-      case "setPerf":
-        PERF.setEnabled(!!message.enabled);
-        chrome.storage.local.set({ perfEnabled: PERF.isEnabled() }, () => {
-          sendResponse({ ok: true, perfEnabled: PERF.isEnabled() });
-        });
-        break;
-
-      case "toggle":
-        globalEnabled = message.enabled;
-        if (globalEnabled) {
-          // Recompile in case dictionary changed
-          chrome.storage.local.get(["dictionary"], (result) => {
-            if (result.dictionary) {
-              compiled = MatcherEngine.compileAll(result.dictionary);
-            }
-
-            PERF.begin("toggle-on-full");
-            try {
-              highlightAll();
-            } finally {
-              PERF.end();
-            }
-
-            startObserver();
-            sendResponse({ ok: true });
-          });
-          return true; // async response
-        } else {
-          PERF.begin("toggle-off-remove");
-          try {
-            stopObserver();
-            removeAllHighlights();
-          } finally {
-            PERF.end();
-          }
-          sendResponse({ ok: true });
-        }
-        break;
-
       case "refresh":
-        // Dictionary was updated — recompile and re-highlight
         chrome.storage.local.get(["dictionary", "enabled"], (result) => {
           globalEnabled = result.enabled !== false;
-          if (result.dictionary) {
-            compiled = MatcherEngine.compileAll(result.dictionary);
+
+          const dict = result.dictionary;
+          if (dict && dict.categories) {
+            priorityByName = buildPriorityMapFromDict(dict);
+            compiledClientOnly = MatcherEngine.compileAll(dictOnlyClientOnly(dict));
+            compiledNonClientOnly = MatcherEngine.compileAll(dictWithoutClientOnly(dict));
           }
 
-          PERF.begin("refresh-full");
-          try {
-            removeAllHighlights();
-            if (globalEnabled) {
-              highlightAll();
-            }
-          } finally {
-            PERF.end();
-          }
-
+          removeAllHighlights();
           if (globalEnabled) {
+            highlightAll(document.body);
             startObserver();
           } else {
             stopObserver();
@@ -523,30 +494,27 @@
 
           sendResponse({ ok: true });
         });
-        return true; // async response
+        return true;
 
       case "getStats":
-        const hlCount = document.querySelectorAll("." + HL_CLASS).length;
         sendResponse({
-          highlights: hlCount,
+          highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
-          categories: compiled ? compiled.compiledCategories.length : 0,
+          catsNonClientOnly: compiledNonClientOnly && compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0,
+          catsClientOnly: compiledClientOnly && compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0
         });
         break;
 
       default:
         sendResponse({ error: "unknown action" });
     }
-    return true; // async response
+
+    return true;
   });
 
-  // ---------------------------------------------------------------------------
-  // Kick it off
-  // ---------------------------------------------------------------------------
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
     init();
   }
-
 })();

@@ -232,9 +232,8 @@
     });
   }
 
-  function saveDictionaryAndRefresh() {
+  function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
-      refreshActiveTab();
       updateStats();
     });
   }
@@ -297,9 +296,13 @@
           statsEl.textContent = "Not running on this page";
           return;
         }
-        statsEl.textContent =
-          `${response.highlights} highlights | ${response.categories} categories | ` +
-          `${response.enabled ? "ON" : "OFF"}`;
+      const cats =
+         (Number(response.catsNonClientOnly) || 0) + (Number(response.catsClientOnly) || 0);
+
+      statsEl.textContent =
+        `${response.highlights} highlights | ${cats} categories | ` +
+        `${response.enabled ? "ON" : "OFF"}`;
+
       });
     });
   }
@@ -362,7 +365,7 @@
     const [moved] = cats.splice(dragIndex, 1);
     cats.splice(dropIndex, 0, moved);
 
-    saveDictionaryAndRefresh();
+    saveDictionary();
     renderAll();
   }
 
@@ -516,7 +519,7 @@
             const destIndex = currentDict.categories.indexOf(destCat);
 
             // One save, one render, one editor open.
-            saveDictionaryAndRefresh();
+            saveDictionary();
             renderAll();
             if (destIndex !== -1) {
               setOpenEditor(`cat:${destIndex}`);
@@ -680,13 +683,13 @@
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
-              saveDictionaryAndRefresh();
+              saveDictionary();
               renderAll();
               setOpenEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
-              saveDictionaryAndRefresh();
+              saveDictionary();
               renderAll();
               setOpenEditor("ignore");
             }
@@ -713,7 +716,7 @@
         // Insert alphabetically instead of appending
         insertAlphabetically(currentDict.ignoreList, raw);
         addInput.value = "";
-        saveDictionaryAndRefresh();
+        saveDictionary();
 
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
@@ -765,7 +768,7 @@
     colorInput.addEventListener("input", () => {
       swatch.style.backgroundColor = colorInput.value;
       cat.color = colorInput.value;
-      saveDictionaryAndRefresh();
+      saveDictionary();
     });
 
     swatch.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -808,7 +811,7 @@
     toggleInput.checked = cat.enabled !== false;
     toggleInput.addEventListener("change", () => {
       cat.enabled = toggleInput.checked;
-      saveDictionaryAndRefresh();
+      saveDictionary();
     });
 
     const toggleSlider = document.createElement("span");
@@ -923,13 +926,13 @@
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
-              saveDictionaryAndRefresh();
+              saveDictionary();
               renderAll();
               setOpenEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
-              saveDictionaryAndRefresh();
+              saveDictionary();
               renderAll();
               setOpenEditor(key);
             }
@@ -956,7 +959,7 @@
         // Insert alphabetically instead of appending
         insertAlphabetically(cat.words, raw);
         addInput.value = "";
-        saveDictionaryAndRefresh();
+        saveDictionary();
 
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);

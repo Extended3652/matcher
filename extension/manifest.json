@@ -9,7 +9,8 @@
   ],
   "host_permissions": [
     "https://cms.bazaarvoice.com/*",
-    "https://workbench.bazaarvoice.com/*"
+    "https://workbench.bazaarvoice.com/*",
+    "http://minotaur:8124/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -18,9 +19,10 @@
     {
       "matches": [
         "https://cms.bazaarvoice.com/*",
-        "https://workbench.bazaarvoice.com/*"
+        "https://workbench.bazaarvoice.com/*",
+        "http://minotaur:8124/*"
       ],
-      "js": ["matcher-core.js", "content.js"],
+      "js": ["matcher-core.js", "content.simple.js"],
       "css": ["highlight.css"],
       "run_at": "document_idle"
     }

@@ -190,6 +190,7 @@
         const combined = chunk.map(f => "(" + f.fragment + ")").join("|");
         const metas = chunk.map(f => ({
           hasWildcard: !!f.parsed.hasWildcard,
+          isExact: !!f.parsed.exact,
           patternLen: f.parsed.pattern.length
         }));
 
@@ -238,21 +239,42 @@
   }
 
   function pickBetterOverlap(a, b) {
-    // Rule:
+    // Overlap winner rules (highest to lowest):
+    // 0) Containment: if one match fully contains the other, prefer the container
+    //    EXCEPT: if the contained match is exact (//word) and the container is not exact,
+    //    prefer the exact one (prevents wildcard gobbling a precise whole-word hit).
     // 1) Non-wildcard (specific) beats wildcard (vague)
-    // 2) if both wildcard or both non-wildcard, category priority wins (lower number = higher priority)
-    // 3) tie-break: longer wins
-    // 4) final tie-break: earlier start wins, then earlier end
+    // 2) Category priority wins (lower number = higher priority)
+    // 3) Longer wins
+    // 4) Earlier start wins, then earlier end
+
+    const aLen = a.end - a.start;
+    const bLen = b.end - b.start;
+
+    const aContainsB = (a.start <= b.start) && (a.end >= b.end);
+    const bContainsA = (b.start <= a.start) && (b.end >= a.end);
+
+    if (aContainsB && !bContainsA) {
+      const aExact = !!a.isExact;
+      const bExact = !!b.isExact;
+      if (bExact && !aExact) return b;
+      return a;
+    }
+
+    if (bContainsA && !aContainsB) {
+      const aExact = !!a.isExact;
+      const bExact = !!b.isExact;
+      if (aExact && !bExact) return a;
+      return b;
+    }
+
     const aWild = !!a.isWildcard;
     const bWild = !!b.isWildcard;
 
-    // FIX: specific (non-wildcard) beats vague (wildcard)
     if (aWild !== bWild) return aWild ? b : a;
 
     if (a.priority !== b.priority) return (a.priority < b.priority) ? a : b;
 
-    const aLen = a.end - a.start;
-    const bLen = b.end - b.start;
     if (aLen !== bLen) return (aLen > bLen) ? a : b;
 
     if (a.start !== b.start) return (a.start < b.start) ? a : b;
@@ -312,6 +334,7 @@
             fColor:   cat.fColor,
             priority: i,
             isWildcard: meta ? !!meta.hasWildcard : false,
+            isExact: meta ? !!meta.exact : false,
           });
         }
       }
