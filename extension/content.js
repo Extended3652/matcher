@@ -15,11 +15,126 @@
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
 
+  // Guardrails to prevent broken matcher output from creating huge spans
+  const MAX_SPAN_LEN = 80;    // prevent pathological spans from slowing DOM work
+  const LOG_GUARDS = true;    // set false to silence guard logs
+
   let compiled = null;
   let globalEnabled = true;
   let debounceTimer = null;
   // Accumulates snapshotted nodes across debounced mutation batches
   let pendingNodes = [];
+
+  // ---------------------------------------------------------------------------
+  // PERF COUNTERS (dev toggle)
+  // ---------------------------------------------------------------------------
+  const PERF = (() => {
+    const WINDOW = 20;
+    const state = {
+      enabled: false,
+      depth: 0,
+      current: null,
+      runs: [],
+    };
+
+    function now() {
+      return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    }
+
+    function begin(trigger) {
+      if (!state.enabled) return;
+      state.depth++;
+      if (state.depth > 1) return; // nested work, count into the outer run
+
+      state.current = {
+        trigger: trigger || "unknown",
+        t0: now(),
+        msWalk: 0,
+        msMatch: 0,
+        msDom: 0,
+        textNodesSeen: 0,
+        textNodesProcessed: 0,
+        matchesFound: 0,
+        spansApplied: 0,
+        errors: 0,
+      };
+    }
+
+    function addTime(key, ms) {
+      if (!state.enabled || !state.current) return;
+      state.current[key] += ms;
+    }
+
+    function addCount(key, n) {
+      if (!state.enabled || !state.current) return;
+      state.current[key] += (n || 0);
+    }
+
+    function error() {
+      if (!state.enabled || !state.current) return;
+      state.current.errors += 1;
+    }
+
+    function end() {
+      if (!state.enabled) return;
+      if (state.depth === 0) return;
+
+      state.depth--;
+      if (state.depth > 0) return; // end inner nesting
+
+      const cur = state.current;
+      if (!cur) return;
+
+      const total = now() - cur.t0;
+      state.runs.push({ ...cur, msTotal: total });
+      if (state.runs.length > WINDOW) state.runs.shift();
+
+      // rolling averages
+      const n = state.runs.length;
+      let aTotal = 0, aWalk = 0, aMatch = 0, aDom = 0;
+      for (const r of state.runs) {
+        aTotal += r.msTotal;
+        aWalk += r.msWalk;
+        aMatch += r.msMatch;
+        aDom += r.msDom;
+      }
+      aTotal /= n; aWalk /= n; aMatch /= n; aDom /= n;
+
+      // one line per run
+      const msg =
+        `CMSHL PERF | ${cur.trigger} | ` +
+        `total ${total.toFixed(1)}ms (avg ${aTotal.toFixed(1)}ms) | ` +
+        `walk ${cur.msWalk.toFixed(1)} (avg ${aWalk.toFixed(1)}) | ` +
+        `match ${cur.msMatch.toFixed(1)} (avg ${aMatch.toFixed(1)}) | ` +
+        `dom ${cur.msDom.toFixed(1)} (avg ${aDom.toFixed(1)}) | ` +
+        `seen ${cur.textNodesSeen} | processed ${cur.textNodesProcessed} | ` +
+        `matches ${cur.matchesFound} | spans ${cur.spansApplied}` +
+        (cur.errors ? ` | errors ${cur.errors}` : "");
+
+      // warn on slow runs (tweak threshold if you want)
+      if (total >= 50) {
+        console.warn(msg);
+      } else {
+        console.log(msg);
+      }
+
+      state.current = null;
+    }
+
+    function setEnabled(v) {
+      state.enabled = !!v;
+      if (!state.enabled) {
+        state.depth = 0;
+        state.current = null;
+      }
+    }
+
+    function isEnabled() {
+      return !!state.enabled;
+    }
+
+    return { now, begin, end, addTime, addCount, error, setEnabled, isEnabled };
+  })();
 
   function isModStatusRoute() {
     return (
@@ -38,15 +153,16 @@
       return;
     }
 
-    chrome.storage.local.get(["dictionary", "enabled"], (result) => {
+    chrome.storage.local.get(["dictionary", "enabled", "perfEnabled"], (result) => {
       if (chrome.runtime.lastError) {
         console.error("CMS Highlighter: storage error", chrome.runtime.lastError);
         return;
       }
 
       globalEnabled = result.enabled !== false; // default true
-      const dict = result.dictionary;
+      PERF.setEnabled(result.perfEnabled === true);
 
+      const dict = result.dictionary;
       if (!dict || !dict.categories) {
         console.log("CMS Highlighter: no dictionary found in storage.");
         return;
@@ -59,12 +175,16 @@
       );
 
       if (globalEnabled) {
-        highlightAll();
+        PERF.begin("init-full");
+        try {
+          highlightAll();
+        } finally {
+          PERF.end();
+        }
         startObserver();
       }
     });
   }
-
 
   // ---------------------------------------------------------------------------
   // DOM Walking — find all text nodes under a root element
@@ -104,7 +224,6 @@
     return nodes;
   }
 
-
   // ---------------------------------------------------------------------------
   // Highlight a single text node by splitting it and wrapping matches
   // ---------------------------------------------------------------------------
@@ -118,8 +237,73 @@
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
 
-    const matches = MatcherEngine.findMatches(text, compiled);
+    const tMatch0 = PERF.now();
+    let matches = MatcherEngine.findMatches(text, compiled);
+    PERF.addTime("msMatch", PERF.now() - tMatch0);
+
+    if (!Array.isArray(matches) || matches.length === 0) return;
+
+    // Sanitize matcher output so we never create runaway spans
+    // - enforce numeric bounds
+    // - sort by start/end
+    // - drop overlaps
+    // - drop absurdly long spans
+    matches = matches
+      .filter(m =>
+        m &&
+        Number.isFinite(m.start) &&
+        Number.isFinite(m.end) &&
+        m.start >= 0 &&
+        m.end > m.start &&
+        m.end <= text.length
+      )
+      .sort((a, b) => (a.start - b.start) || (a.end - b.end));
+
+    const cleaned = [];
+    let lastEnd = -1;
+
+    for (const m of matches) {
+      const spanLen = m.end - m.start;
+
+      if (spanLen > MAX_SPAN_LEN) {
+        if (LOG_GUARDS) {
+          console.warn(
+            "CMSHL GUARD: dropping huge span " +
+            "len=" + spanLen +
+            " cat=" + m.categoryName +
+            " sample=" + JSON.stringify(
+              text.slice(m.start, Math.min(m.end, m.start + 80))
+            )
+          );
+        }
+        continue;
+      }
+
+      // Drop overlaps (keeps earlier match, prevents nested/giant rendering issues)
+      if (m.start < lastEnd) {
+        if (LOG_GUARDS) {
+          console.warn("CMSHL GUARD: dropping overlap", {
+            prevEnd: lastEnd,
+            start: m.start,
+            end: m.end,
+            cat: m.categoryName
+          });
+        }
+        continue;
+      }
+
+      cleaned.push(m);
+      lastEnd = m.end;
+    }
+
+    matches = cleaned;
     if (matches.length === 0) return;
+
+    PERF.addCount("textNodesProcessed", 1);
+    PERF.addCount("matchesFound", matches.length);
+    PERF.addCount("spansApplied", matches.length);
+
+    const tDom0 = PERF.now();
 
     // Build a document fragment with text and highlighted spans
     const frag = document.createDocumentFragment();
@@ -154,8 +338,9 @@
       parent.setAttribute(MARKER_ATTR, "1");
       parent.replaceChild(frag, textNode);
     }
-  }
 
+    PERF.addTime("msDom", PERF.now() - tDom0);
+  }
 
   // ---------------------------------------------------------------------------
   // Highlight all text nodes on the page (or under a specific root)
@@ -165,13 +350,16 @@
     if (!compiled || !globalEnabled) return;
 
     const target = root || document.body;
+
+    const tWalk0 = PERF.now();
     const textNodes = getTextNodes(target);
+    PERF.addTime("msWalk", PERF.now() - tWalk0);
+    PERF.addCount("textNodesSeen", textNodes.length);
 
     for (const node of textNodes) {
       highlightTextNode(node);
     }
   }
-
 
   // ---------------------------------------------------------------------------
   // Remove all highlights (restore original text)
@@ -192,7 +380,6 @@
     const marked = document.querySelectorAll(`[${MARKER_ATTR}]`);
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
   }
-
 
   // ---------------------------------------------------------------------------
   // MutationObserver — watch for Angular DOM changes
@@ -226,15 +413,23 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
-        for (const item of batch) {
-          // Re-check: node might have been removed by Angular during the 80ms wait
-          if (!item.node.parentNode) continue;
+        PERF.begin("mutation-batch");
+        try {
+          for (const item of batch) {
+            // Re-check: node might have been removed by Angular during the 80ms wait
+            if (!item.node.parentNode) continue;
 
-          if (item.type === "element") {
-            highlightAll(item.node);
-          } else {
-            highlightTextNode(item.node);
+            if (item.type === "element") {
+              highlightAll(item.node);
+            } else {
+              highlightTextNode(item.node);
+            }
           }
+        } catch (e) {
+          PERF.error();
+          console.error("CMSHL PERF: error during mutation batch", e);
+        } finally {
+          PERF.end();
         }
       }, 80);
     });
@@ -253,7 +448,6 @@
     pendingNodes = [];
   }
 
-
   // ---------------------------------------------------------------------------
   // Message listener — communicate with popup and background script
   // ---------------------------------------------------------------------------
@@ -264,6 +458,13 @@
         sendResponse({ ok: true });
         break;
 
+      case "setPerf":
+        PERF.setEnabled(!!message.enabled);
+        chrome.storage.local.set({ perfEnabled: PERF.isEnabled() }, () => {
+          sendResponse({ ok: true, perfEnabled: PERF.isEnabled() });
+        });
+        break;
+
       case "toggle":
         globalEnabled = message.enabled;
         if (globalEnabled) {
@@ -272,14 +473,28 @@
             if (result.dictionary) {
               compiled = MatcherEngine.compileAll(result.dictionary);
             }
-            highlightAll();
+
+            PERF.begin("toggle-on-full");
+            try {
+              highlightAll();
+            } finally {
+              PERF.end();
+            }
+
             startObserver();
+            sendResponse({ ok: true });
           });
+          return true; // async response
         } else {
-          stopObserver();
-          removeAllHighlights();
+          PERF.begin("toggle-off-remove");
+          try {
+            stopObserver();
+            removeAllHighlights();
+          } finally {
+            PERF.end();
+          }
+          sendResponse({ ok: true });
         }
-        sendResponse({ ok: true });
         break;
 
       case "refresh":
@@ -289,14 +504,26 @@
           if (result.dictionary) {
             compiled = MatcherEngine.compileAll(result.dictionary);
           }
-          removeAllHighlights();
-          if (globalEnabled) {
-            highlightAll();
-            startObserver();
+
+          PERF.begin("refresh-full");
+          try {
+            removeAllHighlights();
+            if (globalEnabled) {
+              highlightAll();
+            }
+          } finally {
+            PERF.end();
           }
+
+          if (globalEnabled) {
+            startObserver();
+          } else {
+            stopObserver();
+          }
+
+          sendResponse({ ok: true });
         });
-        sendResponse({ ok: true });
-        break;
+        return true; // async response
 
       case "getStats":
         const hlCount = document.querySelectorAll("." + HL_CLASS).length;
@@ -312,7 +539,6 @@
     }
     return true; // async response
   });
-
 
   // ---------------------------------------------------------------------------
   // Kick it off

@@ -1,3 +1,4 @@
 # editor / manual backups
 *.bak.*
 *_bak/
+extension/bench.js

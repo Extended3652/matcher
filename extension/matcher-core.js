@@ -30,6 +30,7 @@
     let text = String(rawEntry || "");
     let exact = false;
     let caseSensitive = false;
+    let literal = false;
 
     // Check for CS: prefix (case-sensitive flag)
     if (text.startsWith("CS:")) {
@@ -41,6 +42,12 @@
     if (text.startsWith("//")) {
       exact = true;
       text = text.slice(2);
+    }
+
+    // Check for LIT: prefix (treat * and ? as literal characters)
+    if (text.startsWith("LIT:")) {
+      literal = true;
+      text = text.slice(4);
     }
 
     // Detect boundary markers BEFORE stripping whitespace
@@ -57,7 +64,7 @@
       text = text.toLowerCase();
     }
 
-    const hasWildcard = text.includes("*") || text.includes("?");
+    const hasWildcard = (!literal) && (text.includes("*") || text.includes("?"));
 
     return {
       pattern: text,
@@ -66,11 +73,13 @@
       boundaryBefore: exact ? true : boundaryBefore,
       boundaryAfter:  exact ? true : boundaryAfter,
       hasWildcard: hasWildcard,
+      literal: literal,
     };
-  }
+}
 
   // ---------------------------------------------------------------------------
   // STEP 2: Convert a glob pattern into a regex fragment string.
+  // Supports escaping: \* and \? mean literal characters, not wildcards.
   // ---------------------------------------------------------------------------
   function globToRegexFragment(pattern) {
     let result = "";
@@ -82,15 +91,37 @@
       const isFirst = (i === 0);
       const isLast  = (i === chars.length - 1);
 
-      if (ch === "*") {
-        if (isFirst || isLast) {
-          // IMPORTANT: wildcard should carry until next whitespace (not stop at punctuation)
-          result += "[^\\s\\p{P}]*";
+      // Escape support: treat next char literally (including * and ?)
+      if (ch === "\\") {
+        const next = chars[i + 1];
+        if (next === undefined) {
+          // trailing backslash, treat it literally
+          result += "\\\\";
         } else {
-          result += hasLiteralSpace ? "[\\s\\S]*?" : "[^\\s\\p{P}]*?";
+          // add escaped literal of next char
+          result += next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          i++; // consume next
         }
-      } else if (ch === "?") {
-        result += hasLiteralSpace ? "[\\s\\S]" : "[^\\s\\p{P}]";
+        continue;
+      }
+
+        if (ch === "*") {
+          const prev = chars[i - 1];
+          const next = chars[i + 1];
+
+          // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
+          // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
+          if (prev === " " && next === " ") {
+            result += "[^\\s]+";
+          } else if (isFirst || isLast) {
+            result += "[^\\s\\p{P}]*";
+          } else {
+            result += "[^\\s\\p{P}]*?";
+          }
+        } else if (ch === "?") {
+          result += "[\\s\\S]";
+      } else if (ch === " ") {
+        result += "\\s+";
       } else {
         result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       }
@@ -108,7 +139,9 @@
       fragment += "(?:^|(?<=[\\s\\p{P}]))";
     }
 
-    fragment += globToRegexFragment(parsed.pattern);
+    fragment += parsed.literal
+      ? parsed.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      : globToRegexFragment(parsed.pattern);
 
     if (parsed.boundaryAfter) {
       fragment += "(?=$|[\\s\\p{P}])";
@@ -145,18 +178,26 @@
       // Longer patterns first for longest-match preference at same start
       items.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
 
-      // Wrap each in a CAPTURE group so we can identify which matched
-      const combined = items.map(f => "(" + f.fragment + ")").join("|");
-      const metas = items.map(f => ({
-        hasWildcard: !!f.parsed.hasWildcard,
-        patternLen: f.parsed.pattern.length
-      }));
+      // Chunk large alternations to keep capture-group scanning fast
+      const MAX_ALTS_PER_REGEX = 120;
 
       const flags = key === "sensitive" ? "gu" : "giu";
-      try {
-        regexes.push({ re: new RegExp(combined, flags), metas });
-      } catch (e) {
-        console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
+
+      for (let start = 0; start < items.length; start += MAX_ALTS_PER_REGEX) {
+        const chunk = items.slice(start, start + MAX_ALTS_PER_REGEX);
+
+        // Wrap each in a CAPTURE group so we can identify which matched
+        const combined = chunk.map(f => "(" + f.fragment + ")").join("|");
+        const metas = chunk.map(f => ({
+          hasWildcard: !!f.parsed.hasWildcard,
+          patternLen: f.parsed.pattern.length
+        }));
+
+        try {
+          regexes.push({ re: new RegExp(combined, flags), metas });
+        } catch (e) {
+          console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
+        }
       }
     }
 
