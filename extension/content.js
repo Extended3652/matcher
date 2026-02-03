@@ -1,9 +1,9 @@
 // =============================================================================
-// CMS Highlighter — Content Script (simple rewrite)
+// CMS Highlighter - Content Script (simple rewrite)
 // - Walk text nodes
 // - Wrap matches in spans
 // - Exactly one decision point: which matcher to use based on region
-// - Client-only categories apply only in clientbar, and win there
+// - Client name in navbar can be highlighted based on dict.clients rules
 // =============================================================================
 
 (function() {
@@ -12,9 +12,8 @@
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
 
-  // Categories that should ONLY affect the client field area (clientbar)
-  // Add more later if you create other client-only category types.
-  const CLIENT_ONLY_CATEGORIES = ["IMG Clients"];
+  // We are NOT using a special "IMG Clients" category anymore.
+  const CLIENT_ONLY_CATEGORIES = [];
 
   // Guardrails
   const MAX_SPAN_LEN = 120;
@@ -28,14 +27,18 @@
   // Priority map from original dictionary category order (lower = higher priority)
   let priorityByName = new Map();
 
+  // Client highlight config
+  let clientRules = [];
+  let categoryStyleByName = new Map();
+
   // ---------------------------------------------------------------------------
   // Route guard
   // ---------------------------------------------------------------------------
-  function isModStatusRoute() {
+  function isBlockedRoute() {
     return (
       location.hostname === "cms.bazaarvoice.com" &&
       location.hash &&
-      location.hash.includes("/modstatus")
+      (location.hash.includes("/modstatus") || location.hash.includes("/guidelinesMod"))
     );
   }
 
@@ -110,6 +113,125 @@
     return d;
   }
 
+  function buildCategoryStyleMap(dict) {
+    const map = new Map();
+    const cats = Array.isArray(dict.categories) ? dict.categories : [];
+    for (const c of cats) {
+      const name = normalizeName(getCategoryName(c));
+      if (!name) continue;
+      map.set(name, {
+        color: c.color || "#FFFF00",
+        fColor: c.fColor || "#000000"
+      });
+    }
+    return map;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client-name highlight
+  // ---------------------------------------------------------------------------
+  function getCmsClientNameEl() {
+    return document.querySelector(".navbar-inner .client-name");
+  }
+
+  function getCmsClientName() {
+    const el = getCmsClientNameEl();
+    return el ? String(el.textContent || "").trim() : "";
+  }
+
+  function getCmsContentType() {
+    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
+
+    if (raw.includes("image")) return "Image";
+    if (raw.includes("profile")) return "Profile";
+    if (raw.includes("question")) return "Question";
+    return "Default";
+  }
+
+  function globToRegex(pattern) {
+    const p = String(pattern || "").trim();
+    if (!p) return null;
+
+    // Escape regex specials, then convert * and ? to wildcards
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+
+    try {
+      return new RegExp(rx, "i");
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function findClientRule(clientName) {
+    const name = String(clientName || "").trim();
+    if (!name) return null;
+
+    for (const r of clientRules) {
+      if (!r || !r._rx) continue;
+      if (r._rx.test(name)) return r;
+    }
+    return null;
+  }
+
+  function pickClientCategory(rule, contentType) {
+    if (!rule) return null;
+
+    const overrides = rule.overrides || {};
+
+    if (contentType === "Image" && overrides.Image) return overrides.Image;
+    if (contentType === "Profile" && overrides.Profile) return overrides.Profile;
+    if (contentType === "Question" && overrides.Question) return overrides.Question;
+
+    // Default: blank means no highlight
+    return rule.defaultCategory || null;
+  }
+
+  function clearClientHighlight() {
+    const el = getCmsClientNameEl();
+    if (!el) return;
+
+    if (el.hasAttribute("data-client-hl")) {
+      el.style.backgroundColor = "";
+      el.style.color = "";
+      el.style.borderRadius = "";
+      el.style.padding = "";
+      el.removeAttribute("data-client-hl");
+    }
+  }
+
+  function applyClientHighlight() {
+    clearClientHighlight();
+
+    if (isBlockedRoute()) return;
+    if (!globalEnabled) return;
+
+    const clientName = getCmsClientName();
+    if (!clientName) return;
+
+    const rule = findClientRule(clientName);
+    if (!rule) return;
+
+    const type = getCmsContentType();
+    const catName = pickClientCategory(rule, type);
+
+    // blank means no highlight
+    if (!catName) return;
+
+    const style = categoryStyleByName.get(catName);
+    if (!style) return;
+
+    const el = getCmsClientNameEl();
+    if (!el) return;
+
+    el.style.backgroundColor = style.color;
+    el.style.color = style.fColor;
+    el.style.borderRadius = "3px";
+    el.style.padding = "2px 6px";
+    el.setAttribute("data-client-hl", "1");
+  }
+
   // ---------------------------------------------------------------------------
   // DOM walking
   // ---------------------------------------------------------------------------
@@ -160,7 +282,7 @@
   function getPriority(catName, region) {
     const name = normalizeName(catName);
 
-    // In clientbar, client-only categories always win
+    // In clientbar, client-only categories always win (not used currently)
     if (region === "clientbar" && CLIENT_ONLY_CATEGORIES.includes(name)) {
       return -100000;
     }
@@ -179,10 +301,7 @@
     const lb = (b.end - b.start);
     if (la !== lb) return la > lb;
 
-    // If still tied, prefer earlier start
     if (a.start !== b.start) return a.start < b.start;
-
-    // Finally, prefer earlier end
     return a.end < b.end;
   }
 
@@ -205,10 +324,8 @@
   function resolveOverlaps(matches, region) {
     if (!Array.isArray(matches) || matches.length === 0) return [];
 
-    // Sort by start asc, then prefer better match first
     matches.sort((a, b) => {
       if (a.start !== b.start) return a.start - b.start;
-      // better first
       if (betterMatch(a, b, region)) return -1;
       if (betterMatch(b, a, region)) return 1;
       return (b.end - b.start) - (a.end - a.start);
@@ -228,14 +345,11 @@
         continue;
       }
 
-      // Overlap: keep the better one
       if (betterMatch(m, last, region)) {
         picked[picked.length - 1] = m;
       }
-      // else keep last
     }
 
-    // After replacement, picked might be slightly out of order in edge cases.
     picked.sort((a, b) => a.start - b.start || a.end - b.end);
     return picked;
   }
@@ -284,24 +398,21 @@
   function findMatchesForNode(text, region) {
     if (!text) return [];
 
-    // Review: never use client-only categories
     if (region === "review") {
       return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
     }
 
-    // Clientbar: run client-only and non-client-only, then resolve overlaps
     if (region === "clientbar") {
       const a = MatcherEngine.findMatches(text, compiledClientOnly) || [];
       const b = MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
       return a.concat(b);
     }
 
-    // Other: treat like review
     return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
   }
 
   function highlightTextNode(textNode) {
-    if (isModStatusRoute()) return;
+    if (isBlockedRoute()) return;
     if (!globalEnabled) return;
     if (!compiledNonClientOnly) return;
 
@@ -323,7 +434,7 @@
   }
 
   function highlightAll(root) {
-    if (isModStatusRoute()) return;
+    if (isBlockedRoute()) return;
     if (!globalEnabled) return;
     if (!compiledNonClientOnly) return;
 
@@ -349,6 +460,8 @@
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
+
+    clearClientHighlight();
   }
 
   // ---------------------------------------------------------------------------
@@ -362,7 +475,7 @@
     if (observer) return;
 
     observer = new MutationObserver((mutations) => {
-      if (isModStatusRoute()) return;
+      if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
@@ -395,6 +508,9 @@
             highlightTextNode(item.node);
           }
         }
+
+        // Also update the client-name highlight when the header changes
+        applyClientHighlight();
       }, 80);
     });
 
@@ -413,8 +529,8 @@
   // Init + messages
   // ---------------------------------------------------------------------------
   function init() {
-    if (isModStatusRoute()) {
-      console.log("CMS Highlighter: disabled on modstatus route");
+    if (isBlockedRoute()) {
+      console.log("CMS Highlighter: disabled on this route");
       return;
     }
 
@@ -434,20 +550,26 @@
 
       priorityByName = buildPriorityMapFromDict(dict);
 
-      // Compile two matchers
-      const dictClientOnly = dictOnlyClientOnly(dict);
-      const dictNonClientOnly = dictWithoutClientOnly(dict);
+      // Compile matchers
+      compiledClientOnly = MatcherEngine.compileAll(dictOnlyClientOnly(dict));
+      compiledNonClientOnly = MatcherEngine.compileAll(dictWithoutClientOnly(dict));
 
-      compiledClientOnly = MatcherEngine.compileAll(dictClientOnly);
-      compiledNonClientOnly = MatcherEngine.compileAll(dictNonClientOnly);
+      // Build client highlight maps
+      categoryStyleByName = buildCategoryStyleMap(dict);
+      clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+      for (const r of clientRules) {
+        r._rx = globToRegex(r.pattern);
+      }
 
       console.log(
         "CMS Highlighter: compiled non-client-only cats=" + (compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0) +
-        ", client-only cats=" + (compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0)
+        ", client-only cats=" + (compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0) +
+        ", clients=" + clientRules.length
       );
 
       if (globalEnabled) {
         highlightAll(document.body);
+        applyClientHighlight();
         startObserver();
       }
     });
@@ -465,6 +587,7 @@
         if (globalEnabled) {
           removeAllHighlights();
           highlightAll(document.body);
+          applyClientHighlight();
           startObserver();
         } else {
           stopObserver();
@@ -482,11 +605,18 @@
             priorityByName = buildPriorityMapFromDict(dict);
             compiledClientOnly = MatcherEngine.compileAll(dictOnlyClientOnly(dict));
             compiledNonClientOnly = MatcherEngine.compileAll(dictWithoutClientOnly(dict));
+
+            categoryStyleByName = buildCategoryStyleMap(dict);
+            clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+            for (const r of clientRules) {
+              r._rx = globToRegex(r.pattern);
+            }
           }
 
           removeAllHighlights();
           if (globalEnabled) {
             highlightAll(document.body);
+            applyClientHighlight();
             startObserver();
           } else {
             stopObserver();
@@ -501,7 +631,8 @@
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
           catsNonClientOnly: compiledNonClientOnly && compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0,
-          catsClientOnly: compiledClientOnly && compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0
+          catsClientOnly: compiledClientOnly && compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0,
+          clients: clientRules.length
         });
         break;
 
