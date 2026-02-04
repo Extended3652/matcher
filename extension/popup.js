@@ -296,13 +296,10 @@
           statsEl.textContent = "Not running on this page";
           return;
         }
-      const cats =
-         (Number(response.catsNonClientOnly) || 0) + (Number(response.catsClientOnly) || 0);
 
-      statsEl.textContent =
-        `${response.highlights} highlights | ${cats} categories | ` +
-        `${response.enabled ? "ON" : "OFF"}`;
-
+        statsEl.textContent =
+          `${response.highlights} highlights | ${response.cats || 0} categories | ` +
+          `${response.enabled ? "ON" : "OFF"}`;
       });
     });
   }
