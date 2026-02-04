@@ -3,3 +3,6 @@
 *_bak/
 extension/bench.js
 extension/bench.js
+
+# local scratch
+_scratch/
