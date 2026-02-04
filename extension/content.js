@@ -31,6 +31,15 @@
   let clientRules = [];
   let categoryStyleByName = new Map();
 
+  // Selector caching - cleared per processing batch
+  let cachedReviewRoot = undefined; // undefined = not cached, null = no root found
+  let cacheTimestamp = 0;
+  const CACHE_TTL_MS = 50; // Cache valid for 50ms (within a batch)
+
+  // Navigation detection - track last client/type to detect SPA navigation
+  let lastClientName = "";
+  let lastContentType = "";
+
   // ---------------------------------------------------------------------------
   // Route guard
   // ---------------------------------------------------------------------------
@@ -43,15 +52,28 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Region detection
+  // Region detection (with caching)
   // ---------------------------------------------------------------------------
+  function invalidateCache() {
+    cachedReviewRoot = undefined;
+    cacheTimestamp = 0;
+  }
+
   function getReviewRoot() {
-    return (
+    const now = Date.now();
+    if (cachedReviewRoot !== undefined && (now - cacheTimestamp) < CACHE_TTL_MS) {
+      return cachedReviewRoot;
+    }
+
+    // Cache miss - do the expensive querySelector calls
+    cachedReviewRoot = (
       document.querySelector("div.ugcAndDetails") ||
       document.querySelector("dd.moderatable") ||
       document.querySelector("div.read") ||
       null
     );
+    cacheTimestamp = now;
+    return cachedReviewRoot;
   }
 
   function getNodeRegion(node) {
@@ -438,6 +460,11 @@
     if (!globalEnabled) return;
     if (!compiledNonClientOnly) return;
 
+    // Invalidate cache for fresh lookups at start of batch
+    if (root === document.body) {
+      invalidateCache();
+    }
+
     const target = root || document.body;
     const textNodes = getTextNodes(target);
 
@@ -465,25 +492,63 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Observer
+  // Observer + Navigation Detection
   // ---------------------------------------------------------------------------
   let observer = null;
   let debounceTimer = null;
   let pendingNodes = [];
+  let navPollTimer = null;
+
+  // Check if SPA navigated to new content (client or content type changed)
+  function checkNavigation() {
+    const currentClient = getCmsClientName();
+    const currentType = getCmsContentType();
+
+    // If client or content type changed, we navigated
+    if (currentClient !== lastClientName || currentType !== lastContentType) {
+      console.log("CMS Highlighter: navigation detected, clearing highlights");
+      lastClientName = currentClient;
+      lastContentType = currentType;
+      invalidateCache();
+      removeAllHighlights();
+      highlightAll(document.body);
+      applyClientHighlight();
+    }
+  }
+
+  function startNavPoll() {
+    if (navPollTimer) return;
+    navPollTimer = setInterval(checkNavigation, 500);
+  }
+
+  function stopNavPoll() {
+    if (navPollTimer) {
+      clearInterval(navPollTimer);
+      navPollTimer = null;
+    }
+  }
 
   function startObserver() {
     if (observer) return;
+
+    // Track seen nodes to avoid duplicates within a batch
+    let seenNodes = new WeakSet();
 
     observer = new MutationObserver((mutations) => {
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
+          // Skip already-seen nodes
+          if (seenNodes.has(node)) continue;
+
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
+            seenNodes.add(node);
             pendingNodes.push({ type: "element", node });
           } else if (node.nodeType === Node.TEXT_NODE) {
             if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
+              seenNodes.add(node);
               pendingNodes.push({ type: "text", node });
             }
           }
@@ -494,6 +559,8 @@
       debounceTimer = setTimeout(() => {
         const batch = pendingNodes;
         pendingNodes = [];
+        seenNodes = new WeakSet(); // Reset for next batch
+        invalidateCache(); // Clear selector cache for new batch
 
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
@@ -515,6 +582,7 @@
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
+    startNavPoll(); // Start navigation detection polling
   }
 
   function stopObserver() {
@@ -523,6 +591,7 @@
       observer = null;
     }
     pendingNodes = [];
+    stopNavPoll(); // Stop navigation detection
   }
 
   // ---------------------------------------------------------------------------
@@ -566,6 +635,10 @@
         ", client-only cats=" + (compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0) +
         ", clients=" + clientRules.length
       );
+
+      // Initialize navigation tracking
+      lastClientName = getCmsClientName();
+      lastContentType = getCmsContentType();
 
       if (globalEnabled) {
         highlightAll(document.body);
