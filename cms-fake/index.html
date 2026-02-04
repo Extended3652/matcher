@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fake CMS Moderation Page</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #eef2f7; color: #0f172a; }
+
+    /* Top CMS-ish header */
+    .topbar {
+      background: #e6edf2;
+      border-bottom: 1px solid #cfd8e3;
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      gap: 22px;
+    }
+    .topbar .clientTitle { font-size: 40px; font-weight: 400; color: #0b2a3a; }
+    .topbar .meta { font-size: 34px; font-weight: 400; color: #0b2a3a; opacity: 0.75; }
+    .topbar .spacer { flex: 1; }
+    .topbar .btn {
+      border: 1px solid #9fb3c8;
+      background: #f6fbff;
+      padding: 10px 16px;
+      border-radius: 3px;
+      font-size: 22px;
+      cursor: pointer;
+    }
+
+    /* This is the "real CMS" client/type display area your content.js targets */
+    .navbar-inner {
+      background: #1f2937;
+      color: #fff;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      border-bottom: 1px solid #111827;
+    }
+    .navbar-inner .label {
+      opacity: 0.85;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .navbar-inner .client-name { font-weight: 700; }
+    .navbar-inner .decisionAreaLabel { font-weight: 600; }
+    .navbar-inner .chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #111827;
+      color: #fff;
+      font-size: 12px;
+      margin-left: auto;
+    }
+
+    /* Layout: left (type) + center (content) + right (codes) */
+    .page {
+      display: grid;
+      grid-template-columns: 260px 1fr 420px;
+      gap: 20px;
+      padding: 16px;
+      align-items: start;
+    }
+
+    /* Left panel like real CMS */
+    .leftPanel { padding-top: 30px; }
+    .leftPanel .typePill {
+      background: #2e7da1;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 700;
+      padding: 10px 12px;
+      border-radius: 3px;
+      width: 210px;
+      text-align: left;
+    }
+    .leftPanel .details { margin-top: 10px; color: #2e7da1; font-size: 18px; cursor: pointer; }
+
+    /* Center content */
+    .centerPanel { padding-top: 18px; }
+    .fieldLabel {
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9aa3af;
+      margin: 18px 0 6px;
+    }
+    .fieldValue {
+      font-size: 26px;
+      color: #0f172a;
+      line-height: 1.25;
+    }
+    .ratingBig { font-size: 26px; font-weight: 700; margin-top: 2px; }
+
+    .textBox {
+      background: #fff;
+      border: 1px solid #d7dbe1;
+      border-radius: 6px;
+      padding: 14px;
+      margin-top: 8px;
+    }
+
+    /* Controls (minimal) */
+    .controls {
+      background: #fff;
+      border: 1px solid #d7dbe1;
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .controls label { font-size: 12px; color: #374151; }
+    .controls select, .controls input, .controls button {
+      padding: 6px 8px;
+      font-size: 14px;
+    }
+    .controls input[type="number"] { width: 90px; }
+    .controls .btnPrimary {
+      background: #0b6e74;
+      color: #fff;
+      border: 1px solid #0b6e74;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .controls .btnGhost {
+      background: #fff;
+      color: #111827;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .controls .grow { flex: 1; min-width: 180px; }
+    .smallMuted { color: #6b7280; font-size: 12px; }
+
+    /* Right codes panel (cosmetic) */
+    .rightPanel { padding-top: 22px; }
+    .codesHeaderRow { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+    .codesHeaderRow .h { font-size: 26px; font-weight: 700; color: #0f172a; }
+    .codesHeaderRow .link { color: #1d73c5; font-size: 22px; cursor: pointer; }
+    .codesGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .codeBtn {
+      background: #f6d98c;
+      border: 1px solid #d4b162;
+      border-radius: 3px;
+      padding: 14px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 22px;
+      font-weight: 700;
+      color: #7a5c00;
+      user-select: none;
+    }
+    .codeBtn.gray { background: #e9eef2; border-color: #cfd8e3; color: #111827; }
+    .codeBtn.red { background: #e9eef2; border-color: #d24b4b; color: #d24b4b; }
+    .codeBtn .box { width: 16px; height: 16px; border: 2px solid currentColor; border-radius: 3px; opacity: 0.6; }
+
+    /* Highlight roots */
+    .ugcAndDetails { border: 1px dashed #cbd5e1; padding: 12px; border-radius: 8px; }
+    dt { font-weight: 700; }
+    dd.moderatable { margin: 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; }
+    .read { padding: 10px; background: #f9fafb; border-radius: 8px; }
+
+    .danger { color: #b91c1c; font-weight: 700; }
+
+    /* Modal for one-off custom content submission */
+    .modalOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal {
+      width: min(900px, 92vw);
+      background: #fff;
+      border-radius: 10px;
+      border: 1px solid #d7dbe1;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+      padding: 14px;
+    }
+    .modal h3 { margin: 0 0 10px 0; font-size: 18px; }
+    .modalRow { margin-bottom: 10px; }
+    .modalRow label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
+    .modalRow input, .modalRow textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .modalRow textarea { height: 180px; resize: vertical; }
+    .modalActions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="clientTitle" id="topClient">Boots</div>
+    <div class="meta" id="topLang">English</div>
+    <div class="meta" id="topBatch">Small Batch</div>
+    <div class="spacer"></div>
+    <button class="btn" type="button">Mail</button>
+    <button class="btn" type="button">Reset</button>
+  </div>
+
+  <!-- This is the "real CMS" client/type display area your content.js targets -->
+  <div class="navbar-inner">
+    <div>
+      <div class="label">Client</div>
+      <span class="client-name" id="clientNameNav">Boots</span>
+    </div>
+    <div>
+      <div class="label">Content Type</div>
+      <span class="decisionAreaLabel" id="contentTypeNav">Review</span>
+    </div>
+    <div class="chip" id="urlChip">/moderation/review/123</div>
+  </div>
+
+  <div class="page">
+
+    <!-- LEFT -->
+    <div class="leftPanel">
+      <div class="typePill" id="leftTypePill">Review</div>
+      <div class="details">show details</div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="centerPanel">
+
+      <div class="controls">
+        <label>
+          Client:
+          <select id="selClient">
+            <option>Boots</option>
+            <option>Waitrose</option>
+            <option>KitchenAidBrand</option>
+            <option>Similac</option>
+          </select>
+        </label>
+
+        <label>
+          Type:
+          <select id="selType">
+            <option>Review</option>
+            <option>Image</option>
+            <option>Question</option>
+            <option>Answer</option>
+          </select>
+        </label>
+
+        <label>
+          Mutation delay ms:
+          <input id="delayMs" type="number" value="250" min="0" />
+        </label>
+
+        <button class="btnPrimary" id="btnSubmit" type="button">Submit (load next)</button>
+        <button class="btnGhost" id="btnCustom" type="button">Submit custom...</button>
+
+        <button class="btnGhost" id="btnPrev" type="button">Prev</button>
+        <button class="btnGhost" id="btnNext" type="button">Next</button>
+        <button class="btnGhost" id="btnToggleRoot" type="button">Cycle root</button>
+
+        <div class="grow"></div>
+        <span class="smallMuted" id="queueInfo">Queue: 0 submitted</span>
+      </div>
+
+      <div class="fieldLabel">Product</div>
+      <div class="fieldValue" id="productName">Garnier Daily UV Niacinamide, BHA & AHA, Invisible + Matte - Anti-Imperfection Fluid SPF50+, 40ml</div>
+
+      <div class="fieldLabel">Category</div>
+      <div class="fieldValue" id="categoryName">not set</div>
+
+      <div class="fieldLabel" id="ratingLabel">Review Rating</div>
+      <div class="fieldValue ratingBig" id="reviewRating">5</div>
+
+      <div class="fieldLabel">Title</div>
+      <div class="fieldValue" id="titleValue">One of the best I have tried</div>
+
+      <div class="fieldLabel">Text</div>
+      <div class="textBox">
+        <!-- Content area where your content.js should target -->
+        <div id="contentHost"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="rightPanel">
+      <div class="codesHeaderRow">
+        <div class="h">Moderation codes</div>
+        <div class="link">Guidelines</div>
+      </div>
+
+      <div class="codesGrid">
+        <div class="codeBtn"><span class="box"></span>AE</div>
+        <div class="codeBtn"><span class="box"></span>CBN</div>
+        <div class="codeBtn"><span class="box"></span>CP</div>
+
+        <div class="codeBtn red"><span class="box"></span>CS</div>
+        <div class="codeBtn gray"><span class="box"></span>CSN</div>
+        <div class="codeBtn red"><span class="box"></span>FL</div>
+
+        <div class="codeBtn red"><span class="box"></span>GIU</div>
+        <div class="codeBtn red"><span class="box"></span>LI</div>
+        <div class="codeBtn gray"><span class="box"></span>NLI</div>
+
+        <div class="codeBtn"><span class="box"></span>OL</div>
+        <div class="codeBtn red"><span class="box"></span>PII</div>
+        <div class="codeBtn"><span class="box"></span>PRI</div>
+
+        <div class="codeBtn red"><span class="box"></span>PUX</div>
+        <div class="codeBtn"><span class="box"></span>QR</div>
+        <div class="codeBtn red"><span class="box"></span>RW</div>
+
+        <div class="codeBtn red"><span class="box"></span>SAI</div>
+        <div class="codeBtn red"><span class="box"></span>SI</div>
+        <div class="codeBtn red"><span class="box"></span>SPM</div>
+
+        <div class="codeBtn red"><span class="box"></span>TEST</div>
+        <div class="codeBtn"><span class="box"></span>UA</div>
+        <div class="codeBtn red"><span class="box"></span>VAC</div>
+
+        <div class="codeBtn red"><span class="box"></span>WP</div>
+        <div class="codeBtn red"><span class="box"></span>ZZER</div>
+        <div class="codeBtn gray"><span class="box"></span>NOTE</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal -->
+  <div class="modalOverlay" id="modalOverlay">
+    <div class="modal">
+      <h3>Submit custom item</h3>
+
+      <div class="modalRow">
+        <label for="customTitle">Title</label>
+        <input id="customTitle" type="text" value="" />
+      </div>
+
+      <div class="modalRow">
+        <label for="customText">Text (this is what gets highlighted)</label>
+        <textarea id="customText"></textarea>
+      </div>
+
+      <div class="modalActions">
+        <button class="btnGhost" id="btnCancelCustom" type="button">Cancel</button>
+        <button class="btnPrimary" id="btnSubmitCustom" type="button">Submit</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const ROOTS = ["ugcAndDetails", "moderatable", "read"];
+  let rootIndex = 0;
+
+  const submitted = [];
+  let viewIndex = -1;
+  let nextId = 123;
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, c => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    }[c]));
+  }
+
+  function normalizeType(t) {
+    const v = String(t || "").trim();
+    if (!v) return "Review";
+    return v[0].toUpperCase() + v.slice(1).toLowerCase();
+  }
+
+  function urlTypeSlug(type) {
+    return normalizeType(type).toLowerCase();
+  }
+
+  function sample(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function makeGeneratedTitle(type) {
+    const t = normalizeType(type);
+    const map = {
+      Review: ["One of the best I have tried", "Works great", "Pretty good overall", "Not for me"],
+      Image: ["Photo attached", "See image", "Image shows issue", "Picture included"],
+      Question: ["Quick question", "Question about size", "Does this work?", "Need help"],
+      Answer: ["Answer", "Response", "My experience", "Here is what I found"]
+    };
+    return sample(map[t] || ["Item"]);
+  }
+
+  function makeGeneratedText(type) {
+    const t = normalizeType(type);
+
+    const common = [
+      "I bought this as I had seen it recommended online as a good sunscreen with no white cast.",
+      "Shipping was fast. Order #12345 arrived missing 2 pieces. Can you send replacements?",
+      "It took three days to arrive. The retailer said it would be overnight.",
+      "One user reported headaches, but it did not happen to me. Just sharing what I heard."
+    ];
+
+    const reviewBits = [
+      "As a black girl with oily skin, this was important to me.",
+      "Great quality, nice feel, and it sits well under makeup.",
+      "I do not feel as meh by midday and I can focus more.",
+      "Pharmacy pickup was easy and the price was good."
+    ];
+
+    const questionBits = [
+      "Does this come in a smaller size?",
+      "Is this safe for kids since birth?",
+      "Can I use this on sensitive skin?",
+      "Does it leave a white cast?"
+    ];
+
+    const answerBits = [
+      "Yes, it comes in multiple sizes. Check the product page.",
+      "It depends on your needs. Ask your doctor if you are unsure.",
+      "I had no issues, but everyone is different.",
+      "Mine arrived in 2 days and worked as expected."
+    ];
+
+    const imageBits = [
+      "Image shows a scratch on the surface and a barcode label.",
+      "Photo has a person in the background and a shipping label visible.",
+      "Screenshot includes an email address and order number.",
+      "Image is blurry and includes a street address in the corner."
+    ];
+
+    const bigBlock =
+      "Some clients have long guideline text blocks. " +
+      "This is here to test performance, range handling, and avoiding full-document scans. " +
+      "Lorem ipsum ".repeat(60);
+
+    if (t === "Review") return [sample(common), sample(reviewBits), "Long block:\n" + bigBlock].join("\n\n");
+    if (t === "Question") return [sample(questionBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
+    if (t === "Answer") return [sample(answerBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
+    if (t === "Image") return [sample(imageBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
+    return [sample(common), "Long block:\n" + bigBlock].join("\n\n");
+  }
+
+  function splitToParas(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n");
+    const parts = raw.split(/\n{2,}/g).map(s => s.trim()).filter(Boolean);
+    if (parts.length) return parts;
+
+    const s = raw.trim();
+    if (!s) return ["(empty)"];
+    if (s.length <= 240) return [s];
+
+    const out = [];
+    let i = 0;
+    while (i < s.length) {
+      out.push(s.slice(i, i + 220));
+      i += 220;
+    }
+    return out;
+  }
+
+  function setClientEverywhere(v) {
+    document.getElementById("clientNameNav").textContent = v;
+    document.getElementById("topClient").textContent = v;
+  }
+
+  function setTypeEverywhere(v) {
+    document.getElementById("contentTypeNav").textContent = v;
+    document.getElementById("leftTypePill").textContent = v;
+  }
+
+  function setMetaEverywhere(item) {
+    setClientEverywhere(item.client);
+    setTypeEverywhere(item.type);
+
+    document.getElementById("titleValue").textContent = item.title || "";
+
+    const isReview = (normalizeType(item.type) === "Review");
+    document.getElementById("ratingLabel").style.display = isReview ? "" : "none";
+    document.getElementById("reviewRating").style.display = isReview ? "" : "none";
+    document.getElementById("reviewRating").textContent = isReview ? String(item.rating || 5) : "";
+
+    document.getElementById("urlChip").textContent = "/moderation/" + urlTypeSlug(item.type) + "/" + String(item.id);
+  }
+
+  function makeContentMarkup(item) {
+    const rootClass = ROOTS[rootIndex];
+    const wrap = document.createElement("div");
+
+    const outerCls = (rootClass === "ugcAndDetails") ? "ugcAndDetails" : "";
+    const ddCls = (rootClass === "moderatable") ? "moderatable" : "";
+    const readCls = (rootClass === "read") ? "read" : "";
+
+    const paragraphs = splitToParas(item.text || "");
+
+    wrap.innerHTML = `
+      <div class="${outerCls}">
+        <dl>
+          <dt>${escapeHtml(normalizeType(item.type))} Text</dt>
+          <dd class="${ddCls}">
+            <div class="${readCls}">
+              ${paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join("\n")}
+              <p>
+                Nested <strong>formatting</strong>, line<br />breaks, and
+                <span class="danger">edge cases</span>.
+              </p>
+            </div>
+          </dd>
+        </dl>
+      </div>
+    `;
+    return wrap;
+  }
+
+  function renderItemToPage(item) {
+    const host = document.getElementById("contentHost");
+    const delay = Number(document.getElementById("delayMs").value || 0);
+    const node = makeContentMarkup(item);
+
+    setTimeout(() => {
+      host.innerHTML = "";
+      host.appendChild(node);
+    }, delay);
+  }
+
+  function updateQueueInfo() {
+    document.getElementById("queueInfo").textContent = "Queue: " + submitted.length + " submitted" + (viewIndex >= 0 ? (" (view " + (viewIndex + 1) + "/" + submitted.length + ")") : "");
+  }
+
+  function buildGeneratedItem() {
+    const client = document.getElementById("selClient").value;
+    const type = normalizeType(document.getElementById("selType").value);
+    return {
+      id: nextId++,
+      client,
+      type,
+      rating: 5,
+      title: makeGeneratedTitle(type),
+      text: makeGeneratedText(type)
+    };
+  }
+
+  function submitItem(item) {
+    submitted.push(item);
+    viewIndex = submitted.length - 1;
+    setMetaEverywhere(item);
+    renderItemToPage(item);
+    updateQueueInfo();
+  }
+
+  function submitAndLoadNextGenerated() {
+    submitItem(buildGeneratedItem());
+  }
+
+  function showPrev() {
+    if (submitted.length === 0) return;
+    viewIndex = Math.max(0, viewIndex - 1);
+    const item = submitted[viewIndex];
+    setMetaEverywhere(item);
+    renderItemToPage(item);
+    updateQueueInfo();
+  }
+
+  function showNext() {
+    if (submitted.length === 0) return;
+    viewIndex = Math.min(submitted.length - 1, viewIndex + 1);
+    const item = submitted[viewIndex];
+    setMetaEverywhere(item);
+    renderItemToPage(item);
+    updateQueueInfo();
+  }
+
+  // Modal helpers
+  function openModal() {
+    document.getElementById("customTitle").value = "";
+    document.getElementById("customText").value = "";
+    document.getElementById("modalOverlay").style.display = "flex";
+    setTimeout(() => document.getElementById("customTitle").focus(), 0);
+  }
+  function closeModal() {
+    document.getElementById("modalOverlay").style.display = "none";
+  }
+
+  // Wire controls
+  document.getElementById("btnSubmit").addEventListener("click", submitAndLoadNextGenerated);
+  document.getElementById("btnPrev").addEventListener("click", showPrev);
+  document.getElementById("btnNext").addEventListener("click", showNext);
+
+  document.getElementById("btnToggleRoot").addEventListener("click", () => {
+    rootIndex = (rootIndex + 1) % ROOTS.length;
+    if (viewIndex >= 0 && submitted[viewIndex]) {
+      renderItemToPage(submitted[viewIndex]);
+    } else {
+      renderItemToPage(buildGeneratedItem());
+    }
+  });
+
+  document.getElementById("selClient").addEventListener("change", () => {
+    setClientEverywhere(document.getElementById("selClient").value);
+  });
+
+  document.getElementById("selType").addEventListener("change", () => {
+    setTypeEverywhere(normalizeType(document.getElementById("selType").value));
+  });
+
+  document.getElementById("btnCustom").addEventListener("click", openModal);
+  document.getElementById("btnCancelCustom").addEventListener("click", closeModal);
+  document.getElementById("modalOverlay").addEventListener("click", (e) => {
+    if (e.target && e.target.id === "modalOverlay") closeModal();
+  });
+
+  document.getElementById("btnSubmitCustom").addEventListener("click", () => {
+    const client = document.getElementById("selClient").value;
+    const type = normalizeType(document.getElementById("selType").value);
+
+    const title = (document.getElementById("customTitle").value || "").trim() || makeGeneratedTitle(type);
+    const text = (document.getElementById("customText").value || "").trim() || makeGeneratedText(type);
+
+    closeModal();
+
+    submitItem({
+      id: nextId++,
+      client,
+      type,
+      rating: 5,
+      title,
+      text
+    });
+  });
+
+  // Init: seed a visible item (not counted as submitted)
+  function init() {
+    setClientEverywhere(document.getElementById("selClient").value);
+    setTypeEverywhere(normalizeType(document.getElementById("selType").value));
+
+    const first = buildGeneratedItem();
+    nextId--; // don't consume an id for the initial display
+    setMetaEverywhere(first);
+    renderItemToPage(first);
+    updateQueueInfo();
+  }
+  init();
+</script>
+
+</body>
+</html>
