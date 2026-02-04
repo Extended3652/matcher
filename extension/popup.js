@@ -296,13 +296,19 @@
           statsEl.textContent = "Not running on this page";
           return;
         }
-      const cats =
-         (Number(response.catsNonClientOnly) || 0) + (Number(response.catsClientOnly) || 0);
 
-      statsEl.textContent =
-        `${response.highlights} highlights | ${cats} categories | ` +
-        `${response.enabled ? "ON" : "OFF"}`;
-
+        let line = `${response.highlights} hl | ${response.categories || 0} cats`;
+        if (response.clientName) {
+          line += ` | ${response.clientName}`;
+          if (response.contentType) line += ` (${response.contentType})`;
+          if (response.clientCategory) {
+            line += ` \u2192 ${response.clientCategory}`;
+          } else {
+            line += ` \u2192 uncoded`;
+          }
+        }
+        line += ` | ${response.enabled ? "ON" : "OFF"}`;
+        statsEl.textContent = line;
       });
     });
   }

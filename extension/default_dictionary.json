@@ -1517,97 +1517,7 @@
       "name": "IMG Clients",
       "color": "#0000CD",
       "fColor": "#FFFFFF",
-      "words": [
-        "Berocca-Uk",
-        "Brita",
-        "BurtsBees",
-        "ByrneDairy",
-        "CloroxBrand",
-        "Conair-Brand",
-        "Costco*",
-        "Dibsbeauty",
-        "Dupont",
-        "EliteProfile",
-        "Everydropwaterbrand",
-        "FisherPrice",
-        "FreshStep",
-        "Glad",
-        "Hanes*",
-        "HiddenValley",
-        "HotTopic",
-        "Huel",
-        "IndianMotorCycle",
-        "Jtb-Products",
-        "Kendoholdings",
-        "Lego-Global",
-        "Medela-Au",
-        "Murad-Llc",
-        "Nanit",
-        "Pureleaf-Tea",
-        "SonyAP-AU",
-        "Textile-Nest",
-        "Tradepint-UK",
-        "Tradepoint-UK",
-        "Worldwise",
-        "abercrombie",
-        "aci-International-Walmart",
-        "agropur",
-        "americaneagle",
-        "anthropologie",
-        "asda",
-        "autozone",
-        "bellisiofoods",
-        "bhphoto",
-        "boxlunch",
-        "canesten-uk",
-        "carnivalc*",
-        "costco",
-        "diy",
-        "exxel*",
-        "fenty-En_us",
-        "fibrecycle",
-        "floravi",
-        "freepeople",
-        "frommpro",
-        "goodai*",
-        "henkel-Corporation-Walmart",
-        "hollister",
-        "hollister-uk",
-        "homedepot",
-        "homedepot-canada",
-        "hottopic",
-        "jcpenney",
-        "josie-maran-cosmetics*",
-        "kidsfootlocker",
-        "kitchenaidbrand",
-        "kohler",
-        "landolakes*",
-        "lego",
-        "maybelline-na",
-        "maytagbrand",
-        "milwaukeetool",
-        "polarisorv",
-        "redken",
-        "royalcaribbean",
-        "sainsburys-En_gb",
-        "screwfix*",
-        "sephora",
-        "shippd",
-        "snickers",
-        "sodelicious",
-        "solaray",
-        "sony-global",
-        "targetcom",
-        "tee-zed",
-        "thevermontcountrystore",
-        "urbanoutfitters",
-        "victoriassecret",
-        "waitrose",
-        "walmart",
-        "whirlpoolbrand",
-        "zestypawspwr",
-        "zola"
-      ]
+      "words": []
     },
     {
       "id": "9c7678b0-fe3f-417a-bcd3-e76280175f71",
@@ -7173,6 +7083,1549 @@
         "time to apply",
         "transaction fee"
       ]
+    }
+  ],
+  "clients": [
+    {
+      "pattern": "4knines",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Abel-Andcole",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "abercrombie",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "academy",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "aci-International-Walmart",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "agropur",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "albertson",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "aldi",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "amazon",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "americaneagle",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "amway",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "anaconda",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "anthropologie",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "argos",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "asda",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "ashley",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "asos",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "asus",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ATT",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "autozone",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "bass",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "bcf",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "bellisiofoods",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Berocca-Uk",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "bestbuy",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "bhphoto",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "bhphoto*",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "bondi",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "bonds",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "booking.com",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "boots",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "bosch",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "boxlunch",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "breville",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "briscoe",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Brita",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "brooks",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Brother-Au",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "burpee",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "BurtsBees",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "ByrneDairy",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "callaway",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "canadiantire-Ca",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "canesten-uk",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "carnivalc*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "cb2",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "champion",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "chewy",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "clinique",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "clorox",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "CloroxBrand",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "coleman",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "colgate",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "columbia",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Conair-Brand",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "contigo",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "converse",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "costco",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Costco*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "crocs",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "cuisinart",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "cvs",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dell",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dewalt",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Dibsbeauty",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "dickies",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dillard",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dior",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "diy",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "dollarama",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dsw",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dunelm",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "dunkin",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Dupont",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "dyson",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ebay",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ego",
+      "defaultCategory": "RET Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "electrolux",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "elemis",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ELF",
+      "defaultCategory": "RET Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "EliteProfile",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "etsy",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "eucerin",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "everlane",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Everydropwaterbrand",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "express",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "exxel*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "faherty",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "fenty-En_us",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "ferguson",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "fibrecycle",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "fingerhut",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "FisherPrice",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "floravi",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "footlocker",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ford",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "fossil",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "freepeople",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "FreshStep",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "frommpro",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "gamestop",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "garnier",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "GE",
+      "defaultCategory": "RET Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "Gelighting",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "ghd",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "gillette",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "givenchy",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Glad",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "gnc",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "goodai*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "graco",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "grainger",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "gucci",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "haier",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Hanes*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "henkel-Corporation-Walmart",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "hexclad",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "hibbett",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "HiddenValley",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "hisense",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "hoka",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "hollister",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "hollister-uk",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "homedepot",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "homedepot-canada",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "honda",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "HotTopic",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "HP",
+      "defaultCategory": "RET Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "hsn",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Huel",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "igloo",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ikea",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "IndianMotorCycle",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "jbhifi",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "jbl",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "jcpenney",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "jcrew",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "joann",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "jockey",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "josie-maran-cosmetics*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Jtb-Products",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Kendoholdings",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "kidsfootlocker",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "kitchenaidbrand",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "kmart",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "kogan",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "kohler",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "kuhl",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "landolakes*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "lazada",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "lego",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Lego-Global",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "lenovo",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "LG",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "lidl",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "liquorland-au",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "logitech",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "lowes",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "lululemon",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "lynch*",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "Macys",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "madewell",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "makita",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "matalan",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "maybelline-na",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "maytagbrand",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "MEC",
+      "defaultCategory": "RET Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "mecca",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Medela-Au",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "meijer",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "michaels",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "milani",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "milwaukee",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "milwaukeetool",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "mitchum",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "morrison",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "motorola",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Murad-Llc",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Nanit",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "napoleongrills",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "nars",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "neutrogena",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "nike",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ninja",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "nissan",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "nyx",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "officeworks",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "olaplex",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "olay",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "orvis",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "otterbox",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "overstock",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "pandora",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "patagonia",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "pendleton",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "petco",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "philips",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "polaris",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "polarisorv",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "poshmark",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "primark",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "publix",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Pureleaf-Tea",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "qvc",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "rawlings",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "rcwilley",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "redken",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "reebok",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "rei",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "revlon",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ridgid",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "rimmel",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "roomba",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "ross",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "royalcaribbean",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "ryobi",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "safeway",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "sainsburys-En_gb",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "saks",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "salomon",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "samsonite",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "samsung",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "saucony",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "screwfix*",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "sears",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "sephora",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "shimano",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "shippd",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "shiseido",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "skims",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "snickers",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "sodelicious",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "solaray",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "sony-global",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "SonyAP-AU",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "staples",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "stihl",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "straighttalk",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "subaru",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "suzuki",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "targetcom",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "tatcha",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "tee-zed",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "temu",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "tesco",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Textile-Nest",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "thevermontcountrystore",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "thule",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "toro",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "toshiba",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "tracfone-wireless",
+      "defaultCategory": "GIU Clients Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "Tradepint-UK",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "Tradepoint-UK",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "traeger",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "tumi",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "UA",
+      "defaultCategory": "RET Exact",
+      "overrides": {}
+    },
+    {
+      "pattern": "ulta",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "urbanoutfitters",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "victoriassecret",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "vizio",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "wacoal",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "waitrose",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "walmart",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "weber",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "whirlpoolbrand",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "wiggle",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "Worldwise",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "worx",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "yamaha",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "yeti",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
+    },
+    {
+      "pattern": "zestypawspwr",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "zola",
+      "defaultCategory": null,
+      "overrides": {
+        "Image": "IMG Clients"
+      }
+    },
+    {
+      "pattern": "zwilling",
+      "defaultCategory": "RET / CR / Rx",
+      "overrides": {}
     }
   ]
 }

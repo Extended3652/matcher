@@ -1,32 +1,73 @@
 // =============================================================================
-// CMS Highlighter — Content Script (simple rewrite)
-// - Walk text nodes
-// - Wrap matches in spans
-// - Exactly one decision point: which matcher to use based on region
-// - Client-only categories apply only in clientbar, and win there
+// CMS Highlighter — Content Script
+// =============================================================================
+// - Region-aware highlighting (clientbar vs review vs other)
+// - Client-field highlighting independent of content matching
+//   Reads span.client-name + span.decisionAreaLabel, looks up dict.clients
+// - Performance: cached selectors, auto-clear on content navigation,
+//   observer dedup, no full-dictionary cloning
 // =============================================================================
 
-(function() {
+(function () {
   "use strict";
 
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
-
-  // Categories that should ONLY affect the client field area (clientbar)
-  // Add more later if you create other client-only category types.
-  const CLIENT_ONLY_CATEGORIES = ["IMG Clients"];
+  const CLIENT_HL_CLASS = "cms-hl-client"; // separate class for client-field highlights
 
   // Guardrails
   const MAX_SPAN_LEN = 120;
 
   let globalEnabled = true;
 
-  // Compiled matchers
-  let compiledClientOnly = null; // only CLIENT_ONLY_CATEGORIES
-  let compiledNonClientOnly = null; // everything except CLIENT_ONLY_CATEGORIES
+  // Compiled matcher for all enabled categories (review + other text)
+  let compiledAll = null;
 
-  // Priority map from original dictionary category order (lower = higher priority)
+  // Priority map from original dictionary category order
   let priorityByName = new Map();
+
+  // Client config from dictionary
+  let clientsConfig = []; // array of { pattern, defaultCategory, overrides }
+
+  // Category color lookup: name -> { color, fColor }
+  let categoryColors = new Map();
+
+  // ---------------------------------------------------------------------------
+  // Selector cache — invalidated on content navigation
+  // ---------------------------------------------------------------------------
+  let cachedReviewRoot = undefined; // undefined = not yet queried, null = not found
+  let cachedClientName = undefined;
+  let cachedContentType = undefined;
+
+  function invalidateCache() {
+    cachedReviewRoot = undefined;
+    cachedClientName = undefined;
+    cachedContentType = undefined;
+  }
+
+  function getReviewRoot() {
+    if (cachedReviewRoot !== undefined) return cachedReviewRoot;
+    cachedReviewRoot =
+      document.querySelector("div.ugcAndDetails") ||
+      document.querySelector("dd.moderatable") ||
+      document.querySelector("div.read") ||
+      null;
+    return cachedReviewRoot;
+  }
+
+  function getClientName() {
+    if (cachedClientName !== undefined) return cachedClientName;
+    const el = document.querySelector("span.client-name");
+    cachedClientName = el ? el.textContent.trim() : null;
+    return cachedClientName;
+  }
+
+  function getContentType() {
+    if (cachedContentType !== undefined) return cachedContentType;
+    const el = document.querySelector("span.decisionAreaLabel");
+    cachedContentType = el ? el.textContent.trim() : null;
+    return cachedContentType;
+  }
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -42,38 +83,26 @@
   // ---------------------------------------------------------------------------
   // Region detection
   // ---------------------------------------------------------------------------
-  function getReviewRoot() {
-    return (
-      document.querySelector("div.ugcAndDetails") ||
-      document.querySelector("dd.moderatable") ||
-      document.querySelector("div.read") ||
-      null
-    );
-  }
-
   function getNodeRegion(node) {
-    const el = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    const el =
+      node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
     if (!el || !el.closest) return "other";
 
-    // Client panel area (real CMS navbar-inner, fake CMS sidebar)
-    if (el.closest(".navbar-inner") || el.closest(".sidebar")) return "clientbar";
+    if (el.closest(".navbar-inner") || el.closest(".sidebar"))
+      return "clientbar";
 
-    // Review area
     const reviewRoot = getReviewRoot();
-    if (reviewRoot && (el === reviewRoot || reviewRoot.contains(el))) return "review";
+    if (reviewRoot && (el === reviewRoot || reviewRoot.contains(el)))
+      return "review";
 
     return "other";
   }
 
   // ---------------------------------------------------------------------------
-  // Dictionary helpers
+  // Dictionary helpers — NO cloning, just filter references
   // ---------------------------------------------------------------------------
-  function cloneDict(dict) {
-    return JSON.parse(JSON.stringify(dict));
-  }
-
   function getCategoryName(cat) {
-    return (cat && (cat.name || cat.categoryName || cat.title || cat.label))
+    return cat && (cat.name || cat.categoryName || cat.title || cat.label)
       ? String(cat.name || cat.categoryName || cat.title || cat.label)
       : "";
   }
@@ -94,20 +123,137 @@
     return map;
   }
 
-  function dictOnlyClientOnly(dict) {
-    const d = cloneDict(dict);
-    if (Array.isArray(d.categories)) {
-      d.categories = d.categories.filter(c => CLIENT_ONLY_CATEGORIES.includes(normalizeName(getCategoryName(c))));
+  function buildCategoryColorMap(dict) {
+    const map = new Map();
+    const cats = Array.isArray(dict.categories) ? dict.categories : [];
+    for (const cat of cats) {
+      const name = normalizeName(getCategoryName(cat));
+      if (name) {
+        map.set(name, { color: cat.color || "#FFFF00", fColor: cat.fColor || "#FFFFFF" });
+      }
     }
-    return d;
+    return map;
   }
 
-  function dictWithoutClientOnly(dict) {
-    const d = cloneDict(dict);
-    if (Array.isArray(d.categories)) {
-      d.categories = d.categories.filter(c => !CLIENT_ONLY_CATEGORIES.includes(normalizeName(getCategoryName(c))));
+  // Build a compiled config from the full dictionary (all enabled categories)
+  function compileFromDict(dict) {
+    // Pass the full dictionary to MatcherEngine — no cloning needed
+    return MatcherEngine.compileAll(dict);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client pattern matching
+  // ---------------------------------------------------------------------------
+  // Simple glob match: supports * and ? against a string (case-insensitive)
+  function globMatch(pattern, text) {
+    const p = pattern.toLowerCase();
+    const t = text.toLowerCase();
+
+    // Fast paths
+    if (p === t) return true;
+    if (!p.includes("*") && !p.includes("?")) return p === t;
+
+    // Convert glob to regex
+    let re = "^";
+    for (const ch of p) {
+      if (ch === "*") re += ".*";
+      else if (ch === "?") re += ".";
+      else re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
-    return d;
+    re += "$";
+
+    try {
+      return new RegExp(re, "i").test(t);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function resolveClientCategory(clientName, contentType) {
+    if (!clientName || clientsConfig.length === 0) return null;
+
+    // Find first matching client entry
+    for (const entry of clientsConfig) {
+      if (!globMatch(entry.pattern, clientName)) continue;
+
+      // Check content-type override first
+      if (contentType && entry.overrides && entry.overrides[contentType]) {
+        return entry.overrides[contentType]; // category name
+      }
+
+      // Fall back to default
+      return entry.defaultCategory; // null = uncoded
+    }
+
+    return null; // no matching client entry
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client field highlighting — independent of content matching
+  // ---------------------------------------------------------------------------
+  function highlightClientField() {
+    if (!globalEnabled) return;
+
+    // Remove previous client highlights
+    removeClientHighlights();
+
+    const clientName = getClientName();
+    const contentType = getContentType();
+    if (!clientName) return;
+
+    const catName = resolveClientCategory(clientName, contentType);
+    if (!catName) return; // null = uncoded, no highlight
+
+    const colors = categoryColors.get(catName);
+    if (!colors) return;
+
+    // Find all span.client-name elements and highlight them
+    const els = document.querySelectorAll("span.client-name");
+    for (const el of els) {
+      const span = document.createElement("span");
+      span.className = CLIENT_HL_CLASS;
+      span.style.backgroundColor = colors.color;
+      span.style.color = colors.fColor;
+      span.style.padding = "0 2px";
+      span.style.borderRadius = "3px";
+      span.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.1)";
+      span.setAttribute("data-hl-cat", catName);
+      span.textContent = el.textContent;
+
+      el.textContent = "";
+      el.appendChild(span);
+    }
+
+    // Also highlight client name in sidebar (meta-value.client-display)
+    const sideEls = document.querySelectorAll(".client-display, .meta-value.client-display");
+    for (const el of sideEls) {
+      if (el.querySelector("." + CLIENT_HL_CLASS)) continue; // already done
+      const text = el.textContent.trim();
+      if (!text) continue;
+
+      const span = document.createElement("span");
+      span.className = CLIENT_HL_CLASS;
+      span.style.backgroundColor = colors.color;
+      span.style.color = colors.fColor;
+      span.style.padding = "0 4px";
+      span.style.borderRadius = "3px";
+      span.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.1)";
+      span.setAttribute("data-hl-cat", catName);
+      span.textContent = text;
+
+      el.textContent = "";
+      el.appendChild(span);
+    }
+  }
+
+  function removeClientHighlights() {
+    const spans = document.querySelectorAll("." + CLIENT_HL_CLASS);
+    spans.forEach((span) => {
+      const parent = span.parentNode;
+      if (!parent) return;
+      parent.replaceChild(document.createTextNode(span.textContent), span);
+      parent.normalize();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -115,38 +261,39 @@
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
     const nodes = [];
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          if (!node || !node.parentElement) return NodeFilter.FILTER_REJECT;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        if (!node || !node.parentElement) return NodeFilter.FILTER_REJECT;
 
-          // Skip nodes inside our own highlights
-          if (node.parentElement.classList.contains(HL_CLASS)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip script/style/textarea/input/select/noscript
-          const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip already-processed parents
-          if (node.parentElement.hasAttribute(MARKER_ATTR)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Only process nodes with visible text
-          if (!node.textContent || node.textContent.trim().length === 0) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          return NodeFilter.FILTER_ACCEPT;
+        // Skip nodes inside our own highlights
+        if (
+          node.parentElement.classList.contains(HL_CLASS) ||
+          node.parentElement.classList.contains(CLIENT_HL_CLASS)
+        ) {
+          return NodeFilter.FILTER_REJECT;
         }
-      }
-    );
+
+        // Skip script/style/textarea/input/select/noscript
+        const tag = node.parentElement.tagName || "";
+        if (
+          ["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // Skip already-processed parents
+        if (node.parentElement.hasAttribute(MARKER_ATTR)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // Only process nodes with visible text
+        if (!node.textContent || node.textContent.trim().length === 0) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
 
     while (walker.nextNode()) {
       nodes.push(walker.currentNode);
@@ -157,32 +304,22 @@
   // ---------------------------------------------------------------------------
   // Match choosing and overlap resolution
   // ---------------------------------------------------------------------------
-  function getPriority(catName, region) {
+  function getPriority(catName) {
     const name = normalizeName(catName);
-
-    // In clientbar, client-only categories always win
-    if (region === "clientbar" && CLIENT_ONLY_CATEGORIES.includes(name)) {
-      return -100000;
-    }
-
     const p = priorityByName.get(name);
     return Number.isFinite(p) ? p : 999999;
   }
 
-  function betterMatch(a, b, region) {
-    // Returns true if a is better than b
-    const pa = getPriority(a.categoryName, region);
-    const pb = getPriority(b.categoryName, region);
+  function betterMatch(a, b) {
+    const pa = getPriority(a.categoryName);
+    const pb = getPriority(b.categoryName);
     if (pa !== pb) return pa < pb;
 
-    const la = (a.end - a.start);
-    const lb = (b.end - b.start);
+    const la = a.end - a.start;
+    const lb = b.end - b.start;
     if (la !== lb) return la > lb;
 
-    // If still tied, prefer earlier start
     if (a.start !== b.start) return a.start < b.start;
-
-    // Finally, prefer earlier end
     return a.end < b.end;
   }
 
@@ -192,26 +329,25 @@
     const out = [];
     for (const m of matches) {
       if (!m) continue;
-      const s = m.start, e = m.end;
+      const s = m.start,
+        e = m.end;
       if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
       if (s < 0 || e <= s || e > textLen) continue;
-      if ((e - s) > MAX_SPAN_LEN) continue;
+      if (e - s > MAX_SPAN_LEN) continue;
       if (!m.categoryName) continue;
       out.push(m);
     }
     return out;
   }
 
-  function resolveOverlaps(matches, region) {
+  function resolveOverlaps(matches) {
     if (!Array.isArray(matches) || matches.length === 0) return [];
 
-    // Sort by start asc, then prefer better match first
     matches.sort((a, b) => {
       if (a.start !== b.start) return a.start - b.start;
-      // better first
-      if (betterMatch(a, b, region)) return -1;
-      if (betterMatch(b, a, region)) return 1;
-      return (b.end - b.start) - (a.end - a.start);
+      if (betterMatch(a, b)) return -1;
+      if (betterMatch(b, a)) return 1;
+      return b.end - b.start - (a.end - a.start);
     });
 
     const picked = [];
@@ -229,13 +365,11 @@
       }
 
       // Overlap: keep the better one
-      if (betterMatch(m, last, region)) {
+      if (betterMatch(m, last)) {
         picked[picked.length - 1] = m;
       }
-      // else keep last
     }
 
-    // After replacement, picked might be slightly out of order in edge cases.
     picked.sort((a, b) => a.start - b.start || a.end - b.end);
     return picked;
   }
@@ -253,7 +387,9 @@
 
     for (const match of matches) {
       if (match.start > lastIndex) {
-        frag.appendChild(document.createTextNode(text.slice(lastIndex, match.start)));
+        frag.appendChild(
+          document.createTextNode(text.slice(lastIndex, match.start))
+        );
       }
 
       const span = document.createElement("span");
@@ -279,44 +415,32 @@
   }
 
   // ---------------------------------------------------------------------------
-  // One decision point: which matcher to use based on region
+  // Highlight a single text node
   // ---------------------------------------------------------------------------
-  function findMatchesForNode(text, region) {
-    if (!text) return [];
-
-    // Review: never use client-only categories
-    if (region === "review") {
-      return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
-    }
-
-    // Clientbar: run client-only and non-client-only, then resolve overlaps
-    if (region === "clientbar") {
-      const a = MatcherEngine.findMatches(text, compiledClientOnly) || [];
-      const b = MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
-      return a.concat(b);
-    }
-
-    // Other: treat like review
-    return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
-  }
-
   function highlightTextNode(textNode) {
     if (isModStatusRoute()) return;
     if (!globalEnabled) return;
-    if (!compiledNonClientOnly) return;
+    if (!compiledAll) return;
 
     if (!textNode || !textNode.parentNode) return;
 
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
 
-    const region = getNodeRegion(textNode);
+    // Skip client-name elements — handled by highlightClientField
+    if (
+      textNode.parentElement &&
+      textNode.parentElement.classList &&
+      textNode.parentElement.classList.contains("client-name")
+    ) {
+      return;
+    }
 
-    let matches = findMatchesForNode(text, region);
+    let matches = MatcherEngine.findMatches(text, compiledAll) || [];
     matches = sanitizeMatches(matches, text.length);
     if (matches.length === 0) return;
 
-    matches = resolveOverlaps(matches, region);
+    matches = resolveOverlaps(matches);
     if (matches.length === 0) return;
 
     renderMatchesIntoNode(textNode, matches);
@@ -325,7 +449,7 @@
   function highlightAll(root) {
     if (isModStatusRoute()) return;
     if (!globalEnabled) return;
-    if (!compiledNonClientOnly) return;
+    if (!compiledAll) return;
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
@@ -333,6 +457,9 @@
     for (const node of textNodes) {
       highlightTextNode(node);
     }
+
+    // Also run client field highlighting
+    highlightClientField();
   }
 
   // ---------------------------------------------------------------------------
@@ -340,7 +467,7 @@
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     const spans = document.querySelectorAll("." + HL_CLASS);
-    spans.forEach(span => {
+    spans.forEach((span) => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
@@ -348,15 +475,60 @@
     });
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
-    marked.forEach(el => el.removeAttribute(MARKER_ATTR));
+    marked.forEach((el) => el.removeAttribute(MARKER_ATTR));
+
+    removeClientHighlights();
   }
 
   // ---------------------------------------------------------------------------
-  // Observer
+  // Content navigation detection
+  // ---------------------------------------------------------------------------
+  // Watch for changes to span.client-name or span.decisionAreaLabel
+  // which indicates the CMS navigated to a new content item.
+  let navObserver = null;
+  let lastSeenClient = null;
+  let lastSeenType = null;
+
+  function startNavObserver() {
+    if (navObserver) return;
+
+    // Check periodically (more reliable than MutationObserver for text changes)
+    const checkInterval = setInterval(() => {
+      const clientEl = document.querySelector("span.client-name");
+      const typeEl = document.querySelector("span.decisionAreaLabel");
+      const currentClient = clientEl ? clientEl.textContent.trim() : null;
+      const currentType = typeEl ? typeEl.textContent.trim() : null;
+
+      if (currentClient !== lastSeenClient || currentType !== lastSeenType) {
+        lastSeenClient = currentClient;
+        lastSeenType = currentType;
+
+        // Content changed — clear and re-highlight
+        invalidateCache();
+        removeAllHighlights();
+        if (globalEnabled && compiledAll) {
+          highlightAll(document.body);
+        }
+      }
+    }, 500);
+
+    // Store ref for cleanup
+    navObserver = { interval: checkInterval };
+  }
+
+  function stopNavObserver() {
+    if (navObserver) {
+      clearInterval(navObserver.interval);
+      navObserver = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Observer for dynamic content
   // ---------------------------------------------------------------------------
   let observer = null;
   let debounceTimer = null;
-  let pendingNodes = [];
+  let pendingSet = new Set(); // dedup: track node references
 
   function startObserver() {
     if (observer) return;
@@ -368,31 +540,42 @@
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
-            pendingNodes.push({ type: "element", node });
+            if (node.classList && node.classList.contains(CLIENT_HL_CLASS)) continue;
+            pendingSet.add(node);
           } else if (node.nodeType === Node.TEXT_NODE) {
-            if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
-              pendingNodes.push({ type: "text", node });
+            if (
+              node.parentElement &&
+              !node.parentElement.classList.contains(HL_CLASS) &&
+              !node.parentElement.classList.contains(CLIENT_HL_CLASS) &&
+              !node.parentElement.hasAttribute(MARKER_ATTR)
+            ) {
+              pendingSet.add(node);
             }
           }
         }
       }
 
+      if (pendingSet.size === 0) return;
+
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        const batch = pendingNodes;
-        pendingNodes = [];
+        const batch = Array.from(pendingSet);
+        pendingSet.clear();
 
-        for (const item of batch) {
-          if (!item.node || !item.node.parentNode) continue;
+        for (const node of batch) {
+          if (!node || !node.parentNode) continue;
 
-          if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            if (
+              node === document.body ||
+              node === document.documentElement
+            ) {
               highlightAll(document.body);
             } else {
-              highlightAll(item.node);
+              highlightAll(node);
             }
-          } else {
-            highlightTextNode(item.node);
+          } else if (node.nodeType === Node.TEXT_NODE) {
+            highlightTextNode(node);
           }
         }
       }, 80);
@@ -406,12 +589,30 @@
       observer.disconnect();
       observer = null;
     }
-    pendingNodes = [];
+    pendingSet.clear();
   }
 
   // ---------------------------------------------------------------------------
   // Init + messages
   // ---------------------------------------------------------------------------
+  function compileAndHighlight(dict) {
+    priorityByName = buildPriorityMapFromDict(dict);
+    categoryColors = buildCategoryColorMap(dict);
+    clientsConfig = Array.isArray(dict.clients) ? dict.clients : [];
+    compiledAll = compileFromDict(dict);
+
+    const catCount = compiledAll.compiledCategories
+      ? compiledAll.compiledCategories.length
+      : 0;
+    console.log(
+      "CMS Highlighter: compiled " +
+        catCount +
+        " categories, " +
+        clientsConfig.length +
+        " client entries"
+    );
+  }
+
   function init() {
     if (isModStatusRoute()) {
       console.log("CMS Highlighter: disabled on modstatus route");
@@ -420,7 +621,10 @@
 
     chrome.storage.local.get(["dictionary", "enabled"], (result) => {
       if (chrome.runtime.lastError) {
-        console.error("CMS Highlighter: storage error", chrome.runtime.lastError);
+        console.error(
+          "CMS Highlighter: storage error",
+          chrome.runtime.lastError
+        );
         return;
       }
 
@@ -432,23 +636,16 @@
         return;
       }
 
-      priorityByName = buildPriorityMapFromDict(dict);
+      compileAndHighlight(dict);
 
-      // Compile two matchers
-      const dictClientOnly = dictOnlyClientOnly(dict);
-      const dictNonClientOnly = dictWithoutClientOnly(dict);
-
-      compiledClientOnly = MatcherEngine.compileAll(dictClientOnly);
-      compiledNonClientOnly = MatcherEngine.compileAll(dictNonClientOnly);
-
-      console.log(
-        "CMS Highlighter: compiled non-client-only cats=" + (compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0) +
-        ", client-only cats=" + (compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0)
-      );
+      // Seed nav tracking
+      lastSeenClient = getClientName();
+      lastSeenType = getContentType();
 
       if (globalEnabled) {
         highlightAll(document.body);
         startObserver();
+        startNavObserver();
       }
     });
   }
@@ -463,11 +660,14 @@
       case "toggle":
         globalEnabled = !!message.enabled;
         if (globalEnabled) {
+          invalidateCache();
           removeAllHighlights();
           highlightAll(document.body);
           startObserver();
+          startNavObserver();
         } else {
           stopObserver();
+          stopNavObserver();
           removeAllHighlights();
         }
         sendResponse({ ok: true });
@@ -479,30 +679,46 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            priorityByName = buildPriorityMapFromDict(dict);
-            compiledClientOnly = MatcherEngine.compileAll(dictOnlyClientOnly(dict));
-            compiledNonClientOnly = MatcherEngine.compileAll(dictWithoutClientOnly(dict));
+            compileAndHighlight(dict);
           }
 
+          invalidateCache();
           removeAllHighlights();
           if (globalEnabled) {
             highlightAll(document.body);
             startObserver();
+            startNavObserver();
           } else {
             stopObserver();
+            stopNavObserver();
           }
 
           sendResponse({ ok: true });
         });
         return true;
 
-      case "getStats":
+      case "getStats": {
+        const clientName = getClientName();
+        const contentType = getContentType();
+        const resolvedCat = resolveClientCategory(clientName, contentType);
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,
+          clientHighlights: document.querySelectorAll("." + CLIENT_HL_CLASS).length,
           enabled: globalEnabled,
-          catsNonClientOnly: compiledNonClientOnly && compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0,
-          catsClientOnly: compiledClientOnly && compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0
+          categories: compiledAll && compiledAll.compiledCategories
+            ? compiledAll.compiledCategories.length
+            : 0,
+          clientName: clientName,
+          contentType: contentType,
+          clientCategory: resolvedCat,
+          clientEntries: clientsConfig.length,
         });
+        break;
+      }
+
+      case "notify":
+        if (message.message) console.log("CMS Highlighter:", message.message);
+        sendResponse({ ok: true });
         break;
 
       default:

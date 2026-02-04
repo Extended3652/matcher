@@ -1,7 +1,8 @@
 // =============================================================================
 // CMS Highlighter — Options Page Script
 // =============================================================================
-// Full dictionary management: categories, words, ignore list, import/export.
+// Full dictionary management: categories, words, ignore list, clients,
+// import/export.
 // =============================================================================
 
 (function() {
@@ -20,18 +21,26 @@
   const newCatName    = document.getElementById("newCatName");
   const newCatColor   = document.getElementById("newCatColor");
 
+  // Client UI elements
+  const clientTableWrap  = document.getElementById("clientTableWrap");
+  const clientCountEl    = document.getElementById("clientCount");
+  const btnAddClient     = document.getElementById("btnAddClient");
+  const newClientPattern = document.getElementById("newClientPattern");
+  const newClientDefault = document.getElementById("newClientDefault");
+
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
+
+  // Content types the CMS can show
+  const CONTENT_TYPES = ["Review", "Image", "Question", "Answer", "Comment"];
 
   // ---------------------------------------------------------------------------
   // Alphabetical insert helper
   // ---------------------------------------------------------------------------
-  // Strips CS: and // prefixes so that "CS://HP" sorts by "hp", not the prefix.
   function sortKey(raw) {
     return String(raw || "").replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
   }
 
-  // Inserts word into arr at the correct alphabetical position (by bare word).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);
     let i = 0;
@@ -49,12 +58,40 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Category names helper (for dropdowns)
+  // ---------------------------------------------------------------------------
+  function getCategoryNames() {
+    if (!currentDict || !currentDict.categories) return [];
+    return currentDict.categories.map(c => c.name).filter(Boolean);
+  }
+
+  function buildCategorySelect(selectedValue) {
+    const sel = document.createElement("select");
+    const uncoded = document.createElement("option");
+    uncoded.value = "";
+    uncoded.textContent = "(uncoded)";
+    sel.appendChild(uncoded);
+
+    for (const name of getCategoryNames()) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    }
+
+    sel.value = selectedValue || "";
+    return sel;
+  }
+
+  // ---------------------------------------------------------------------------
   // Load
   // ---------------------------------------------------------------------------
   function load() {
     chrome.storage.local.get(["dictionary"], (result) => {
-      currentDict = result.dictionary || { ignoreList: [], categories: [] };
+      currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
+      if (!currentDict.clients) currentDict.clients = [];
       renderIgnoreList();
+      renderClients();
       renderCategories();
     });
   }
@@ -85,6 +122,172 @@
   });
 
   // ---------------------------------------------------------------------------
+  // Clients table
+  // ---------------------------------------------------------------------------
+  function renderClients() {
+    clientTableWrap.innerHTML = "";
+    const clients = currentDict.clients || [];
+    clientCountEl.textContent = `(${clients.length} entries)`;
+
+    // Populate the "add client" default dropdown
+    newClientDefault.innerHTML = "";
+    const uncOpt = document.createElement("option");
+    uncOpt.value = "";
+    uncOpt.textContent = "(uncoded)";
+    newClientDefault.appendChild(uncOpt);
+    for (const name of getCategoryNames()) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      newClientDefault.appendChild(opt);
+    }
+
+    if (clients.length === 0) {
+      const p = document.createElement("p");
+      p.style.fontSize = "12px";
+      p.style.color = "#999";
+      p.textContent = "No client entries yet. Add one above.";
+      clientTableWrap.appendChild(p);
+      return;
+    }
+
+    const table = document.createElement("table");
+    table.className = "client-table";
+
+    // Header
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    const headers = ["Pattern", "Default"].concat(CONTENT_TYPES).concat([""]);
+    for (const h of headers) {
+      const th = document.createElement("th");
+      th.textContent = h;
+      headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement("tbody");
+
+    clients.forEach((entry, idx) => {
+      const tr = document.createElement("tr");
+
+      // Pattern (editable)
+      const tdPat = document.createElement("td");
+      const patInput = document.createElement("input");
+      patInput.type = "text";
+      patInput.value = entry.pattern || "";
+      patInput.addEventListener("change", () => {
+        entry.pattern = patInput.value.trim();
+        saveDictionary();
+      });
+      tdPat.appendChild(patInput);
+      tr.appendChild(tdPat);
+
+      // Default category
+      const tdDef = document.createElement("td");
+      const defSel = buildCategorySelect(entry.defaultCategory);
+      defSel.addEventListener("change", () => {
+        entry.defaultCategory = defSel.value || null;
+        saveDictionary();
+      });
+      tdDef.appendChild(defSel);
+      tr.appendChild(tdDef);
+
+      // Override columns per content type
+      for (const type of CONTENT_TYPES) {
+        const td = document.createElement("td");
+        const overVal = (entry.overrides && entry.overrides[type]) || "";
+
+        const sel = document.createElement("select");
+
+        const optDefault = document.createElement("option");
+        optDefault.value = "";
+        optDefault.textContent = "\u2014"; // em dash = use default
+        sel.appendChild(optDefault);
+
+        for (const name of getCategoryNames()) {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          sel.appendChild(opt);
+        }
+
+        sel.value = overVal;
+        sel.addEventListener("change", () => {
+          if (!entry.overrides) entry.overrides = {};
+          if (sel.value) {
+            entry.overrides[type] = sel.value;
+          } else {
+            delete entry.overrides[type];
+          }
+          saveDictionary();
+        });
+
+        td.appendChild(sel);
+        tr.appendChild(td);
+      }
+
+      // Delete button
+      const tdDel = document.createElement("td");
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn-del";
+      delBtn.textContent = "X";
+      delBtn.title = "Delete this client entry";
+      delBtn.addEventListener("click", () => {
+        if (confirm(`Remove client "${entry.pattern}"?`)) {
+          currentDict.clients.splice(idx, 1);
+          saveDictionary(`Removed client "${entry.pattern}"`);
+          renderClients();
+        }
+      });
+      tdDel.appendChild(delBtn);
+      tr.appendChild(tdDel);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    clientTableWrap.appendChild(table);
+  }
+
+  // Add client button
+  btnAddClient.addEventListener("click", () => {
+    const pattern = newClientPattern.value.trim();
+    if (!pattern) {
+      showMsg("Enter a client pattern", "error");
+      return;
+    }
+
+    if (!currentDict.clients) currentDict.clients = [];
+
+    // Check for duplicate pattern
+    const existing = currentDict.clients.find(
+      c => c.pattern.toLowerCase() === pattern.toLowerCase()
+    );
+    if (existing) {
+      showMsg(`Client "${pattern}" already exists`, "error");
+      return;
+    }
+
+    const entry = {
+      pattern: pattern,
+      defaultCategory: newClientDefault.value || null,
+      overrides: {},
+    };
+
+    // Insert alphabetically
+    const key = pattern.toLowerCase();
+    let i = 0;
+    while (i < currentDict.clients.length && currentDict.clients[i].pattern.toLowerCase() < key) i++;
+    currentDict.clients.splice(i, 0, entry);
+
+    newClientPattern.value = "";
+    saveDictionary(`Added client "${pattern}"`);
+    renderClients();
+  });
+
+  // ---------------------------------------------------------------------------
   // Category editors
   // ---------------------------------------------------------------------------
   function renderCategories() {
@@ -102,7 +305,7 @@
 
       const arrow = document.createElement("span");
       arrow.className = "cat-arrow";
-      arrow.textContent = "\u25b6"; // right triangle
+      arrow.textContent = "\u25b6";
       header.appendChild(arrow);
 
       const colorPrev = document.createElement("span");
@@ -226,7 +429,6 @@
           if (addExactCb.checked && !word.startsWith("//")) {
             word = "//" + word;
           }
-          // Insert alphabetically instead of appending
           insertAlphabetically(cat.words, word);
           wordArea.value = cat.words.join("\n");
           countSpan.textContent = `${cat.words.length} words`;
@@ -275,7 +477,6 @@
       // Toggle expand/collapse
       header.addEventListener("click", () => {
         const isOpen = body.classList.contains("open");
-        // Close all others
         document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
         document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
         if (!isOpen) {
@@ -310,6 +511,7 @@
     newCatName.value = "";
     saveDictionary(`Added category "${name}"`);
     renderCategories();
+    renderClients(); // refresh client dropdowns with new category
   });
 
   // ---------------------------------------------------------------------------
@@ -359,7 +561,6 @@
       } catch (err) {
         showMsg("Invalid JSON file: " + err.message, "error");
       }
-      // Reset so same file can be selected again
       importFileEl.value = "";
     };
     reader.readAsText(file);
@@ -374,9 +575,13 @@
       return;
     }
 
+    // Preserve clients if present in imported data
+    if (!data.clients) data.clients = [];
+
     currentDict = data;
-    saveDictionary(`Imported ${data.categories.length} categories`);
+    saveDictionary(`Imported ${data.categories.length} categories, ${data.clients.length} clients`);
     renderIgnoreList();
+    renderClients();
     renderCategories();
   }
 
@@ -389,7 +594,7 @@
       return;
     }
 
-    const dict = { ignoreList: [], categories: [] };
+    const dict = { ignoreList: [], categories: [], clients: [] };
     let totalWords = 0;
 
     for (const id of backup.order) {
@@ -422,6 +627,7 @@
     currentDict = dict;
     saveDictionary(`Imported HighlightThis backup: ${dict.categories.length} categories, ${totalWords} words`);
     renderIgnoreList();
+    renderClients();
     renderCategories();
   }
 
