@@ -36,6 +36,12 @@
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
 
+  // Newer "Mentions" fields (must exist in options.html)
+  const newClientMentionCategory = document.getElementById("newClientMentionCategory");
+  const newClientAliases = document.getElementById("newClientAliases");
+  const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
+  const newClientNote = document.getElementById("newClientNote");
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -58,6 +64,13 @@
 
   function safeStr(v) {
     return String(v || "");
+  }
+
+  function normalizeAliasesFromTextarea(txt) {
+    return String(txt || "")
+      .split("\n")
+      .map(s => String(s).trim())
+      .filter(s => s.length > 0);
   }
 
   function sortKey(raw) {
@@ -102,36 +115,79 @@
     // override: includes "-" (inherit) + categories
     const sel = document.createElement("select");
 
-    if (opts.mode === "override") {
-      const optInherit = document.createElement("option");
-      optInherit.value = "";
-      optInherit.textContent = "-";
-      sel.appendChild(optInherit);
-    } else {
-      const optNone = document.createElement("option");
-      optNone.value = "";
-      optNone.textContent = "(no highlight)";
-      sel.appendChild(optNone);
+    function resetSelectVisual() {
+      sel.style.backgroundColor = "";
+      sel.style.color = "";
+      sel.style.borderColor = "";
     }
 
-    for (const name of getCategoryNames()) {
+    function applySelectVisualForValue(v) {
+      if (!v) {
+        resetSelectVisual();
+        return;
+      }
+      const st = getCategoryStyleByName().get(v);
+      if (!st) {
+        resetSelectVisual();
+        return;
+      }
+      sel.style.backgroundColor = st.color || "";
+      sel.style.color = st.fColor || "";
+      sel.style.borderColor = "rgba(0,0,0,0.25)";
+    }
+
+    function makeOption(value, label, st) {
       const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      sel.appendChild(opt);
+      opt.value = value;
+      opt.textContent = label;
+
+      // Some Chrome builds will apply these option styles, some will not.
+      // Even if options do not style, the select styling still gives you color context.
+      if (st && value) {
+        opt.style.backgroundColor = st.color || "";
+        opt.style.color = st.fColor || "";
+      }
+      return opt;
+    }
+
+    if (opts.mode === "override") {
+      sel.appendChild(makeOption("", "-", null));
+    } else {
+      sel.appendChild(makeOption("", "(no highlight)", null));
+    }
+
+    const stMap = getCategoryStyleByName();
+    for (const name of getCategoryNames()) {
+      sel.appendChild(makeOption(name, name, stMap.get(name) || null));
     }
 
     sel.value = opts.value || "";
+    applySelectVisualForValue(sel.value);
+    sel.addEventListener("change", () => applySelectVisualForValue(sel.value));
+
     return sel;
   }
 
   function formatSummary(entry) {
-    const def = entry.defaultCategory ? entry.defaultCategory : "none";
+    const def = entry.defaultCategory ? entry.defaultCategory : "-";
     const o = entry.overrides || {};
     const img = o.Image ? o.Image : "-";
     const pro = o.Profile ? o.Profile : "-";
     const q = o.Question ? o.Question : "-";
-    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q;
+
+    const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
+    const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
+    const incPat = (entry.includePatternInContent !== false); // default true
+    const note = entry.note ? String(entry.note).trim() : "";
+
+    let extra = "";
+    if (mentionCat !== "-" || aliases.length > 0 || !incPat || note) {
+      extra += " | Mentions: " + mentionCat + " (" + aliases.length + ")";
+      if (!incPat) extra += " [no pattern]";
+      if (note) extra += " [note]";
+    }
+
+    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
   }
 
   function pickHeaderSwatchCategory(entry) {
@@ -185,7 +241,8 @@
   // Clients
   // ---------------------------------------------------------------------------
   function populateAddClientDropdowns() {
-    // Review uses "review" mode, overrides use "override" mode
+    // We build temp <select>s so we inherit the same options + styling logic
+    // then move options into the real DOM selects.
     newClientReview.innerHTML = "";
     newClientImage.innerHTML = "";
     newClientProfile.innerHTML = "";
@@ -205,6 +262,14 @@
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+
+    // Mentions category select, if present in HTML
+    if (newClientMentionCategory) {
+      newClientMentionCategory.innerHTML = "";
+      const mentionSel = makeCategorySelect({ mode: "override", value: "" });
+      while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
+      newClientMentionCategory.value = "";
+    }
   }
 
   function getClientFilter() {
@@ -218,7 +283,16 @@
 
     return all.filter(c => {
       const p = safeStr(c && c.pattern).toLowerCase();
-      return p.includes(f);
+      if (p.includes(f)) return true;
+
+      const note = safeStr(c && c.note).toLowerCase();
+      if (note.includes(f)) return true;
+
+      const aliases = Array.isArray(c && c.aliases) ? c.aliases : [];
+      for (const a of aliases) {
+        if (safeStr(a).toLowerCase().includes(f)) return true;
+      }
+      return false;
     });
   }
 
@@ -327,7 +401,7 @@
       const fPat = document.createElement("div");
       fPat.className = "field";
       const lPat = document.createElement("label");
-      lPat.textContent = "Pattern";
+      lPat.textContent = "Client Name";
       const iPat = document.createElement("input");
       iPat.type = "text";
       iPat.value = pat;
@@ -338,7 +412,7 @@
       const fReview = document.createElement("div");
       fReview.className = "field";
       const lReview = document.createElement("label");
-      lReview.textContent = "Review (Default)";
+      lReview.textContent = "Header: Review (Default)";
       const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" });
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
@@ -347,7 +421,7 @@
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
-      lImg.textContent = "Image override";
+      lImg.textContent = "Header: Image override";
       const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" });
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
@@ -356,7 +430,7 @@
       const fPro = document.createElement("div");
       fPro.className = "field";
       const lPro = document.createElement("label");
-      lPro.textContent = "Profile override";
+      lPro.textContent = "Header: Profile override";
       const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" });
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
@@ -365,13 +439,81 @@
       const fQ = document.createElement("div");
       fQ.className = "field";
       const lQ = document.createElement("label");
-      lQ.textContent = "Question override";
+      lQ.textContent = "Header: Question override";
       const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" });
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
       grid.appendChild(fQ);
 
       body.appendChild(grid);
+
+      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      const mentionsWrap = document.createElement("div");
+      mentionsWrap.className = "client-mentions-wrap";
+
+      const mGrid = document.createElement("div");
+      mGrid.className = "client-edit-grid";
+
+      const fMCat = document.createElement("div");
+      fMCat.className = "field";
+      const lMCat = document.createElement("label");
+      lMCat.textContent = "Mentions: Category";
+      const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" });
+      fMCat.appendChild(lMCat);
+      fMCat.appendChild(sMCat);
+      mGrid.appendChild(fMCat);
+
+      const fAliases = document.createElement("div");
+      fAliases.className = "field";
+      fAliases.style.gridColumn = "1 / -1";
+      const lAliases = document.createElement("label");
+      lAliases.textContent = "Mentions: Aliases (one per line, supports * and ?)";
+      const tAliases = document.createElement("textarea");
+      tAliases.className = "word-list";
+      tAliases.spellcheck = false;
+      tAliases.style.minHeight = "90px";
+      tAliases.value = Array.isArray(entry.aliases) ? entry.aliases.join("\n") : "";
+      fAliases.appendChild(lAliases);
+      fAliases.appendChild(tAliases);
+      mGrid.appendChild(fAliases);
+
+      const fInc = document.createElement("div");
+      fInc.className = "field";
+      fInc.style.gridColumn = "1 / -1";
+      const lInc = document.createElement("label");
+      lInc.style.display = "flex";
+      lInc.style.alignItems = "center";
+      lInc.style.gap = "10px";
+      const cbInc = document.createElement("input");
+      cbInc.type = "checkbox";
+      cbInc.checked = (entry.includePatternInContent !== false);
+      lInc.appendChild(cbInc);
+      lInc.appendChild(document.createTextNode("Also treat the main Client Name as a mention in content (in addition to aliases)"));
+      fInc.appendChild(lInc);
+
+      const incHelp = document.createElement("div");
+      incHelp.className = "muted";
+      incHelp.style.marginTop = "4px";
+      incHelp.textContent = "If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
+      fInc.appendChild(incHelp);
+
+      mGrid.appendChild(fInc);
+
+      const fNote = document.createElement("div");
+      fNote.className = "field";
+      fNote.style.gridColumn = "1 / -1";
+      const lNote = document.createElement("label");
+      lNote.textContent = "Note";
+      const iNote = document.createElement("input");
+      iNote.type = "text";
+      iNote.placeholder = "Optional note (not used for matching)";
+      iNote.value = entry.note ? String(entry.note) : "";
+      fNote.appendChild(lNote);
+      fNote.appendChild(iNote);
+      mGrid.appendChild(fNote);
+
+      mentionsWrap.appendChild(mGrid);
+      body.appendChild(mentionsWrap);
 
       function refreshHeaderVisuals() {
         summary.textContent = formatSummary(entry);
@@ -403,7 +545,7 @@
       iPat.addEventListener("change", () => {
         const newPat = normalizePattern(iPat.value);
         if (!newPat) {
-          showMsg("Pattern cannot be blank", "error");
+          showMsg("Client Name cannot be blank", "error");
           iPat.value = entry.pattern || "";
           return;
         }
@@ -430,7 +572,6 @@
         entry.defaultCategory = sReview.value ? sReview.value : null;
         refreshHeaderVisuals();
         saveDictionary();
-        summary.textContent = formatSummary(entry);
       });
 
       sImg.addEventListener("change", () => {
@@ -439,7 +580,6 @@
         else delete entry.overrides.Image;
         refreshHeaderVisuals();
         saveDictionary();
-        summary.textContent = formatSummary(entry);
       });
 
       sPro.addEventListener("change", () => {
@@ -448,7 +588,6 @@
         else delete entry.overrides.Profile;
         refreshHeaderVisuals();
         saveDictionary();
-        summary.textContent = formatSummary(entry);
       });
 
       sQ.addEventListener("change", () => {
@@ -456,6 +595,29 @@
         if (sQ.value) entry.overrides.Question = sQ.value;
         else delete entry.overrides.Question;
         refreshHeaderVisuals();
+        saveDictionary();
+      });
+
+      sMCat.addEventListener("change", () => {
+        entry.mentionCategory = sMCat.value ? sMCat.value : null;
+        saveDictionary();
+        summary.textContent = formatSummary(entry);
+      });
+
+      tAliases.addEventListener("change", () => {
+        entry.aliases = normalizeAliasesFromTextarea(tAliases.value);
+        saveDictionary();
+        summary.textContent = formatSummary(entry);
+      });
+
+      cbInc.addEventListener("change", () => {
+        entry.includePatternInContent = !!cbInc.checked;
+        saveDictionary();
+        summary.textContent = formatSummary(entry);
+      });
+
+      iNote.addEventListener("change", () => {
+        entry.note = (iNote.value || "").trim();
         saveDictionary();
         summary.textContent = formatSummary(entry);
       });
@@ -487,7 +649,7 @@
   btnAddClient.addEventListener("click", () => {
     const pattern = normalizePattern(newClientPattern.value);
     if (!pattern) {
-      showMsg("Enter a client pattern", "error");
+      showMsg("Enter a client name", "error");
       return;
     }
 
@@ -502,7 +664,11 @@
     const entry = {
       pattern: pattern,
       defaultCategory: newClientReview.value ? newClientReview.value : null,
-      overrides: {}
+      overrides: {},
+      mentionCategory: (newClientMentionCategory && newClientMentionCategory.value) ? newClientMentionCategory.value : null,
+      aliases: newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [],
+      includePatternInContent: newClientIncludePatternInContent ? !!newClientIncludePatternInContent.checked : true,
+      note: newClientNote ? (newClientNote.value || "").trim() : ""
     };
 
     if (newClientImage.value) entry.overrides.Image = newClientImage.value;
@@ -518,6 +684,11 @@
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+
+    if (newClientMentionCategory) newClientMentionCategory.value = "";
+    if (newClientAliases) newClientAliases.value = "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+    if (newClientNote) newClientNote.value = "";
 
     openClientKey = patternKey(pattern);
 
@@ -604,13 +775,14 @@
         colorPrev.style.backgroundColor = bgInput.value;
         preview.style.background = bgInput.value;
         saveDictionary();
-        renderClients(); // update client swatches immediately when a category color changes
+        renderClients(); // update client swatches + dropdown styling
       });
 
       fgInput.addEventListener("input", () => {
         cat.fColor = fgInput.value;
         preview.style.color = fgInput.value;
         saveDictionary();
+        renderClients();
       });
 
       const nameRow = document.createElement("div");
