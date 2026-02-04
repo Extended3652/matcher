@@ -1,8 +1,7 @@
 // =============================================================================
-// CMS Highlighter - Content Script (simple rewrite)
+// CMS Highlighter - Content Script
 // - Walk text nodes
 // - Wrap matches in spans
-// - Exactly one decision point: which matcher to use based on region
 // - Client name in navbar can be highlighted based on dict.clients rules
 // =============================================================================
 
@@ -12,20 +11,13 @@
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
 
-  // We are NOT using a special "IMG Clients" category anymore.
-  const CLIENT_ONLY_CATEGORIES = [];
-
   // Guardrails
   const MAX_SPAN_LEN = 120;
 
   let globalEnabled = true;
 
-  // Compiled matchers
-  let compiledClientOnly = null; // only CLIENT_ONLY_CATEGORIES
-  let compiledNonClientOnly = null; // everything except CLIENT_ONLY_CATEGORIES
-
-  // Priority map from original dictionary category order (lower = higher priority)
-  let priorityByName = new Map();
+  // Compiled matcher
+  let compiledMatcher = null;
 
   // Client highlight config
   let clientRules = [];
@@ -43,81 +35,13 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Region detection
-  // ---------------------------------------------------------------------------
-  function getReviewRoot() {
-    return (
-      document.querySelector("div.ugcAndDetails") ||
-      document.querySelector("dd.moderatable") ||
-      document.querySelector("div.read") ||
-      null
-    );
-  }
-
-  function getNodeRegion(node) {
-    const el = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-    if (!el || !el.closest) return "other";
-
-    // Client panel area (real CMS navbar-inner, fake CMS sidebar)
-    if (el.closest(".navbar-inner") || el.closest(".sidebar")) return "clientbar";
-
-    // Review area
-    const reviewRoot = getReviewRoot();
-    if (reviewRoot && (el === reviewRoot || reviewRoot.contains(el))) return "review";
-
-    return "other";
-  }
-
-  // ---------------------------------------------------------------------------
   // Dictionary helpers
   // ---------------------------------------------------------------------------
-  function cloneDict(dict) {
-    return JSON.parse(JSON.stringify(dict));
-  }
-
-  function getCategoryName(cat) {
-    return (cat && (cat.name || cat.categoryName || cat.title || cat.label))
-      ? String(cat.name || cat.categoryName || cat.title || cat.label)
-      : "";
-  }
-
-  function normalizeName(s) {
-    return String(s || "").trim();
-  }
-
-  function buildPriorityMapFromDict(dict) {
-    const map = new Map();
-    const cats = Array.isArray(dict.categories) ? dict.categories : [];
-    for (let i = 0; i < cats.length; i++) {
-      const name = normalizeName(getCategoryName(cats[i]));
-      if (name && !map.has(name)) {
-        map.set(name, i);
-      }
-    }
-    return map;
-  }
-
-  function dictOnlyClientOnly(dict) {
-    const d = cloneDict(dict);
-    if (Array.isArray(d.categories)) {
-      d.categories = d.categories.filter(c => CLIENT_ONLY_CATEGORIES.includes(normalizeName(getCategoryName(c))));
-    }
-    return d;
-  }
-
-  function dictWithoutClientOnly(dict) {
-    const d = cloneDict(dict);
-    if (Array.isArray(d.categories)) {
-      d.categories = d.categories.filter(c => !CLIENT_ONLY_CATEGORIES.includes(normalizeName(getCategoryName(c))));
-    }
-    return d;
-  }
-
   function buildCategoryStyleMap(dict) {
     const map = new Map();
     const cats = Array.isArray(dict.categories) ? dict.categories : [];
     for (const c of cats) {
-      const name = normalizeName(getCategoryName(c));
+      const name = (c && c.name) ? String(c.name).trim() : "";
       if (!name) continue;
       map.set(name, {
         color: c.color || "#FFFF00",
@@ -277,34 +201,8 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Match choosing and overlap resolution
+  // Match sanitization (matcher-core.js already resolves overlaps)
   // ---------------------------------------------------------------------------
-  function getPriority(catName, region) {
-    const name = normalizeName(catName);
-
-    // In clientbar, client-only categories always win (not used currently)
-    if (region === "clientbar" && CLIENT_ONLY_CATEGORIES.includes(name)) {
-      return -100000;
-    }
-
-    const p = priorityByName.get(name);
-    return Number.isFinite(p) ? p : 999999;
-  }
-
-  function betterMatch(a, b, region) {
-    // Returns true if a is better than b
-    const pa = getPriority(a.categoryName, region);
-    const pb = getPriority(b.categoryName, region);
-    if (pa !== pb) return pa < pb;
-
-    const la = (a.end - a.start);
-    const lb = (b.end - b.start);
-    if (la !== lb) return la > lb;
-
-    if (a.start !== b.start) return a.start < b.start;
-    return a.end < b.end;
-  }
-
   function sanitizeMatches(matches, textLen) {
     if (!Array.isArray(matches) || matches.length === 0) return [];
 
@@ -319,39 +217,6 @@
       out.push(m);
     }
     return out;
-  }
-
-  function resolveOverlaps(matches, region) {
-    if (!Array.isArray(matches) || matches.length === 0) return [];
-
-    matches.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start;
-      if (betterMatch(a, b, region)) return -1;
-      if (betterMatch(b, a, region)) return 1;
-      return (b.end - b.start) - (a.end - a.start);
-    });
-
-    const picked = [];
-    for (const m of matches) {
-      if (picked.length === 0) {
-        picked.push(m);
-        continue;
-      }
-
-      const last = picked[picked.length - 1];
-
-      if (m.start >= last.end) {
-        picked.push(m);
-        continue;
-      }
-
-      if (betterMatch(m, last, region)) {
-        picked[picked.length - 1] = m;
-      }
-    }
-
-    picked.sort((a, b) => a.start - b.start || a.end - b.end);
-    return picked;
   }
 
   // ---------------------------------------------------------------------------
@@ -393,41 +258,24 @@
   }
 
   // ---------------------------------------------------------------------------
-  // One decision point: which matcher to use based on region
+  // Run matcher on text
   // ---------------------------------------------------------------------------
-  function findMatchesForNode(text, region) {
-    if (!text) return [];
-
-    if (region === "review") {
-      return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
-    }
-
-    if (region === "clientbar") {
-      const a = MatcherEngine.findMatches(text, compiledClientOnly) || [];
-      const b = MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
-      return a.concat(b);
-    }
-
-    return MatcherEngine.findMatches(text, compiledNonClientOnly) || [];
+  function findMatchesForText(text) {
+    if (!text || !compiledMatcher) return [];
+    return MatcherEngine.findMatches(text, compiledMatcher) || [];
   }
 
   function highlightTextNode(textNode) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
-    if (!compiledNonClientOnly) return;
+    if (!compiledMatcher) return;
 
     if (!textNode || !textNode.parentNode) return;
 
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
 
-    const region = getNodeRegion(textNode);
-
-    let matches = findMatchesForNode(text, region);
-    matches = sanitizeMatches(matches, text.length);
-    if (matches.length === 0) return;
-
-    matches = resolveOverlaps(matches, region);
+    const matches = sanitizeMatches(findMatchesForText(text), text.length);
     if (matches.length === 0) return;
 
     renderMatchesIntoNode(textNode, matches);
@@ -436,7 +284,7 @@
   function highlightAll(root) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
-    if (!compiledNonClientOnly) return;
+    if (!compiledMatcher) return;
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
@@ -548,11 +396,8 @@
         return;
       }
 
-      priorityByName = buildPriorityMapFromDict(dict);
-
-      // Compile matchers
-      compiledClientOnly = MatcherEngine.compileAll(dictOnlyClientOnly(dict));
-      compiledNonClientOnly = MatcherEngine.compileAll(dictWithoutClientOnly(dict));
+      // Compile matcher
+      compiledMatcher = MatcherEngine.compileAll(dict);
 
       // Build client highlight maps
       categoryStyleByName = buildCategoryStyleMap(dict);
@@ -562,9 +407,9 @@
       }
 
       console.log(
-        "CMS Highlighter: compiled non-client-only cats=" + (compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0) +
-        ", client-only cats=" + (compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0) +
-        ", clients=" + clientRules.length
+        "CMS Highlighter: compiled " +
+        (compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0) +
+        " categories, " + clientRules.length + " client rules"
       );
 
       if (globalEnabled) {
@@ -602,9 +447,7 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            priorityByName = buildPriorityMapFromDict(dict);
-            compiledClientOnly = MatcherEngine.compileAll(dictOnlyClientOnly(dict));
-            compiledNonClientOnly = MatcherEngine.compileAll(dictWithoutClientOnly(dict));
+            compiledMatcher = MatcherEngine.compileAll(dict);
 
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
@@ -630,8 +473,7 @@
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
-          catsNonClientOnly: compiledNonClientOnly && compiledNonClientOnly.compiledCategories ? compiledNonClientOnly.compiledCategories.length : 0,
-          catsClientOnly: compiledClientOnly && compiledClientOnly.compiledCategories ? compiledClientOnly.compiledCategories.length : 0,
+          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
         });
         break;

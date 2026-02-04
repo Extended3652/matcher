@@ -1,69 +1,38 @@
 // =============================================================================
-// MATCHER ENGINE v5
+// MATCHER ENGINE v6 — Node.js Module
 // =============================================================================
-// This file does one job: takes text + a dictionary config, returns matches.
-// No Chrome extension. No DOM. No UI. Just the matching logic.
+// Pure matching logic. No DOM, no Chrome APIs. Just text in, matches out.
+// This is the Node.js version of extension/matcher-core.js for testing.
 //
-// Changes in this version:
-//   - Exact prefix changed from ! to //
-//   - Exact + boundary spaces: exact means whole-word match on the word itself.
-//     Boundary spaces are only used for detection, never included in the match.
-//   - "Unhighlight" category renamed to "Ignore List" concept. It's not a
-//     category anymore — it's a separate list. Words in it create exclusion
-//     zones that prevent any other category from highlighting overlapping text.
-//
-// HOW IT WORKS (plain english):
-//   1. Every word in the dictionary gets compiled into a regex fragment once.
-//   2. All words in a category get combined into one big regex.
-//   3. When we match text, we run each category's regex against it.
-//   4. We collect all matches, then throw away any that overlap with
-//      something in the Ignore List.
-//   5. If two normal categories match the same spot, the one higher in
-//      the priority order wins.
-//   6. We return a clean list of {start, end, categoryName, color}.
-//
-// WILDCARD RULES:
-//   *  at the END of a word  → eats to end of the current token
-//          example: "amazon*" matches "amazonprime", "amazons"
-//   *  at the START of a word → eats from start of current token
-//          example: "*etailer" matches "retailer"
-//   *  in the MIDDLE, no spaces in pattern → stays in-token
-//          example: "sh*t" matches "shit", "shot" but NOT "should...mat"
-//   *  in the MIDDLE, pattern has spaces → can span words
-//          example: "took * days" matches "took 5 days", "took several long days"
-//   ?  → exactly one character (same space rules as * above)
-//
-// EXACT FLAG:
-//   Prefix a word with // to mark it as exact (whole-word match).
-//          example: "//elf" only matches standalone "elf", not inside "herself"
-//   You can also type it normally and check a checkbox in the UI — same result.
-//   The // is just the fast-typing shortcut.
-//
-// BOUNDARY SPACES:
-//   If a word has leading or trailing whitespace (space, \n, \r), that means
-//   "require a word boundary here." The whitespace is stripped before matching
-//   and is NEVER part of the highlighted text.
-//          example: " elf " detects standalone "elf" but highlights only "elf"
-//   Boundary spaces and exact can coexist. Exact already implies boundaries
-//   on both sides, so adding spaces on top is redundant but harmless.
+// WORD ENTRY SYNTAX:
+//   walmart           → substring, case-insensitive
+//   //walmart         → exact (whole-word), case-insensitive
+//   CS:walmart        → substring, case-SENSITIVE
+//   CS://walmart      → exact, case-SENSITIVE
+//   LIT:test*         → literal (treat * and ? as regular characters)
+//   " elf "           → boundary spaces (require whitespace/punctuation around)
+//   amazon*           → wildcard (end)
+//   *etailer          → wildcard (start)
+//   sh*t              → wildcard (middle, stays in-token)
+//   took * days       → wildcard (middle with spaces, spans words)
 // =============================================================================
 
+"use strict";
 
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // STEP 1: Parse a raw word entry into a structured object.
-// This runs once at compile time, not per-match.
-// -----------------------------------------------------------------------------
-// Examples:
-//   "walmart"        → { pattern:"walmart",  exact:false, bBefore:false, bAfter:false }
-//   "//walmart"      → { pattern:"walmart",  exact:true,  bBefore:true,  bAfter:true  }
-//   " elf "          → { pattern:"elf",       exact:false, bBefore:true,  bAfter:true  }
-//   "// elf "        → { pattern:"elf",       exact:true,  bBefore:true,  bAfter:true  }
-//   "amazon*"        → { pattern:"amazon*",   exact:false, bBefore:false, bAfter:false }
-//   "AF\n"           → { pattern:"af",        exact:false, bBefore:false, bAfter:true  }
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 function parseWordEntry(rawEntry) {
-  let text = rawEntry;
+  let text = String(rawEntry || "");
   let exact = false;
+  let caseSensitive = false;
+  let literal = false;
+
+  // Check for CS: prefix (case-sensitive flag)
+  if (text.startsWith("CS:")) {
+    caseSensitive = true;
+    text = text.slice(3);
+  }
 
   // Check for // prefix (exact flag)
   if (text.startsWith("//")) {
@@ -71,40 +40,46 @@ function parseWordEntry(rawEntry) {
     text = text.slice(2);
   }
 
-  // Detect boundary markers BEFORE stripping whitespace.
-  // Any whitespace char at start or end = boundary required there.
+  // Check for LIT: prefix (treat * and ? as literal characters)
+  if (text.startsWith("LIT:")) {
+    literal = true;
+    text = text.slice(4);
+  }
+
+  // Detect boundary markers BEFORE stripping whitespace
   const boundaryBefore = /^[\s\n\r\t]/.test(text);
   const boundaryAfter  = /[\s\n\r\t]$/.test(text);
 
   // Strip all leading/trailing whitespace
   text = text.trim();
 
-  // Nothing left after trim = skip this entry
   if (text.length === 0) return null;
 
-  // Everything is case-insensitive, so normalize to lowercase now
-  text = text.toLowerCase();
+  // Only lowercase if case-insensitive
+  if (!caseSensitive) {
+    text = text.toLowerCase();
+  }
+
+  const hasWildcard = (!literal) && (text.includes("*") || text.includes("?"));
 
   return {
     pattern: text,
     exact: exact,
-    // Exact implies boundary on both sides automatically
+    caseSensitive: caseSensitive,
     boundaryBefore: exact ? true : boundaryBefore,
     boundaryAfter:  exact ? true : boundaryAfter,
+    hasWildcard: hasWildcard,
+    literal: literal,
   };
 }
 
-
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // STEP 2: Convert a glob pattern into a regex fragment string.
-// -----------------------------------------------------------------------------
+// Supports escaping: \* and \? mean literal characters, not wildcards.
+// ---------------------------------------------------------------------------
 function globToRegexFragment(pattern) {
   let result = "";
   const chars = [...pattern];
-
-  // Key rule: if the pattern contains a literal space anywhere,
-  // wildcards are allowed to cross word boundaries.
-  // If no space, wildcards stay within a single token.
   const hasLiteralSpace = pattern.includes(" ");
 
   for (let i = 0; i < chars.length; i++) {
@@ -112,167 +87,215 @@ function globToRegexFragment(pattern) {
     const isFirst = (i === 0);
     const isLast  = (i === chars.length - 1);
 
-    if (ch === "*") {
-      if (isFirst || isLast) {
-        // * at start or end: eat to edge of current token
-        // Stops at whitespace or punctuation
-        result += "[^\\s\\p{P}]*";
+    // Escape support: treat next char literally (including * and ?)
+    if (ch === "\\") {
+      const next = chars[i + 1];
+      if (next === undefined) {
+        // trailing backslash, treat it literally
+        result += "\\\\";
       } else {
-        // * in the middle
-        if (hasLiteralSpace) {
-          // Multi-word pattern: * can span across spaces, non-greedy
-          result += "[\\s\\S]*?";
+        // add escaped literal of next char
+        result += next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        i++; // consume next
+      }
+      continue;
+    }
+
+      if (ch === "*") {
+        const prev = chars[i - 1];
+        const next = chars[i + 1];
+
+        // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
+        // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
+        if (prev === " " && next === " ") {
+          result += "[^\\s]+";
+        } else if (isFirst || isLast) {
+          result += "[^\\s\\p{P}]*";
         } else {
-          // Single-word pattern: * stays in-token, non-greedy
-          result += "[^\\s]*?";
+          result += "[^\\s\\p{P}]*?";
         }
-      }
-    } else if (ch === "?") {
-      if (hasLiteralSpace) {
-        result += "[\\s\\S]";   // any single char including space
-      } else {
-        result += "[^\\s]";     // any single char except space
-      }
+      } else if (ch === "?") {
+        result += "[\\s\\S]";
+    } else if (ch === " ") {
+      result += "\\s+";
     } else {
-      // Escape anything that's special in regex
       result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
   }
   return result;
 }
 
-
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // STEP 3: Wrap a glob fragment with boundary assertions if needed.
-// -----------------------------------------------------------------------------
-// Boundaries use lookahead/lookbehind so they don't consume characters.
-// This means the spaces around a word are never part of the match.
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 function compileWordToRegexFragment(parsed) {
   let fragment = "";
 
   if (parsed.boundaryBefore) {
-    // Must be preceded by: start of string, whitespace, or punctuation
     fragment += "(?:^|(?<=[\\s\\p{P}]))";
   }
 
-  fragment += globToRegexFragment(parsed.pattern);
+  fragment += parsed.literal
+    ? parsed.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    : globToRegexFragment(parsed.pattern);
 
   if (parsed.boundaryAfter) {
-    // Must be followed by: end of string, whitespace, or punctuation
     fragment += "(?=$|[\\s\\p{P}])";
   }
 
   return fragment;
 }
 
-
-// -----------------------------------------------------------------------------
-// STEP 4: Compile one category into a single RegExp.
-// All its words get joined with | (alternation).
-// Longer patterns are sorted first so the regex prefers longer matches.
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// STEP 4: Compile one category into RegExp(s).
+// Words are split into case-sensitive and case-insensitive groups,
+// each getting their own regex, so flags can differ.
+//
+// NOTE: We wrap each fragment in a capturing group so we can recover
+// which entry matched (needed for wildcard precedence rules).
+// ---------------------------------------------------------------------------
 function compileCategory(category) {
-  const fragments = [];
+  const groups = { sensitive: [], insensitive: [] };
 
   for (const rawWord of category.words) {
     const parsed = parseWordEntry(rawWord);
     if (!parsed) continue;
 
     const fragment = compileWordToRegexFragment(parsed);
-    fragments.push({ fragment, parsed });
+    const bucket = parsed.caseSensitive ? "sensitive" : "insensitive";
+    groups[bucket].push({ fragment, parsed });
   }
 
-  if (fragments.length === 0) return null;
+  const regexes = [];
 
-  // Longer patterns first — helps regex pick the longest match
-  fragments.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
+  for (const [key, items] of Object.entries(groups)) {
+    if (items.length === 0) continue;
 
-  const combined = fragments.map(f => f.fragment).join("|");
+    // Longer patterns first for longest-match preference at same start
+    items.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
 
-  let regex;
-  try {
-    regex = new RegExp(combined, "giu");  // g=global, i=case-insensitive, u=unicode
-  } catch (e) {
-    console.error(`Failed to compile regex for "${category.name}":`, e.message);
-    return null;
+    // Chunk large alternations to keep capture-group scanning fast
+    const MAX_ALTS_PER_REGEX = 120;
+
+    const flags = key === "sensitive" ? "gu" : "giu";
+
+    for (let start = 0; start < items.length; start += MAX_ALTS_PER_REGEX) {
+      const chunk = items.slice(start, start + MAX_ALTS_PER_REGEX);
+
+      // Wrap each in a CAPTURE group so we can identify which matched
+      const combined = chunk.map(f => "(" + f.fragment + ")").join("|");
+      const metas = chunk.map(f => ({
+        hasWildcard: !!f.parsed.hasWildcard,
+        isExact: !!f.parsed.exact,
+        patternLen: f.parsed.pattern.length
+      }));
+
+      try {
+        regexes.push({ re: new RegExp(combined, flags), metas });
+      } catch (e) {
+        console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
+      }
+    }
   }
+
+  if (regexes.length === 0) return null;
 
   return {
-    id:   category.id,
-    name: category.name,
-    color: category.color,
-    fColor: category.fColor,
-    regex: regex,
+    id:      category.id,
+    name:    category.name,
+    color:   category.color,
+    fColor:  category.fColor,
+    regexes: regexes,
   };
 }
 
-
-// -----------------------------------------------------------------------------
-// STEP 5: Compile the Ignore List into its own RegExp.
-// Same logic as a category, but it has no color — it just produces
-// exclusion zones.
-// -----------------------------------------------------------------------------
-function compileIgnoreList(ignoreWords) {
-  if (!ignoreWords || ignoreWords.length === 0) return null;
-
-  // Wrap it as a fake category so we can reuse compileCategory
-  const result = compileCategory({
-    id: "__ignore__",
-    name: "Ignore List",
-    color: null,
-    fColor: null,
-    words: ignoreWords,
-  });
-
-  return result;
-}
-
-
-// -----------------------------------------------------------------------------
-// STEP 6: Compile everything — categories + ignore list — in one call.
-// -----------------------------------------------------------------------------
-// Input: { ignoreList: [...words], categories: [...category objects] }
-// Output: { ignoreRegex, compiledCategories }
-//
-// Categories are in priority order (index 0 = highest priority).
-// Disabled categories are skipped.
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// STEP 5: Compile everything — categories + ignore list.
+// ---------------------------------------------------------------------------
 function compileAll(config) {
-  const ignoreRegex = compileIgnoreList(config.ignoreList);
+  let ignoreCompiled = null;
+  if (config.ignoreList && config.ignoreList.length > 0) {
+    ignoreCompiled = compileCategory({
+      id: "__ignore__",
+      name: "Ignore List",
+      color: null,
+      fColor: null,
+      words: config.ignoreList,
+    });
+  }
 
   const compiledCategories = [];
   for (const cat of config.categories) {
-    if (!cat.enabled) continue;
+    if (cat.enabled === false) continue;
     const compiled = compileCategory(cat);
-    if (!compiled) continue;
-    compiledCategories.push(compiled);
+    if (compiled) compiledCategories.push(compiled);
   }
 
-  return { ignoreRegex, compiledCategories };
+  return { ignoreCompiled, compiledCategories };
 }
 
+function pickBetterOverlap(a, b) {
+  // Overlap winner rules (highest to lowest):
+  // 0) Containment: if one match fully contains the other, prefer the container
+  //    EXCEPT: if the contained match is exact (//word) and the container is not exact,
+  //    prefer the exact one (prevents wildcard gobbling a precise whole-word hit).
+  // 1) Non-wildcard (specific) beats wildcard (vague)
+  // 2) Category priority wins (lower number = higher priority)
+  // 3) Longer wins
+  // 4) Earlier start wins, then earlier end
 
-// -----------------------------------------------------------------------------
-// STEP 7: Run matching on a piece of text.
-// -----------------------------------------------------------------------------
-// 1. Find all matches from all categories
-// 2. Find all Ignore List matches
-// 3. Remove any category match that overlaps with an Ignore match
-// 4. Resolve priority conflicts (higher priority wins at same position)
-// 5. Return clean results
-// -----------------------------------------------------------------------------
+  const aLen = a.end - a.start;
+  const bLen = b.end - b.start;
+
+  const aContainsB = (a.start <= b.start) && (a.end >= b.end);
+  const bContainsA = (b.start <= a.start) && (b.end >= a.end);
+
+  if (aContainsB && !bContainsA) {
+    const aExact = !!a.isExact;
+    const bExact = !!b.isExact;
+    if (bExact && !aExact) return b;
+    return a;
+  }
+
+  if (bContainsA && !aContainsB) {
+    const aExact = !!a.isExact;
+    const bExact = !!b.isExact;
+    if (aExact && !bExact) return a;
+    return b;
+  }
+
+  const aWild = !!a.isWildcard;
+  const bWild = !!b.isWildcard;
+
+  if (aWild !== bWild) return aWild ? b : a;
+
+  if (a.priority !== b.priority) return (a.priority < b.priority) ? a : b;
+
+  if (aLen !== bLen) return (aLen > bLen) ? a : b;
+
+  if (a.start !== b.start) return (a.start < b.start) ? a : b;
+  if (a.end !== b.end) return (a.end < b.end) ? a : b;
+
+  return a;
+}
+
+// ---------------------------------------------------------------------------
+// STEP 6: Run matching on a piece of text.
+// ---------------------------------------------------------------------------
 function findMatches(text, compiled) {
-  const { ignoreRegex, compiledCategories } = compiled;
+  const { ignoreCompiled, compiledCategories } = compiled;
 
   // --- Collect Ignore List match ranges ---
   const ignoreRanges = [];
-  if (ignoreRegex) {
-    ignoreRegex.regex.lastIndex = 0;
-    let m;
-    while ((m = ignoreRegex.regex.exec(text)) !== null) {
-      if (m[0].length === 0) { ignoreRegex.regex.lastIndex++; continue; }
-      ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
+  if (ignoreCompiled) {
+    for (const rx of ignoreCompiled.regexes) {
+      const re = rx.re;
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) { re.lastIndex++; continue; }
+        ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
+      }
     }
   }
 
@@ -280,297 +303,96 @@ function findMatches(text, compiled) {
   const allMatches = [];
   for (let i = 0; i < compiledCategories.length; i++) {
     const cat = compiledCategories[i];
-    cat.regex.lastIndex = 0;
-    let m;
-    while ((m = cat.regex.exec(text)) !== null) {
-      if (m[0].length === 0) { cat.regex.lastIndex++; continue; }
-      allMatches.push({
-        start:    m.index,
-        end:      m.index + m[0].length,
-        name:     cat.name,
-        color:    cat.color,
-        fColor:   cat.fColor,
-        priority: i,   // lower number = higher priority
-      });
+
+    for (const rx of cat.regexes) {
+      const re = rx.re;
+      const metas = rx.metas;
+
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) { re.lastIndex++; continue; }
+
+        // Identify which capture group matched
+        let meta = null;
+        for (let gi = 1; gi < m.length; gi++) {
+          if (m[gi] !== undefined) {
+            meta = metas[gi - 1];
+            break;
+          }
+        }
+
+        allMatches.push({
+          start:    m.index,
+          end:      m.index + m[0].length,
+          name:     cat.name,
+          color:    cat.color,
+          fColor:   cat.fColor,
+          priority: i,
+          isWildcard: meta ? !!meta.hasWildcard : false,
+          isExact: meta ? !!meta.isExact : false,
+        });
+      }
     }
   }
 
   // --- Remove matches that overlap with any Ignore range ---
-  // "Overlap" = the two ranges share at least one character position
   let filtered = allMatches;
   if (ignoreRanges.length > 0) {
     filtered = allMatches.filter(match => {
-      return !ignoreRanges.some(ig => {
-        return match.start < ig.end && match.end > ig.start;
-      });
+      return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
     });
   }
 
-  // --- Resolve priority: sort by position, then priority ---
+  if (filtered.length === 0) return [];
+
+  // Sort by start, then longer first (helps reduce churn)
   filtered.sort((a, b) => {
     if (a.start !== b.start) return a.start - b.start;
+    const aLen = a.end - a.start;
+    const bLen = b.end - b.start;
+    if (aLen !== bLen) return bLen - aLen;
     return a.priority - b.priority;
   });
 
-  // --- Greedy sweep: keep a match only if it doesn't overlap the last kept one ---
+  // Overlap resolver:
+  // Keep a "current winner". When an overlapping match appears, choose the better.
+  // When a non-overlapping match appears, finalize the winner and move on.
   const final = [];
-  let lastEnd = -1;
-  for (const match of filtered) {
-    if (match.start >= lastEnd) {
-      final.push(match);
-      lastEnd = match.end;
+  let winner = null;
+
+  for (const m of filtered) {
+    if (!winner) {
+      winner = m;
+      continue;
     }
+
+    const overlaps = (m.start < winner.end) && (m.end > winner.start);
+    if (!overlaps) {
+      final.push(winner);
+      winner = m;
+      continue;
+    }
+
+    winner = pickBetterOverlap(winner, m);
   }
 
-  // --- Return clean output ---
+  if (winner) final.push(winner);
+
   return final.map(m => ({
-    start: m.start,
-    end:   m.end,
+    start:        m.start,
+    end:          m.end,
     categoryName: m.name,
-    color: m.color,
-    fColor: m.fColor,
+    color:        m.color,
+    fColor:       m.fColor,
   }));
 }
 
-
-// =============================================================================
-// TEST HARNESS
-// =============================================================================
-// Run this file with:   node ~/matcher.js
-// =============================================================================
-
-// --- Config: Ignore List + Categories ---
-const config = {
-
-  // The Ignore List. Not a category — just a plain array of words.
-  // Anything matching here blocks highlights from all categories.
-  ignoreList: [
-    " elf ",            // standalone "elf" → ignore it (makeup brand context)
-    "easy to use",      // common phrase, not interesting
-    "store front",      // "store" inside "store front" → ignore it
-  ],
-
-  // Categories, in priority order. Index 0 = highest priority.
-  categories: [
-    {
-      id: "retailers",
-      name: "RET / CR / Rx",
-      color: "#32CD32",
-      fColor: "#FFFFFF",
-      enabled: true,
-      words: [
-        "walmart",
-        "amazon*",          // matches amazonprime, amazons, etc.
-        "target",
-        "store",            // broad — matches "store" anywhere
-        "elf",              // substring mode — matches inside "herself" too
-        "best buy",
-        "*etailer",         // start-wildcard
-        "//ELF",            // exact — whole word only
-        "//HP",             // exact — whole word only
-      ],
-    },
-    {
-      id: "profanity",
-      name: "PRF",
-      color: "#FF0000",
-      fColor: "#FFFFFF",
-      enabled: true,
-      words: [
-        "sh*t",             // middle wildcard, no spaces → stays in-token
-        "f?ck",             // single-char wildcard
-        "a*hole",           // middle wildcard, stays in-token
-      ],
-    },
-    {
-      id: "shipping",
-      name: "SI",
-      color: "#00BFFF",
-      fColor: "#FFFFFF",
-      enabled: true,
-      words: [
-        "arriv*",           // end-wildcard
-        "deliver*",         // end-wildcard
-        "took * days",      // middle wildcard WITH spaces → spans words
-        "came * fast",      // middle wildcard WITH spaces → spans words
-      ],
-    },
-    {
-      id: "disabled_test",
-      name: "Should Not Match",
-      color: "#999999",
-      fColor: "#FFFFFF",
-      enabled: false,       // disabled — skipped entirely
-      words: ["this should never match"],
-    },
-  ],
+// ---------------------------------------------------------------------------
+// Export for Node.js
+// ---------------------------------------------------------------------------
+module.exports = {
+  parseWordEntry,
+  compileAll,
+  findMatches,
 };
-
-// --- Tests ---
-const tests = [
-  // === Basic matching ===
-  {
-    label: "Basic word match",
-    text: "I bought this at walmart last week.",
-    expect: [{ cat: "RET / CR / Rx", word: "walmart" }],
-  },
-  {
-    label: "End-wildcard: amazon* matches full token",
-    text: "I found it on amazonprime for cheap.",
-    expect: [{ cat: "RET / CR / Rx", word: "amazonprime" }],
-  },
-  {
-    label: "End-wildcard: deliver* matches delivery and delivered",
-    text: "The delivery was delivered quickly.",
-    expect: [{ cat: "SI", word: "delivery" }, { cat: "SI", word: "delivered" }],
-  },
-  {
-    label: "End-wildcard: arriv* matches arrive, arrived, arriving",
-    text: "It arrive, it arrived, it is arriving.",
-    expect: [{ cat: "SI", word: "arrive" }, { cat: "SI", word: "arrived" }, { cat: "SI", word: "arriving" }],
-  },
-  {
-    label: "Start-wildcard: *etailer matches retailer",
-    text: "I am a retailer.",
-    expect: [{ cat: "RET / CR / Rx", word: "retailer" }],
-  },
-
-  // === Middle wildcard — single token (no spaces in pattern) ===
-  {
-    label: "sh*t does NOT cross words — no false positive on 'should...mat'",
-    text: "This should never match anything. But shit does.",
-    expect: [{ cat: "PRF", word: "shit" }],
-  },
-  {
-    label: "a*hole stays in single token",
-    text: "What an ashole and axxhole.",
-    expect: [{ cat: "PRF", word: "ashole" }, { cat: "PRF", word: "axxhole" }],
-  },
-
-  // === Middle wildcard — multi-word (spaces in pattern) ===
-  {
-    label: "'took * days' spans words",
-    text: "It took 5 days to arrive.",
-    expect: [{ cat: "SI", word: "took 5 days" }, { cat: "SI", word: "arrive" }],
-  },
-  {
-    label: "'took * days' with multiple words between",
-    text: "It took several long days.",
-    expect: [{ cat: "SI", word: "took several long days" }],
-  },
-  {
-    label: "'came * fast' spans words",
-    text: "The package came really fast.",
-    expect: [{ cat: "SI", word: "came really fast" }],
-  },
-
-  // === Single-char wildcard ===
-  {
-    label: "f?ck matches fock, fick",
-    text: "fock and fick.",
-    expect: [{ cat: "PRF", word: "fock" }, { cat: "PRF", word: "fick" }],
-  },
-
-  // === Ignore List ===
-  {
-    label: "Ignore List: standalone 'elf' is ignored",
-    text: "I bought elf makeup.",
-    expect: [],   // " elf " in ignore list blocks it
-  },
-  {
-    label: "Ignore List: 'elf' inside 'herself' is NOT ignored",
-    text: "She herself loved it.",
-    expect: [{ cat: "RET / CR / Rx", word: "elf" }],
-  },
-  {
-    label: "Ignore List: 'store' in 'store front' is ignored, standalone 'store' is not",
-    text: "The store front and the store.",
-    expect: [{ cat: "RET / CR / Rx", word: "store" }],  // only the second one
-  },
-  {
-    label: "Ignore List: 'easy to use' blocks the whole phrase",
-    text: "This is easy to use and great.",
-    expect: [],
-  },
-
-  // === Exact flag (//) ===
-  {
-    label: "//HP matches standalone HP only, not inside 'cheapness'",
-    text: "My HP works but cheapness doesn't.",
-    expect: [{ cat: "RET / CR / Rx", word: "HP" }],
-  },
-  {
-    label: "//ELF is standalone but Ignore List has ' elf ' so it gets blocked",
-    text: "The brand ELF is nice.",
-    expect: [],   // ignore list wins
-  },
-
-  // === Priority ===
-  {
-    label: "Two categories match different parts — both show",
-    text: "I bought it at walmart and it arrived yesterday.",
-    expect: [{ cat: "RET / CR / Rx", word: "walmart" }, { cat: "SI", word: "arrived" }],
-  },
-
-  // === Edge cases ===
-  {
-    label: "Empty text",
-    text: "",
-    expect: [],
-  },
-  {
-    label: "No matches in text",
-    text: "Hello world, nothing to see here.",
-    expect: [],
-  },
-  {
-    label: "Disabled category never matches",
-    text: "This should never match from the disabled one.",
-    expect: [],
-  },
-];
-
-// --- Runner ---
-console.log("=".repeat(70));
-console.log(" MATCHER ENGINE — TEST RESULTS");
-console.log("=".repeat(70));
-
-const compiled = compileAll(config);
-console.log(`\n  Compiled ${compiled.compiledCategories.length} categories`);
-console.log(`  Ignore list: ${compiled.ignoreRegex ? "active" : "empty"}\n`);
-
-let passed = 0;
-let failed = 0;
-
-tests.forEach((test, i) => {
-  const matches = findMatches(test.text, compiled);
-  const got = matches.map(m => ({
-    cat:  m.categoryName,
-    word: test.text.slice(m.start, m.end),
-  }));
-
-  // Check every expected item exists in output
-  let ok = true;
-  for (const exp of test.expect) {
-    if (!got.some(g => g.word === exp.word && g.cat === exp.cat)) {
-      ok = false;
-    }
-  }
-  // If we expected nothing, output must be empty
-  if (test.expect.length === 0 && got.length !== 0) ok = false;
-
-  if (ok) passed++; else failed++;
-
-  const status = ok ? "  ✓" : "  ✗";
-  console.log(`${status} Test ${i + 1}: ${test.label}`);
-
-  if (!ok) {
-    console.log(`      Text:     "${test.text}"`);
-    console.log(`      Expected: ${JSON.stringify(test.expect)}`);
-    console.log(`      Got:      ${JSON.stringify(got)}`);
-  }
-});
-
-console.log("\n" + "=".repeat(70));
-console.log(`  ${passed} passed, ${failed} failed out of ${tests.length} tests`);
-console.log("=".repeat(70) + "\n");

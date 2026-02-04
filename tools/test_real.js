@@ -1,128 +1,21 @@
 // =============================================================================
-// REAL DICTIONARY TEST — Combined file
+// REAL DICTIONARY TEST — Uses matcher.js v6
 // =============================================================================
-// Copy this into nano on your Pi and run with:   node test_real.js
-// It includes the matcher engine + your real dictionary + sample reviews.
+// Run with:   node test_real.js
+// Tests the matcher engine against sample reviews with your real dictionary.
 // =============================================================================
 
-// ---------------------------------------------------------------------------
-// MATCHER ENGINE (same functions as matcher.js)
-// ---------------------------------------------------------------------------
+"use strict";
 
-function parseWordEntry(rawEntry) {
-  let text = rawEntry;
-  let exact = false;
-  if (text.startsWith("//")) { exact = true; text = text.slice(2); }
-  const boundaryBefore = /^[\s\n\r\t]/.test(text);
-  const boundaryAfter  = /[\s\n\r\t]$/.test(text);
-  text = text.trim();
-  if (text.length === 0) return null;
-  text = text.toLowerCase();
-  return {
-    pattern: text, exact: exact,
-    boundaryBefore: exact ? true : boundaryBefore,
-    boundaryAfter:  exact ? true : boundaryAfter,
-  };
-}
-
-function globToRegexFragment(pattern) {
-  let result = "";
-  const chars = [...pattern];
-  const hasLiteralSpace = pattern.includes(" ");
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    const isFirst = (i === 0), isLast = (i === chars.length - 1);
-    if (ch === "*") {
-      if (isFirst || isLast) { result += "[^\\s\\p{P}]*"; }
-      else { result += hasLiteralSpace ? "[\\s\\S]*?" : "[^\\s]*?"; }
-    } else if (ch === "?") {
-      result += hasLiteralSpace ? "[\\s\\S]" : "[^\\s]";
-    } else {
-      result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-  }
-  return result;
-}
-
-function compileWordToRegexFragment(parsed) {
-  let fragment = "";
-  if (parsed.boundaryBefore) fragment += "(?:^|(?<=[\\s\\p{P}]))";
-  fragment += globToRegexFragment(parsed.pattern);
-  if (parsed.boundaryAfter)  fragment += "(?=$|[\\s\\p{P}])";
-  return fragment;
-}
-
-function compileCategory(category) {
-  const fragments = [];
-  for (const rawWord of category.words) {
-    const parsed = parseWordEntry(rawWord);
-    if (!parsed) continue;
-    fragments.push({ fragment: compileWordToRegexFragment(parsed), parsed });
-  }
-  if (fragments.length === 0) return null;
-  fragments.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
-  let regex;
-  try { regex = new RegExp(fragments.map(f => f.fragment).join("|"), "giu"); }
-  catch (e) { console.error("Regex compile failed for " + category.name, e.message); return null; }
-  return { id: category.id, name: category.name, color: category.color, fColor: category.fColor, regex };
-}
-
-function compileAll(config) {
-  const ignoreRegex = config.ignoreList && config.ignoreList.length > 0
-    ? compileCategory({ id:"__ignore__", name:"Ignore", color:null, fColor:null, words: config.ignoreList })
-    : null;
-  const compiledCategories = [];
-  for (const cat of config.categories) {
-    if (!cat.enabled) continue;
-    const c = compileCategory(cat);
-    if (c) compiledCategories.push(c);
-  }
-  return { ignoreRegex, compiledCategories };
-}
-
-function findMatches(text, compiled) {
-  const { ignoreRegex, compiledCategories } = compiled;
-  const ignoreRanges = [];
-  if (ignoreRegex) {
-    ignoreRegex.regex.lastIndex = 0;
-    let m;
-    while ((m = ignoreRegex.regex.exec(text)) !== null) {
-      if (m[0].length === 0) { ignoreRegex.regex.lastIndex++; continue; }
-      ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
-    }
-  }
-  const allMatches = [];
-  for (let i = 0; i < compiledCategories.length; i++) {
-    const cat = compiledCategories[i];
-    cat.regex.lastIndex = 0;
-    let m;
-    while ((m = cat.regex.exec(text)) !== null) {
-      if (m[0].length === 0) { cat.regex.lastIndex++; continue; }
-      allMatches.push({ start: m.index, end: m.index + m[0].length, name: cat.name, color: cat.color, fColor: cat.fColor, priority: i });
-    }
-  }
-  let filtered = allMatches;
-  if (ignoreRanges.length > 0) {
-    filtered = allMatches.filter(match => !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start));
-  }
-  filtered.sort((a, b) => a.start !== b.start ? a.start - b.start : a.priority - b.priority);
-  const final = [];
-  let lastEnd = -1;
-  for (const match of filtered) {
-    if (match.start >= lastEnd) { final.push(match); lastEnd = match.end; }
-  }
-  return final.map(m => ({ start: m.start, end: m.end, categoryName: m.name, color: m.color, fColor: m.fColor }));
-}
-
+const { compileAll, findMatches } = require("./matcher.js");
 
 // ---------------------------------------------------------------------------
-// YOUR REAL DICTIONARY (converted from your backup JSON)
+// SAMPLE DICTIONARY (converted from your backup JSON)
 // ---------------------------------------------------------------------------
 // Notes on what happened during conversion:
 //   - "Unhighlight" category became the ignoreList (no color, no priority)
 //   - Categories with findWords:true had // added to every word automatically
 //   - Word order within categories is unchanged
-//   - \n and \r in words are preserved — they act as boundary markers
 // ---------------------------------------------------------------------------
 
 const config = {
@@ -243,6 +136,18 @@ const config = {
         "not purchased", "have not tried",
       ],
     },
+    {
+      id: "CS_Test",
+      name: "CS Test",
+      color: "#9900FF",
+      fColor: "#FFFFFF",
+      enabled: true,
+      words: [
+        "CS:HP",          // case-sensitive substring
+        "CS://ATT",       // case-sensitive exact
+        "LIT:test*file",  // literal asterisk
+      ],
+    },
   ],
 };
 
@@ -264,22 +169,22 @@ const reviews = [
   {
     label: "Review 2 — elf standalone vs inside word",
     text: "I got this from elf. My herself thought it was amazing.",
-    notes: 'SHOULD: "elf" inside "herself" (RET). NOT standalone "elf" (ignore list).',
+    notes: 'SHOULD: "from elf" (RET), "elf" inside "herself" (RET). NOT standalone "elf" if ignore list blocks it.',
   },
   {
     label: "Review 3 — shipping issues",
     text: "The package took 5 days to arrive and it was damaged. Tracking showed it was lost in transit.",
-    notes: 'SHOULD: "package" (SI), "took 5 days" (SI), "arrive" (SI), "damaged" (SI), "Tracking" (SI), "lost in transit" (SI).',
+    notes: 'SHOULD: "package" (SI), "took 5 days" (SI), "damaged" (SI), "Tracking" (SI), "lost in transit" (SI).',
   },
   {
     label: "Review 4 — exact words HP, ATT, ELF",
     text: "I use my HP laptop every day. The ATT service is fine. ELF makeup is cheap.",
-    notes: 'SHOULD: "HP" (RET Exact), "ATT" (GIU Exact). NOT "ELF" (ignore list blocks standalone elf).',
+    notes: 'SHOULD: "HP" (RET Exact or CS Test), "ATT" (GIU Exact). Standalone "ELF" if not blocked by ignore.',
   },
   {
     label: "Review 5 — profanity",
     text: "This product is shit quality. I never bought this. What a piece of crap.",
-    notes: 'SHOULD: "shit" (PRF Exact — has //s*hit*), "never bought" (PRF), "crap" (PRF).',
+    notes: 'SHOULD: "shit" (PRF), "never bought" (PRF), "crap" (PRF).',
   },
   {
     label: "Review 6 — ignore list blocks 'easy to use'",
@@ -306,6 +211,16 @@ const reviews = [
     text: "This lotion feels great on my skin. Very moisturizing and gentle.",
     notes: 'SHOULD: nothing. All benign text.',
   },
+  {
+    label: "Review 11 — case-sensitive CS:HP",
+    text: "My HP printer works great. The hp brand is reliable.",
+    notes: 'SHOULD: first "HP" (CS Test, case-sensitive). NOT lowercase "hp" from CS:HP. But lowercase "hp" might match RET Exact //HP.',
+  },
+  {
+    label: "Review 12 — literal asterisk LIT:test*file",
+    text: "The file is named test*file.txt and also testfile.txt exists.",
+    notes: 'SHOULD: "test*file" (CS Test, literal match). NOT "testfile" (no asterisk in text).',
+  },
 ];
 
 
@@ -316,9 +231,9 @@ const reviews = [
 const compiled = compileAll(config);
 
 console.log("=".repeat(70));
-console.log(" REAL DICTIONARY TEST");
+console.log(" MATCHER ENGINE v6 — TEST RESULTS");
 console.log("=".repeat(70));
-console.log(`\n  Categories: ${compiled.compiledCategories.length} | Ignore list: active\n`);
+console.log(`\n  Categories: ${compiled.compiledCategories.length} | Ignore list: ${compiled.ignoreCompiled ? "active" : "empty"}\n`);
 
 reviews.forEach((review, i) => {
   const matches = findMatches(review.text, compiled);
