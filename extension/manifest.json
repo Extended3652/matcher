@@ -22,7 +22,7 @@
         "https://workbench.bazaarvoice.com/*",
         "http://minotaur:8124/*"
       ],
-      "js": ["matcher-core.js", "content.simple.js"],
+      "js": ["matcher-core.js", "content.js"],
       "css": ["highlight.css"],
       "run_at": "document_idle"
     }
