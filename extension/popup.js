@@ -23,7 +23,16 @@
   const btnOptions   = document.getElementById("btnOptions");
   const popupSearch  = document.getElementById("popupSearch");
 
+  // Quick Client Add elements
+  const quickClientHeader   = document.getElementById("quickClientHeader");
+  const quickClientArrow    = document.getElementById("quickClientArrow");
+  const quickClientBody     = document.getElementById("quickClientBody");
+  const quickClientName     = document.getElementById("quickClientName");
+  const quickClientCategory = document.getElementById("quickClientCategory");
+  const quickClientAdd      = document.getElementById("quickClientAdd");
+
   let currentDict = null;
+  let quickClientOpen = false;
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -983,6 +992,98 @@
 
     catListEl.appendChild(editor);
   }
+
+  // ---------------------------------------------------------------------------
+  // Quick Client Add
+  // ---------------------------------------------------------------------------
+  function populateQuickClientCategories() {
+    quickClientCategory.innerHTML = "";
+
+    // Add "(no highlight)" option
+    const noHlOpt = document.createElement("option");
+    noHlOpt.value = "";
+    noHlOpt.textContent = "(no highlight)";
+    quickClientCategory.appendChild(noHlOpt);
+
+    // Add all categories
+    const cats = currentDict.categories || [];
+    cats.forEach((cat) => {
+      if (!cat || !cat.name) return;
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = cat.name;
+      opt.style.backgroundColor = cat.color || "#FFFF00";
+      opt.style.color = cat.fColor || "#000000";
+      quickClientCategory.appendChild(opt);
+    });
+  }
+
+  function toggleQuickClient() {
+    quickClientOpen = !quickClientOpen;
+    if (quickClientOpen) {
+      quickClientArrow.classList.add("open");
+      quickClientBody.classList.add("open");
+      populateQuickClientCategories();
+    } else {
+      quickClientArrow.classList.remove("open");
+      quickClientBody.classList.remove("open");
+    }
+  }
+
+  quickClientHeader.addEventListener("click", toggleQuickClient);
+
+  quickClientAdd.addEventListener("click", () => {
+    const name = normalizeTrim(quickClientName.value);
+    if (!name) {
+      quickClientAdd.textContent = "Enter name";
+      setTimeout(() => { quickClientAdd.textContent = "Add"; }, 1000);
+      return;
+    }
+
+    // Check for duplicate (case-insensitive)
+    if (!currentDict.clients) currentDict.clients = [];
+    const exists = currentDict.clients.some(c =>
+      normalizeTrim(c.pattern).toLowerCase() === name.toLowerCase()
+    );
+
+    if (exists) {
+      quickClientAdd.textContent = "Exists!";
+      setTimeout(() => { quickClientAdd.textContent = "Add"; }, 1000);
+      return;
+    }
+
+    const catName = quickClientCategory.value || null;
+
+    const entry = {
+      pattern: name,
+      defaultCategory: catName,
+      overrides: {},
+      mentionCategory: null,
+      aliases: [],
+      includePatternInContent: true,
+      note: ""
+    };
+
+    currentDict.clients.push(entry);
+
+    // Sort clients alphabetically
+    currentDict.clients.sort((a, b) =>
+      normalizeTrim(a.pattern).toLowerCase().localeCompare(normalizeTrim(b.pattern).toLowerCase())
+    );
+
+    saveDictionary();
+
+    quickClientName.value = "";
+    quickClientAdd.textContent = "Added!";
+    setTimeout(() => { quickClientAdd.textContent = "Add"; }, 1000);
+  });
+
+  quickClientName.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      quickClientAdd.click();
+    }
+  });
 
   // ---------------------------------------------------------------------------
   // Init

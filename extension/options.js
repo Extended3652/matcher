@@ -703,6 +703,16 @@
     catEditorsEl.innerHTML = "";
     if (!currentDict.categories) return;
 
+    if (currentDict.categories.length === 0) {
+      const empty = document.createElement("div");
+      empty.style.padding = "20px";
+      empty.style.color = "#888";
+      empty.style.textAlign = "center";
+      empty.innerHTML = "No categories yet.<br>Use the form above to add your first category.";
+      catEditorsEl.appendChild(empty);
+      return;
+    }
+
     currentDict.categories.forEach((cat, index) => {
       const editor = document.createElement("div");
       editor.className = "cat-editor";

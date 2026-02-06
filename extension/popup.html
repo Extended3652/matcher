@@ -243,6 +243,68 @@
       font-size: 12px;
       color: #6b7280;
     }
+
+    /* Quick Client Add */
+    .quick-client {
+      border-bottom: 1px solid #ddd;
+      background: #f7f9fa;
+    }
+    .quick-client-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+    }
+    .quick-client-header:hover {
+      background: #eef1f3;
+    }
+    .quick-client-arrow {
+      font-size: 10px;
+      color: #999;
+      transition: transform 0.2s;
+    }
+    .quick-client-arrow.open {
+      transform: rotate(90deg);
+    }
+    .quick-client-body {
+      display: none;
+      padding: 8px 12px 12px;
+      gap: 8px;
+    }
+    .quick-client-body.open {
+      display: flex;
+    }
+    .quick-client-body input[type="text"] {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #cfd8dc;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .quick-client-body select {
+      padding: 8px 10px;
+      border: 1px solid #cfd8dc;
+      border-radius: 8px;
+      font-size: 13px;
+      min-width: 100px;
+    }
+    .quick-client-body button {
+      padding: 8px 14px;
+      border: 1px solid #2980b9;
+      border-radius: 8px;
+      background: #3498db;
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .quick-client-body button:hover {
+      background: #2980b9;
+    }
   </style>
 </head>
 <body>
@@ -263,6 +325,19 @@
 
   <div class="search-bar">
     <input type="text" id="popupSearch" placeholder="Search categories and words">
+  </div>
+
+  <!-- Quick Client Add -->
+  <div class="quick-client" id="quickClient">
+    <div class="quick-client-header" id="quickClientHeader">
+      <span class="quick-client-arrow" id="quickClientArrow">&#9654;</span>
+      <span>Quick Add Client</span>
+    </div>
+    <div class="quick-client-body" id="quickClientBody">
+      <input type="text" id="quickClientName" placeholder="Client name (supports * and ?)">
+      <select id="quickClientCategory"></select>
+      <button id="quickClientAdd">Add</button>
+    </div>
   </div>
 
   <div class="cat-list" id="catList"></div>
