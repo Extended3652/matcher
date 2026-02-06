@@ -497,6 +497,12 @@
         });
         break;
 
+      case "getClientName":
+        sendResponse({
+          clientName: getCmsClientName() || null
+        });
+        break;
+
       default:
         sendResponse({ error: "unknown action" });
     }

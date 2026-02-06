@@ -39,12 +39,19 @@
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
 
+  // Client form state elements
+  const clientFormTitle = document.getElementById("clientFormTitle");
+  const clientExistsNotice = document.getElementById("clientExistsNotice");
+  const btnClearClient = document.getElementById("btnClearClient");
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let editingClientKey = null; // key of client being edited (null = adding new)
+  let cmsClientName = null; // current client name from CMS
 
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
@@ -197,6 +204,105 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Client Form Management
+  // ---------------------------------------------------------------------------
+  function findClientByKey(key) {
+    if (!key || !currentDict || !currentDict.clients) return null;
+    return currentDict.clients.find(c => patternKey(c.pattern) === key) || null;
+  }
+
+  function loadClientIntoForm(entry) {
+    if (!entry) return;
+
+    newClientPattern.value = safeStr(entry.pattern);
+    newClientReview.value = entry.defaultCategory || "";
+    newClientImage.value = (entry.overrides && entry.overrides.Image) || "";
+    newClientProfile.value = (entry.overrides && entry.overrides.Profile) || "";
+    newClientQuestion.value = (entry.overrides && entry.overrides.Question) || "";
+
+    if (newClientMentionCategory) newClientMentionCategory.value = entry.mentionCategory || "";
+    if (newClientAliases) newClientAliases.value = Array.isArray(entry.aliases) ? entry.aliases.join("\n") : "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = entry.includePatternInContent !== false;
+    if (newClientNote) newClientNote.value = entry.note || "";
+
+    editingClientKey = patternKey(entry.pattern);
+    updateClientFormUI();
+  }
+
+  function clearClientForm() {
+    newClientPattern.value = "";
+    newClientReview.value = "";
+    newClientImage.value = "";
+    newClientProfile.value = "";
+    newClientQuestion.value = "";
+
+    if (newClientMentionCategory) newClientMentionCategory.value = "";
+    if (newClientAliases) newClientAliases.value = "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+    if (newClientNote) newClientNote.value = "";
+
+    editingClientKey = null;
+    updateClientFormUI();
+  }
+
+  function updateClientFormUI() {
+    const isEditing = editingClientKey !== null;
+    clientFormTitle.textContent = isEditing ? "Edit Client" : "Add Client";
+    clientExistsNotice.style.display = isEditing ? "block" : "none";
+    btnClearClient.style.display = isEditing ? "inline-block" : "none";
+    btnAddClient.textContent = isEditing ? "Save Changes" : "Add Client";
+  }
+
+  function getCmsClientFromTab() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) return;
+
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.clientName) {
+          cmsClientName = null;
+          return;
+        }
+        cmsClientName = response.clientName;
+
+        // Auto-populate form if we have a CMS client
+        if (cmsClientName && currentDict) {
+          const existing = findClientByKey(patternKey(cmsClientName));
+          if (existing) {
+            loadClientIntoForm(existing);
+          } else {
+            newClientPattern.value = cmsClientName;
+            editingClientKey = null;
+            updateClientFormUI();
+          }
+        }
+      });
+    });
+  }
+
+  // Handle pattern input changes to check if client exists
+  newClientPattern.addEventListener("input", () => {
+    const pattern = normalizePattern(newClientPattern.value);
+    if (!pattern) {
+      editingClientKey = null;
+      updateClientFormUI();
+      return;
+    }
+
+    const key = patternKey(pattern);
+    const existing = findClientByKey(key);
+    if (existing && editingClientKey !== key) {
+      loadClientIntoForm(existing);
+    } else if (!existing && editingClientKey !== null) {
+      editingClientKey = null;
+      updateClientFormUI();
+    }
+  });
+
+  btnClearClient.addEventListener("click", () => {
+    clearClientForm();
+  });
+
+  // ---------------------------------------------------------------------------
   // Load / Save
   // ---------------------------------------------------------------------------
   function load() {
@@ -208,6 +314,9 @@
 
       renderClients();
       renderCategories();
+
+      // Try to get current CMS client after loading
+      getCmsClientFromTab();
     });
   }
 
@@ -658,45 +767,72 @@
 
     const clients = currentDict.clients || [];
     const key = patternKey(pattern);
-    const exists = clients.some(c => patternKey(c.pattern) === key);
-    if (exists) {
-      showMsg('Client "' + pattern + '" already exists', "error");
-      return;
+    const existingIdx = clients.findIndex(c => patternKey(c.pattern) === key);
+    const isEditing = editingClientKey !== null;
+
+    if (isEditing) {
+      // Update existing client
+      let entry;
+      if (existingIdx >= 0) {
+        entry = clients[existingIdx];
+      } else {
+        // Key changed - find by old key and update pattern
+        const oldIdx = clients.findIndex(c => patternKey(c.pattern) === editingClientKey);
+        if (oldIdx >= 0) {
+          entry = clients[oldIdx];
+          entry.pattern = pattern;
+        } else {
+          showMsg("Client not found", "error");
+          return;
+        }
+      }
+
+      entry.defaultCategory = newClientReview.value || null;
+      entry.overrides = {};
+      if (newClientImage.value) entry.overrides.Image = newClientImage.value;
+      if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
+      if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
+      entry.mentionCategory = (newClientMentionCategory && newClientMentionCategory.value) || null;
+      entry.aliases = newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [];
+      entry.includePatternInContent = newClientIncludePatternInContent ? !!newClientIncludePatternInContent.checked : true;
+      entry.note = newClientNote ? (newClientNote.value || "").trim() : "";
+
+      ensureClientsSorted();
+      saveDictionary('Updated client "' + pattern + '"');
+      editingClientKey = patternKey(pattern);
+      renderClients();
+
+    } else {
+      // Add new client
+      if (existingIdx >= 0) {
+        showMsg('Client "' + pattern + '" already exists', "error");
+        return;
+      }
+
+      const entry = {
+        pattern: pattern,
+        defaultCategory: newClientReview.value || null,
+        overrides: {},
+        mentionCategory: (newClientMentionCategory && newClientMentionCategory.value) || null,
+        aliases: newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [],
+        includePatternInContent: newClientIncludePatternInContent ? !!newClientIncludePatternInContent.checked : true,
+        note: newClientNote ? (newClientNote.value || "").trim() : ""
+      };
+
+      if (newClientImage.value) entry.overrides.Image = newClientImage.value;
+      if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
+      if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
+
+      clients.push(entry);
+      currentDict.clients = clients;
+      ensureClientsSorted();
+
+      clearClientForm();
+      openClientKey = patternKey(pattern);
+
+      saveDictionary('Added client "' + pattern + '"');
+      renderClients();
     }
-
-    const entry = {
-      pattern: pattern,
-      defaultCategory: newClientReview.value ? newClientReview.value : null,
-      overrides: {},
-      mentionCategory: (newClientMentionCategory && newClientMentionCategory.value) ? newClientMentionCategory.value : null,
-      aliases: newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [],
-      includePatternInContent: newClientIncludePatternInContent ? !!newClientIncludePatternInContent.checked : true,
-      note: newClientNote ? (newClientNote.value || "").trim() : ""
-    };
-
-    if (newClientImage.value) entry.overrides.Image = newClientImage.value;
-    if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
-    if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
-
-    clients.push(entry);
-    currentDict.clients = clients;
-    ensureClientsSorted();
-
-    newClientPattern.value = "";
-    newClientReview.value = "";
-    newClientImage.value = "";
-    newClientProfile.value = "";
-    newClientQuestion.value = "";
-
-    if (newClientMentionCategory) newClientMentionCategory.value = "";
-    if (newClientAliases) newClientAliases.value = "";
-    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
-    if (newClientNote) newClientNote.value = "";
-
-    openClientKey = patternKey(pattern);
-
-    saveDictionary('Added client "' + pattern + '"');
-    renderClients();
   });
 
   // ---------------------------------------------------------------------------

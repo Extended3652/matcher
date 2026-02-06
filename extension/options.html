@@ -209,7 +209,7 @@
     }
 
     .client-list-body {
-      max-height: 420px;
+      max-height: 210px;
       overflow: auto;
     }
 
@@ -414,24 +414,11 @@
       <span class="pill">No highlight</span> uses grey.
     </p>
 
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients...">
-      <span id="clientShowing" class="muted"></span>
-    </div>
-
-    <div class="client-list">
-      <div class="client-list-header">
-        <span style="width:14px;"></span>
-        <span style="width:14px;"></span>
-        <span style="flex: 1;">Client</span>
-        <span style="width: 360px;">Summary</span>
-        <span style="width: 90px; text-align:right;">Remove</span>
+    <div class="client-add-box" id="clientAddBox">
+      <h3 id="clientFormTitle" style="margin: 0 0 10px; color: #444;">Add / Edit Client</h3>
+      <div id="clientExistsNotice" style="display:none; margin-bottom:10px; padding:8px 12px; background:#e8f4fd; border:1px solid #b8daff; border-radius:4px; font-size:12px; color:#004085;">
+        This client already exists. Changes will update the existing entry.
       </div>
-      <div id="clientListBody" class="client-list-body"></div>
-    </div>
-
-    <div class="client-add-box">
-      <h3 style="margin: 0 0 10px; color: #444;">Add Client</h3>
 
       <div class="client-add-grid">
         <div class="field">
@@ -494,9 +481,26 @@
       </details>
 
       <div class="client-add-actions">
-        <button class="primary" id="btnAddClient">Add Client</button>
-        <span class="muted">Leave overrides as "-" to use Default.</span>
+        <button class="primary" id="btnAddClient">Save Client</button>
+        <button id="btnClearClient" style="display:none;">Clear Form</button>
+        <span class="muted" id="clientFormHint">Leave overrides as "-" to use Default.</span>
       </div>
+    </div>
+
+    <div class="clients-topbar">
+      <input type="text" id="clientSearch" placeholder="Search clients...">
+      <span id="clientShowing" class="muted"></span>
+    </div>
+
+    <div class="client-list">
+      <div class="client-list-header">
+        <span style="width:14px;"></span>
+        <span style="width:14px;"></span>
+        <span style="flex: 1;">Client</span>
+        <span style="width: 360px;">Summary</span>
+        <span style="width: 90px; text-align:right;">Remove</span>
+      </div>
+      <div id="clientListBody" class="client-list-body"></div>
     </div>
   </div>
 

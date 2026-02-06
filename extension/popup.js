@@ -255,12 +255,16 @@
       const enabled = result.enabled !== false;
       masterToggle.checked = enabled;
 
-      currentDict = result.dictionary || { ignoreList: [], categories: [] };
+      currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
       if (!currentDict.ignoreList) currentDict.ignoreList = [];
       if (!currentDict.categories) currentDict.categories = [];
+      if (!currentDict.clients) currentDict.clients = [];
 
       renderAll();
       updateStats();
+
+      // Get CMS client and pre-fill quick add if not in list
+      getCmsClientAndPopulate();
     });
   }
 
@@ -996,6 +1000,8 @@
   // ---------------------------------------------------------------------------
   // Quick Client Add
   // ---------------------------------------------------------------------------
+  let cmsClientName = null;
+
   function populateQuickClientCategories() {
     quickClientCategory.innerHTML = "";
 
@@ -1018,12 +1024,43 @@
     });
   }
 
+  function clientExists(name) {
+    if (!name || !currentDict || !currentDict.clients) return false;
+    const key = normalizeTrim(name).toLowerCase();
+    return currentDict.clients.some(c => normalizeTrim(c.pattern).toLowerCase() === key);
+  }
+
+  function getCmsClientAndPopulate() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) return;
+
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.clientName) {
+          cmsClientName = null;
+          return;
+        }
+        cmsClientName = response.clientName;
+
+        // If client not in list, pre-fill the quick add form
+        if (cmsClientName && !clientExists(cmsClientName)) {
+          quickClientName.value = cmsClientName;
+        } else {
+          quickClientName.value = "";
+        }
+      });
+    });
+  }
+
   function toggleQuickClient() {
     quickClientOpen = !quickClientOpen;
     if (quickClientOpen) {
       quickClientArrow.classList.add("open");
       quickClientBody.classList.add("open");
       populateQuickClientCategories();
+      // Re-check if CMS client should pre-fill
+      if (cmsClientName && !clientExists(cmsClientName)) {
+        quickClientName.value = cmsClientName;
+      }
     } else {
       quickClientArrow.classList.remove("open");
       quickClientBody.classList.remove("open");
