@@ -36,11 +36,18 @@
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
 
-  // Newer "Mentions" fields (must exist in options.html)
+  // Newer "Mentions" fields
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
+
+  // Clear / Save / Detected client
+  const btnClearClient = document.getElementById("btnClearClient");
+  const btnSaveClients = document.getElementById("btnSaveClients");
+  const detectedBanner = document.getElementById("detectedClientBanner");
+  const detectedNameEl = document.getElementById("detectedClientName");
+  const btnUseDetected = document.getElementById("btnUseDetectedClient");
 
   // ---------------------------------------------------------------------------
   // State
@@ -86,6 +93,14 @@
 
   function normalizePattern(p) {
     return safeStr(p).trim();
+  }
+
+  function globToRegex(pattern) {
+    const p = safeStr(pattern).trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
   }
 
   function patternKey(p) {
@@ -416,16 +431,24 @@
       const fReview = document.createElement("div");
       fReview.className = "field";
       const lReview = document.createElement("label");
-      lReview.textContent = "Header: Review (Default)";
+      lReview.textContent = "Default";
       const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" });
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
 
+      const overrideSep = document.createElement("div");
+      overrideSep.style.gridColumn = "1 / -1";
+      overrideSep.style.borderTop = "1px solid #e5e5e5";
+      overrideSep.style.paddingTop = "6px";
+      overrideSep.style.marginTop = "2px";
+      overrideSep.innerHTML = '<span style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Overrides</span>';
+      grid.appendChild(overrideSep);
+
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
-      lImg.textContent = "Header: Image override";
+      lImg.textContent = "Image";
       const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" });
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
@@ -434,7 +457,7 @@
       const fPro = document.createElement("div");
       fPro.className = "field";
       const lPro = document.createElement("label");
-      lPro.textContent = "Header: Profile override";
+      lPro.textContent = "Profile";
       const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" });
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
@@ -443,7 +466,7 @@
       const fQ = document.createElement("div");
       fQ.className = "field";
       const lQ = document.createElement("label");
-      lQ.textContent = "Header: Question override";
+      lQ.textContent = "Question";
       const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" });
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
@@ -451,9 +474,16 @@
 
       body.appendChild(grid);
 
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      // Mentions editor block
       const mentionsWrap = document.createElement("div");
-      mentionsWrap.className = "client-mentions-wrap";
+      mentionsWrap.style.borderTop = "1px solid #e5e5e5";
+      mentionsWrap.style.paddingTop = "8px";
+      mentionsWrap.style.marginTop = "8px";
+
+      const mentionHeader = document.createElement("div");
+      mentionHeader.innerHTML = '<span style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Mentions</span>';
+      mentionHeader.style.marginBottom = "8px";
+      mentionsWrap.appendChild(mentionHeader);
 
       const mGrid = document.createElement("div");
       mGrid.className = "client-edit-grid";
@@ -1041,6 +1071,99 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Clear / Save client form
+  // ---------------------------------------------------------------------------
+  function clearClientForm() {
+    if (newClientPattern) newClientPattern.value = "";
+    if (newClientReview) newClientReview.value = "";
+    if (newClientImage) newClientImage.value = "";
+    if (newClientProfile) newClientProfile.value = "";
+    if (newClientQuestion) newClientQuestion.value = "";
+    if (newClientMentionCategory) newClientMentionCategory.value = "";
+    if (newClientAliases) newClientAliases.value = "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+    if (newClientNote) newClientNote.value = "";
+
+    [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
+      .filter(Boolean)
+      .forEach(sel => applySelectVisualForCategory(sel));
+  }
+
+  if (btnClearClient) {
+    btnClearClient.addEventListener("click", clearClientForm);
+  }
+
+  if (btnSaveClients) {
+    btnSaveClients.addEventListener("click", () => {
+      saveDictionary("Clients saved (" + (currentDict.clients || []).length + " entries)");
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Detect current CMS client from open tabs
+  // ---------------------------------------------------------------------------
+  let detectedClient = null;
+
+  function detectCurrentClient() {
+    if (!chrome.tabs) return;
+
+    chrome.tabs.query({}, (tabs) => {
+      if (!tabs || tabs.length === 0) return;
+
+      let found = false;
+      for (const tab of tabs) {
+        if (found) break;
+        try {
+          chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (response) => {
+            if (chrome.runtime.lastError) return;
+            if (found) return;
+            if (response && response.clientName) {
+              found = true;
+              detectedClient = response.clientName;
+              onClientDetected(response.clientName);
+            }
+          });
+        } catch (e) {
+          // tab doesn't have content script
+        }
+      }
+    });
+  }
+
+  function onClientDetected(clientName) {
+    if (detectedBanner && detectedNameEl) {
+      detectedNameEl.textContent = clientName;
+      detectedBanner.style.display = "flex";
+    }
+
+    // Pre-fill pattern if form is empty
+    if (newClientPattern && !newClientPattern.value) {
+      newClientPattern.value = clientName;
+    }
+
+    // Auto-expand matching client in the list
+    if (currentDict) {
+      const match = (currentDict.clients || []).find(c => {
+        const rx = globToRegex(c.pattern);
+        return rx && rx.test(clientName);
+      });
+      if (match) {
+        openClientKey = patternKey(match.pattern);
+        renderClients();
+      }
+    }
+  }
+
+  if (btnUseDetected) {
+    btnUseDetected.addEventListener("click", () => {
+      if (detectedClient && newClientPattern) {
+        newClientPattern.value = detectedClient;
+        newClientPattern.focus();
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------------
 
@@ -1050,5 +1173,8 @@
     .forEach(sel => sel.addEventListener("change", () => applySelectVisualForCategory(sel)));
 
   load();
+
+  // Detect CMS client after dictionary loads (small delay to let storage callback finish)
+  setTimeout(detectCurrentClient, 300);
 
 })();

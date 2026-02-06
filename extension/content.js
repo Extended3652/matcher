@@ -469,6 +469,10 @@
         });
         return true;
 
+      case "getClientName":
+        sendResponse({ clientName: getCmsClientName() });
+        break;
+
       case "getStats":
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,

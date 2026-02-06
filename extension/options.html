@@ -211,7 +211,7 @@
     }
 
     .client-list-body {
-      max-height: 420px;
+      max-height: 210px;
       overflow: auto;
     }
 
@@ -371,46 +371,54 @@
       <span class="pill">No highlight</span> uses grey.
     </p>
 
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
-      <span id="clientShowing" class="muted"></span>
+    <div id="detectedClientBanner" style="display:none; padding:8px 12px; background:#eaf4fe; border:1px solid #b3d7f7; border-radius:4px; margin-bottom:10px; font-size:13px; align-items:center; gap:8px;">
+      Current CMS client: <strong id="detectedClientName"></strong>
+      <button id="btnUseDetectedClient" style="margin-left:8px; padding:3px 10px; border:1px solid #b3d7f7; border-radius:4px; background:#fff; cursor:pointer; font-size:12px;">Fill Form</button>
     </div>
 
     <div class="client-add-box">
       <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
       <div class="client-add-grid">
         <div class="field">
-          <label>Pattern</label>
-          <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
+          <label>Client Name</label>
+          <input type="text" id="newClientPattern" placeholder="Client name (supports * and ?)">
         </div>
 
         <div class="field">
-          <label>Review (Default)</label>
+          <label>Default</label>
           <select id="newClientReview"></select>
         </div>
 
+        <div style="grid-column: 1 / -1; border-top: 1px solid #e5e5e5; padding-top: 6px; margin-top: 2px;">
+          <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Overrides</span>
+        </div>
+
         <div class="field">
-          <label>Image override</label>
+          <label>Image</label>
           <select id="newClientImage"></select>
         </div>
 
         <div class="field">
-          <label>Profile override</label>
+          <label>Profile</label>
           <select id="newClientProfile"></select>
         </div>
 
         <div class="field">
-          <label>Question override</label>
+          <label>Question</label>
           <select id="newClientQuestion"></select>
         </div>
 
+        <div style="grid-column: 1 / -1; border-top: 1px solid #e5e5e5; padding-top: 6px; margin-top: 2px;">
+          <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Mentions</span>
+        </div>
+
         <div class="field">
-          <label>Mentions: Category</label>
+          <label>Category</label>
           <select id="newClientMentionCategory"></select>
         </div>
 
         <div class="field" style="grid-column: 1 / -1;">
-          <label>Mentions: Aliases (one per line, supports * and ?)</label>
+          <label>Aliases (one per line, supports * and ?)</label>
           <textarea id="newClientAliases" class="word-list" spellcheck="false" style="min-height: 90px;"></textarea>
         </div>
 
@@ -429,8 +437,14 @@
 
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
+        <button id="btnClearClient">Clear</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
       </div>
+    </div>
+
+    <div class="clients-topbar">
+      <input type="text" id="clientSearch" placeholder="Search clients...">
+      <span id="clientShowing" class="muted"></span>
     </div>
 
     <div class="client-list">
@@ -442,6 +456,10 @@
         <span style="width: 90px; text-align:right;">Remove</span>
       </div>
       <div id="clientListBody" class="client-list-body"></div>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <button class="primary" id="btnSaveClients">Save Clients</button>
     </div>
   </div>
 
