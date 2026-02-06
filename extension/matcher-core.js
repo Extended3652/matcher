@@ -114,12 +114,15 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
+            // Allow apostrophes (straight and curly) for contractions like "didn't"
+            result += "(?:[^\\s\\p{P}]|['''])*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            // Middle wildcard: non-greedy, allow apostrophes
+            result += "(?:[^\\s\\p{P}]|['''])*?";
           }
         } else if (ch === "?") {
-          result += "[\\s\\S]";
+          // Single char wildcard - also allow apostrophes
+          result += "(?:[^\\s\\p{P}]|['''])";
       } else if (ch === " ") {
         result += "\\s+";
       } else {
