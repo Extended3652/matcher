@@ -312,7 +312,7 @@ chrome.runtime.onInstalled.addListener((details) => {
       if (!result.dictionary) {
         chrome.storage.local.set({
           enabled: true,
-          dictionary: { ignoreList: [], categories: [] },
+          dictionary: { ignoreList: [], categories: [], clients: [] },
           contextExact: false,
           contextCaseSensitive: false,
         });

@@ -102,9 +102,29 @@
     if (!currentDict || !Array.isArray(currentDict.categories)) return map;
     for (const c of currentDict.categories) {
       if (!c || !c.name) continue;
-      map.set(c.name, { color: c.color || "#FFFF00", fColor: c.fColor || "#000000" });
+      map.set(c.name, { color: c.color || "#FFFF00", fColor: c.fColor || "#FFFFFF" });
     }
     return map;
+  }
+
+  function applySelectVisualForCategory(sel) {
+    const v = sel.value;
+    if (!v) {
+      sel.style.backgroundColor = "";
+      sel.style.color = "";
+      sel.style.borderColor = "";
+      return;
+    }
+    const st = getCategoryStyleByName().get(v);
+    if (!st) {
+      sel.style.backgroundColor = "";
+      sel.style.color = "";
+      sel.style.borderColor = "";
+      return;
+    }
+    sel.style.backgroundColor = st.color || "";
+    sel.style.color = st.fColor || "";
+    sel.style.borderColor = "rgba(0,0,0,0.25)";
   }
 
   function makeCategorySelect(opts) {
@@ -114,27 +134,6 @@
     // review: includes "(no highlight)" + categories
     // override: includes "-" (inherit) + categories
     const sel = document.createElement("select");
-
-    function resetSelectVisual() {
-      sel.style.backgroundColor = "";
-      sel.style.color = "";
-      sel.style.borderColor = "";
-    }
-
-    function applySelectVisualForValue(v) {
-      if (!v) {
-        resetSelectVisual();
-        return;
-      }
-      const st = getCategoryStyleByName().get(v);
-      if (!st) {
-        resetSelectVisual();
-        return;
-      }
-      sel.style.backgroundColor = st.color || "";
-      sel.style.color = st.fColor || "";
-      sel.style.borderColor = "rgba(0,0,0,0.25)";
-    }
 
     function makeOption(value, label, st) {
       const opt = document.createElement("option");
@@ -162,8 +161,8 @@
     }
 
     sel.value = opts.value || "";
-    applySelectVisualForValue(sel.value);
-    sel.addEventListener("change", () => applySelectVisualForValue(sel.value));
+    applySelectVisualForCategory(sel);
+    sel.addEventListener("change", () => applySelectVisualForCategory(sel));
 
     return sel;
   }
@@ -270,6 +269,11 @@
       while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
       newClientMentionCategory.value = "";
     }
+
+    // Apply visual styling to real form selects (temp selects' handlers don't transfer)
+    [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
+      .filter(Boolean)
+      .forEach(sel => applySelectVisualForCategory(sel));
   }
 
   function getClientFilter() {
@@ -1039,6 +1043,12 @@
   // ---------------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------------
+
+  // One-time change handlers for "Add client" form selects (visual styling)
+  [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
+    .filter(Boolean)
+    .forEach(sel => sel.addEventListener("change", () => applySelectVisualForCategory(sel)));
+
   load();
 
 })();

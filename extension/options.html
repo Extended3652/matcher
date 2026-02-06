@@ -403,6 +403,28 @@
           <label>Question override</label>
           <select id="newClientQuestion"></select>
         </div>
+
+        <div class="field">
+          <label>Mentions: Category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Mentions: Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" class="word-list" spellcheck="false" style="min-height: 90px;"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Also treat Client Name as a mention in content
+          </label>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)">
+        </div>
       </div>
 
       <div class="client-add-actions">
