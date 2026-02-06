@@ -11,10 +11,7 @@
   // Elements
   // ---------------------------------------------------------------------------
   const msgEl         = document.getElementById("msg");
-  const ignoreArea    = document.getElementById("ignoreListArea");
-  const ignoreCount   = document.getElementById("ignoreCount");
   const catEditorsEl  = document.getElementById("catEditors");
-  const btnSaveIgnore = document.getElementById("btnSaveIgnore");
   const btnExport     = document.getElementById("btnExport");
   const btnImportHT   = document.getElementById("btnImportHT");
   const btnImportJSON = document.getElementById("btnImportJSON");
@@ -187,7 +184,7 @@
       if (note) extra += " [note]";
     }
 
-    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
+    return "Def: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
   }
 
   function pickHeaderSwatchCategory(entry) {
@@ -209,7 +206,6 @@
       if (!Array.isArray(currentDict.categories)) currentDict.categories = [];
       if (!Array.isArray(currentDict.clients)) currentDict.clients = [];
 
-      renderIgnoreList();
       renderClients();
       renderCategories();
     });
@@ -220,22 +216,6 @@
       if (msg) showMsg(msg, "success");
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // Ignore List
-  // ---------------------------------------------------------------------------
-  function renderIgnoreList() {
-    const words = currentDict.ignoreList || [];
-    ignoreArea.value = words.join("\n");
-    ignoreCount.textContent = "(" + words.length + " words)";
-  }
-
-  btnSaveIgnore.addEventListener("click", () => {
-    const lines = ignoreArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    currentDict.ignoreList = lines;
-    saveDictionary("Ignore list saved (" + lines.length + " words)");
-    ignoreCount.textContent = "(" + lines.length + " words)";
-  });
 
   // ---------------------------------------------------------------------------
   // Clients
@@ -412,40 +392,63 @@
       const fReview = document.createElement("div");
       fReview.className = "field";
       const lReview = document.createElement("label");
-      lReview.textContent = "Header: Review (Default)";
+      lReview.textContent = "Default";
       const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" });
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
 
+      body.appendChild(grid);
+
+      // Divider for overrides
+      const divider = document.createElement("div");
+      divider.className = "override-divider";
+      divider.innerHTML = "<span>Content Type Overrides</span>";
+      divider.style.cssText = "display:flex;align-items:center;margin:14px 0 10px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.5px;";
+      const beforeLine = document.createElement("span");
+      beforeLine.style.cssText = "flex:1;height:1px;background:#ddd;";
+      const afterLine = document.createElement("span");
+      afterLine.style.cssText = "flex:1;height:1px;background:#ddd;";
+      const divText = document.createElement("span");
+      divText.style.padding = "0 10px";
+      divText.textContent = "Content Type Overrides";
+      divider.innerHTML = "";
+      divider.appendChild(beforeLine);
+      divider.appendChild(divText);
+      divider.appendChild(afterLine);
+      body.appendChild(divider);
+
+      const overrideGrid = document.createElement("div");
+      overrideGrid.className = "client-edit-grid";
+
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
-      lImg.textContent = "Header: Image override";
+      lImg.textContent = "Image";
       const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" });
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
-      grid.appendChild(fImg);
+      overrideGrid.appendChild(fImg);
 
       const fPro = document.createElement("div");
       fPro.className = "field";
       const lPro = document.createElement("label");
-      lPro.textContent = "Header: Profile override";
+      lPro.textContent = "Profile";
       const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" });
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
-      grid.appendChild(fPro);
+      overrideGrid.appendChild(fPro);
 
       const fQ = document.createElement("div");
       fQ.className = "field";
       const lQ = document.createElement("label");
-      lQ.textContent = "Header: Question override";
+      lQ.textContent = "Question";
       const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" });
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
-      grid.appendChild(fQ);
+      overrideGrid.appendChild(fQ);
 
-      body.appendChild(grid);
+      body.appendChild(overrideGrid);
 
       // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
       const mentionsWrap = document.createElement("div");
@@ -697,10 +700,113 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Categories
+  // Ignore List (rendered as first category)
+  // ---------------------------------------------------------------------------
+  let ignoreListOpen = false;
+
+  function renderIgnoreListCategory() {
+    const words = currentDict.ignoreList || [];
+
+    const editor = document.createElement("div");
+    editor.className = "ignore-cat-editor";
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "ignore-cat-header";
+
+    const arrow = document.createElement("span");
+    arrow.className = "cat-arrow" + (ignoreListOpen ? " open" : "");
+    arrow.textContent = "\u25b6";
+    header.appendChild(arrow);
+
+    const colorPrev = document.createElement("span");
+    colorPrev.style.cssText = "display:inline-block;width:14px;height:14px;border-radius:3px;background:#d1d5db;border:1px solid rgba(0,0,0,0.2);";
+    header.appendChild(colorPrev);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "cat-header-name";
+    nameSpan.textContent = "Ignore List (global)";
+    header.appendChild(nameSpan);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "cat-header-count";
+    countSpan.textContent = words.length + " words";
+    header.appendChild(countSpan);
+
+    editor.appendChild(header);
+
+    // Body
+    const body = document.createElement("div");
+    body.className = "cat-body" + (ignoreListOpen ? " open" : "");
+
+    const helpText = document.createElement("p");
+    helpText.style.cssText = "font-size:12px;color:#777;margin-bottom:8px;";
+    helpText.textContent = "Words here block highlights from all categories. One per line. Wildcards (* ?) work.";
+    body.appendChild(helpText);
+
+    const wordArea = document.createElement("textarea");
+    wordArea.className = "word-list";
+    wordArea.spellcheck = false;
+    wordArea.value = words.join("\n");
+    body.appendChild(wordArea);
+
+    const addRow = document.createElement("div");
+    addRow.className = "add-word-row";
+
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Quick add (Enter to add)";
+
+    addInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && addInput.value.trim()) {
+        const word = addInput.value.trim();
+        if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
+        insertAlphabetically(currentDict.ignoreList, word);
+        wordArea.value = currentDict.ignoreList.join("\n");
+        countSpan.textContent = currentDict.ignoreList.length + " words";
+        addInput.value = "";
+        saveDictionary('Added "' + word + '" to Ignore List');
+      }
+    });
+
+    addRow.appendChild(addInput);
+    body.appendChild(addRow);
+
+    const saveRow = document.createElement("div");
+    saveRow.style.marginTop = "10px";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "primary";
+    saveBtn.textContent = "Save Ignore List";
+    saveBtn.addEventListener("click", () => {
+      const lines = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      currentDict.ignoreList = lines;
+      countSpan.textContent = lines.length + " words";
+      saveDictionary("Ignore list saved (" + lines.length + " words)");
+    });
+    saveRow.appendChild(saveBtn);
+
+    body.appendChild(saveRow);
+    editor.appendChild(body);
+
+    header.addEventListener("click", () => {
+      ignoreListOpen = !ignoreListOpen;
+      arrow.classList.toggle("open", ignoreListOpen);
+      body.classList.toggle("open", ignoreListOpen);
+    });
+
+    catEditorsEl.appendChild(editor);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Categories (includes Ignore List as first item)
   // ---------------------------------------------------------------------------
   function renderCategories() {
     catEditorsEl.innerHTML = "";
+
+    // Render Ignore List as first expandable item
+    renderIgnoreListCategory();
+
     if (!currentDict.categories) return;
 
     if (currentDict.categories.length === 0) {
@@ -997,7 +1103,6 @@
     currentDict = data;
     openClientKey = null;
     saveDictionary("Imported " + data.categories.length + " categories, " + data.clients.length + " clients");
-    renderIgnoreList();
     renderClients();
     renderCategories();
   }
@@ -1041,7 +1146,6 @@
     currentDict = dict;
     openClientKey = null;
     saveDictionary("Imported HighlightThis backup: " + dict.categories.length + " categories, " + totalWords + " words");
-    renderIgnoreList();
     renderClients();
     renderCategories();
   }

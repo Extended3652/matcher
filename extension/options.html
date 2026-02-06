@@ -63,8 +63,6 @@
     .msg.success { display: block; background: #d5f5e3; color: #1e8449; border: 1px solid #82e0aa; }
     .msg.error { display: block; background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
 
-    .ignore-section textarea { min-height: 250px; }
-
     .toolbar {
       display: flex;
       gap: 8px;
@@ -329,6 +327,64 @@
       color: #888;
       font-size: 12px;
     }
+
+    .override-divider {
+      display: flex;
+      align-items: center;
+      margin: 14px 0 10px;
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .override-divider::before,
+    .override-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #ddd;
+    }
+    .override-divider span {
+      padding: 0 10px;
+    }
+
+    .mentions-details {
+      margin-top: 12px;
+      border: 1px solid #e5e5e5;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .mentions-details summary {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #666;
+    }
+    .mentions-details[open] summary {
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .mentions-details .client-add-grid {
+      padding: 0 12px 12px;
+    }
+
+    /* Ignore List as category */
+    .ignore-cat-editor {
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      background: #f5f5f5;
+    }
+    .ignore-cat-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      background: #eaeaea;
+      border-bottom: 1px solid #ddd;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .ignore-cat-header:hover { background: #e0e0e0; }
   </style>
 </head>
 <body>
@@ -350,112 +406,114 @@
     </p>
   </div>
 
-  <!-- Ignore List -->
-  <div class="section ignore-section">
-    <h2>Ignore List <span id="ignoreCount" style="font-size:12px; color:#999;"></span></h2>
-    <p style="font-size: 12px; color: #777; margin-bottom: 8px;">
-      Words here block highlights from all categories. One per line. Wildcards (* ?) work.
-    </p>
-    <textarea id="ignoreListArea" class="word-list" spellcheck="false"></textarea>
-    <div style="margin-top: 8px;">
-      <button class="primary" id="btnSaveIgnore">Save Ignore List</button>
-    </div>
-  </div>
-
   <!-- Clients -->
   <div class="section">
     <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
     <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
-      Match against the client name shown in the CMS header. Pattern supports * and ?.
-      Review uses the Default setting. Image/Profile/Question can override Default.
+      Match against the client name shown in the CMS header. Supports * and ?.
       <span class="pill">No highlight</span> uses grey.
     </p>
 
     <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
+      <input type="text" id="clientSearch" placeholder="Search clients...">
       <span id="clientShowing" class="muted"></span>
-    </div>
-
-    <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
-      <div class="client-add-grid">
-        <div class="field">
-          <label>Pattern</label>
-          <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
-        </div>
-
-        <div class="field">
-          <label>Review (Default)</label>
-          <select id="newClientReview"></select>
-        </div>
-
-        <div class="field">
-          <label>Image override</label>
-          <select id="newClientImage"></select>
-        </div>
-
-        <div class="field">
-          <label>Profile override</label>
-          <select id="newClientProfile"></select>
-        </div>
-
-        <div class="field">
-          <label>Question override</label>
-          <select id="newClientQuestion"></select>
-        </div>
-
-        <div class="field">
-          <label>Mentions: Category</label>
-          <select id="newClientMentionCategory"></select>
-        </div>
-
-        <div class="field">
-          <label>Note</label>
-          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)">
-        </div>
-
-        <div class="field" style="grid-column: 1 / -1;">
-          <label>Mentions: Aliases (one per line, supports * and ?)</label>
-          <textarea id="newClientAliases" class="word-list" style="min-height: 60px;" spellcheck="false" placeholder="Enter aliases, one per line"></textarea>
-        </div>
-
-        <div class="field" style="grid-column: 1 / -1;">
-          <label style="display: flex; align-items: center; gap: 8px;">
-            <input type="checkbox" id="newClientIncludePatternInContent" checked>
-            Also treat Client Name as a mention in content
-          </label>
-        </div>
-      </div>
-
-      <div class="client-add-actions">
-        <button class="primary" id="btnAddClient">Add Client</button>
-        <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
-      </div>
     </div>
 
     <div class="client-list">
       <div class="client-list-header">
         <span style="width:14px;"></span>
         <span style="width:14px;"></span>
-        <span style="flex: 1;">Client pattern</span>
+        <span style="flex: 1;">Client</span>
         <span style="width: 360px;">Summary</span>
         <span style="width: 90px; text-align:right;">Remove</span>
       </div>
       <div id="clientListBody" class="client-list-body"></div>
+    </div>
+
+    <div class="client-add-box">
+      <h3 style="margin: 0 0 10px; color: #444;">Add Client</h3>
+
+      <div class="client-add-grid">
+        <div class="field">
+          <label>Client Name</label>
+          <input type="text" id="newClientPattern" placeholder="Client name (supports * and ?)">
+        </div>
+
+        <div class="field">
+          <label>Default</label>
+          <select id="newClientReview"></select>
+        </div>
+      </div>
+
+      <div class="override-divider">
+        <span>Content Type Overrides</span>
+      </div>
+
+      <div class="client-add-grid">
+        <div class="field">
+          <label>Image</label>
+          <select id="newClientImage"></select>
+        </div>
+
+        <div class="field">
+          <label>Profile</label>
+          <select id="newClientProfile"></select>
+        </div>
+
+        <div class="field">
+          <label>Question</label>
+          <select id="newClientQuestion"></select>
+        </div>
+
+        <div class="field">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note">
+        </div>
+      </div>
+
+      <details class="mentions-details">
+        <summary>Mentions (advanced)</summary>
+        <div class="client-add-grid" style="margin-top: 10px;">
+          <div class="field">
+            <label>Mentions Category</label>
+            <select id="newClientMentionCategory"></select>
+          </div>
+
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Aliases (one per line, supports * and ?)</label>
+            <textarea id="newClientAliases" class="word-list" style="min-height: 60px;" spellcheck="false" placeholder="Enter aliases, one per line"></textarea>
+          </div>
+
+          <div class="field" style="grid-column: 1 / -1;">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="newClientIncludePatternInContent" checked>
+              Also treat Client Name as a mention in content
+            </label>
+          </div>
+        </div>
+      </details>
+
+      <div class="client-add-actions">
+        <button class="primary" id="btnAddClient">Add Client</button>
+        <span class="muted">Leave overrides as "-" to use Default.</span>
+      </div>
     </div>
   </div>
 
   <!-- Categories -->
   <div class="section">
     <h2>Categories</h2>
+    <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
+      Ignore List blocks highlights globally. Categories define highlight colors for matched words.
+    </p>
 
-    <div class="new-cat-form">
+    <div id="catEditors"></div>
+
+    <div class="new-cat-form" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
       <input type="text" id="newCatName" placeholder="New category name">
       <input type="color" id="newCatColor" value="#FF9900">
       <button class="primary" id="btnAddCat">Add Category</button>
     </div>
-
-    <div id="catEditors"></div>
   </div>
 
   <script src="options.js"></script>
