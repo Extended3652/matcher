@@ -64,12 +64,31 @@
   }
 
   function getCmsContentType() {
-    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
-    const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
+    // Try the old selector first (for backwards compatibility)
+    let el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    if (el) {
+      const raw = String(el.textContent || "").trim().toLowerCase();
+      if (raw.includes("image")) return "Image";
+      if (raw.includes("profile")) return "Profile";
+      if (raw.includes("question")) return "Question";
+      return "Default";
+    }
 
-    if (raw.includes("image")) return "Image";
-    if (raw.includes("profile")) return "Profile";
-    if (raw.includes("question")) return "Question";
+    // New selector: find <dt>contentType</dt> and get the next <dd> sibling
+    const dtElements = document.querySelectorAll("dt");
+    for (const dt of dtElements) {
+      if (dt.textContent.trim().toLowerCase() === "contenttype") {
+        const dd = dt.nextElementSibling;
+        if (dd && dd.tagName === "DD") {
+          const raw = String(dd.textContent || "").trim().toLowerCase();
+          if (raw.includes("image")) return "Image";
+          if (raw.includes("profile")) return "Profile";
+          if (raw.includes("question")) return "Question";
+        }
+        break;
+      }
+    }
+
     return "Default";
   }
 
