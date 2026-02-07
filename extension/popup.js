@@ -23,16 +23,7 @@
   const btnOptions   = document.getElementById("btnOptions");
   const popupSearch  = document.getElementById("popupSearch");
 
-  // Client quick-add elements
-  const clientSectionEl  = document.getElementById("clientSection");
-  const popupClientName  = document.getElementById("popupClientName");
-  const popupClientStatus = document.getElementById("popupClientStatus");
-  const popupClientAddEl = document.getElementById("popupClientAdd");
-  const popupClientCat   = document.getElementById("popupClientCat");
-  const popupBtnAdd      = document.getElementById("popupBtnAddClient");
-
   let currentDict = null;
-  let detectedClientName = null;
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -241,8 +232,9 @@
     });
   }
 
-  function saveDictionary() {
+  function saveDictionaryAndRefresh() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      refreshActiveTab();
       updateStats();
     });
   }
@@ -255,14 +247,12 @@
       const enabled = result.enabled !== false;
       masterToggle.checked = enabled;
 
-      currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
+      currentDict = result.dictionary || { ignoreList: [], categories: [] };
       if (!currentDict.ignoreList) currentDict.ignoreList = [];
       if (!currentDict.categories) currentDict.categories = [];
-      if (!currentDict.clients) currentDict.clients = [];
 
       renderAll();
       updateStats();
-      detectAndShowClient();
     });
   }
 
@@ -307,114 +297,10 @@
           statsEl.textContent = "Not running on this page";
           return;
         }
-
         statsEl.textContent =
-          `${response.highlights} highlights | ${response.cats || 0} categories | ` +
+          `${response.highlights} highlights | ${response.categories} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
       });
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Client detection + quick-add
-  // ---------------------------------------------------------------------------
-  function globToRegex(pattern) {
-    const p = String(pattern || "").trim();
-    if (!p) return null;
-    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
-    try { return new RegExp(rx, "i"); } catch (e) { return null; }
-  }
-
-  function findMatchingRule(clientName) {
-    const clients = (currentDict && currentDict.clients) || [];
-    for (const c of clients) {
-      const rx = globToRegex(c.pattern);
-      if (rx && rx.test(clientName)) return c;
-    }
-    return null;
-  }
-
-  function populateClientCatDropdown() {
-    if (!popupClientCat || !currentDict) return;
-    popupClientCat.innerHTML = "";
-
-    const none = document.createElement("option");
-    none.value = "";
-    none.textContent = "(no highlight)";
-    popupClientCat.appendChild(none);
-
-    const cats = (currentDict.categories || []);
-    for (const c of cats) {
-      if (!c || !c.name) continue;
-      const opt = document.createElement("option");
-      opt.value = c.name;
-      opt.textContent = c.name;
-      if (c.color) {
-        opt.style.backgroundColor = c.color;
-        opt.style.color = c.fColor || "#fff";
-      }
-      popupClientCat.appendChild(opt);
-    }
-  }
-
-  function detectAndShowClient() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs[0]) return;
-
-      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (response) => {
-        if (chrome.runtime.lastError || !response || !response.clientName) return;
-
-        detectedClientName = response.clientName;
-        if (!clientSectionEl || !popupClientName) return;
-
-        popupClientName.textContent = detectedClientName;
-        clientSectionEl.style.display = "block";
-
-        const rule = findMatchingRule(detectedClientName);
-        if (rule) {
-          const cat = rule.defaultCategory || "(no highlight)";
-          popupClientStatus.textContent = "\u2192 " + cat;
-          if (popupClientAddEl) popupClientAddEl.style.display = "none";
-        } else {
-          popupClientStatus.textContent = "(no rule)";
-          populateClientCatDropdown();
-          if (popupClientAddEl) popupClientAddEl.style.display = "flex";
-        }
-      });
-    });
-  }
-
-  if (popupBtnAdd) {
-    popupBtnAdd.addEventListener("click", () => {
-      if (!detectedClientName || !currentDict) return;
-
-      if (!currentDict.clients) currentDict.clients = [];
-
-      const key = detectedClientName.toLowerCase();
-      const exists = currentDict.clients.some(c =>
-        String(c.pattern || "").trim().toLowerCase() === key
-      );
-      if (exists) {
-        popupBtnAdd.textContent = "Exists";
-        setTimeout(() => { popupBtnAdd.textContent = "Add Client"; }, 700);
-        return;
-      }
-
-      const entry = {
-        pattern: detectedClientName,
-        defaultCategory: (popupClientCat && popupClientCat.value) ? popupClientCat.value : null,
-        overrides: {}
-      };
-
-      currentDict.clients.push(entry);
-      saveDictionary();
-
-      popupBtnAdd.textContent = "Added!";
-      setTimeout(() => { popupBtnAdd.textContent = "Add Client"; }, 700);
-
-      if (popupClientStatus) popupClientStatus.textContent = "\u2192 " + (entry.defaultCategory || "(no highlight)");
-      if (popupClientAddEl) popupClientAddEl.style.display = "none";
     });
   }
 
@@ -476,7 +362,7 @@
     const [moved] = cats.splice(dragIndex, 1);
     cats.splice(dropIndex, 0, moved);
 
-    saveDictionary();
+    saveDictionaryAndRefresh();
     renderAll();
   }
 
@@ -604,18 +490,9 @@
 
             if (!destCat.words) destCat.words = [];
 
-            // Avoid duplicates (by raw string)
-            if (!destCat.words.includes(raw)) {
-              // Insert alphabetically into destination
-              insertAlphabetically(destCat.words, raw);
-            }
-
-            // Remove from source BY VALUE, not by index.
-            // We can't use onRemove() here — it splices by the entryIndex
-            // captured at render time, but insertAlphabetically may have
-            // already shifted indices if dest and source are the same array.
-            // onRemove also does its own save/render/setOpenEditor which
-            // would fight with ours below. So we do it directly.
+            // Remove from source FIRST, before we insert into destination.
+            // This prevents indexOf from finding a newly-inserted duplicate
+            // when source and dest are the same array.
             if (scope === "ignore") {
               const srcIdx = currentDict.ignoreList.indexOf(raw);
               if (srcIdx !== -1) currentDict.ignoreList.splice(srcIdx, 1);
@@ -625,12 +502,17 @@
               if (srcIdx !== -1) srcWords.splice(srcIdx, 1);
             }
 
+            // Now insert into destination (avoid duplicates by raw string)
+            if (!destCat.words.includes(raw)) {
+              insertAlphabetically(destCat.words, raw);
+            }
+
             // Find the destination's current index so we can open its editor.
             // Editor keys are "cat:INDEX", not the category's uuid.
             const destIndex = currentDict.categories.indexOf(destCat);
 
             // One save, one render, one editor open.
-            saveDictionary();
+            saveDictionaryAndRefresh();
             renderAll();
             if (destIndex !== -1) {
               setOpenEditor(`cat:${destIndex}`);
@@ -794,13 +676,13 @@
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
-              saveDictionary();
+              saveDictionaryAndRefresh();
               renderAll();
               setOpenEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
-              saveDictionary();
+              saveDictionaryAndRefresh();
               renderAll();
               setOpenEditor("ignore");
             }
@@ -827,7 +709,7 @@
         // Insert alphabetically instead of appending
         insertAlphabetically(currentDict.ignoreList, raw);
         addInput.value = "";
-        saveDictionary();
+        saveDictionaryAndRefresh();
 
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
@@ -879,7 +761,7 @@
     colorInput.addEventListener("input", () => {
       swatch.style.backgroundColor = colorInput.value;
       cat.color = colorInput.value;
-      saveDictionary();
+      saveDictionaryAndRefresh();
     });
 
     swatch.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -922,7 +804,7 @@
     toggleInput.checked = cat.enabled !== false;
     toggleInput.addEventListener("change", () => {
       cat.enabled = toggleInput.checked;
-      saveDictionary();
+      saveDictionaryAndRefresh();
     });
 
     const toggleSlider = document.createElement("span");
@@ -1037,13 +919,13 @@
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
-              saveDictionary();
+              saveDictionaryAndRefresh();
               renderAll();
               setOpenEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
-              saveDictionary();
+              saveDictionaryAndRefresh();
               renderAll();
               setOpenEditor(key);
             }
@@ -1070,7 +952,7 @@
         // Insert alphabetically instead of appending
         insertAlphabetically(cat.words, raw);
         addInput.value = "";
-        saveDictionary();
+        saveDictionaryAndRefresh();
 
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
