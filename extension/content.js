@@ -561,7 +561,7 @@
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
-          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
+          categories: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
         });
         break;
