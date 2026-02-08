@@ -81,6 +81,10 @@
   // STEP 2: Convert a glob pattern into a regex fragment string.
   // Supports escaping: \* and \? mean literal characters, not wildcards.
   // ---------------------------------------------------------------------------
+
+  // Wildcard char class: word chars + apostrophes + hyphens (common within words)
+  const WILD_CH = "(?:[^\\s\\p{P}]|['\u2019\\-])";
+
   function globToRegexFragment(pattern) {
     let result = "";
     const chars = [...pattern];
@@ -114,9 +118,9 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
+            result += WILD_CH + "*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            result += WILD_CH + "*?";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
@@ -334,7 +338,7 @@
             fColor:   cat.fColor,
             priority: i,
             isWildcard: meta ? !!meta.hasWildcard : false,
-            isExact: meta ? !!meta.exact : false,
+            isExact: meta ? !!meta.isExact : false,
           });
         }
       }

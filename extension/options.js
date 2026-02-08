@@ -1103,22 +1103,26 @@
   // Detect current CMS client from open tabs
   // ---------------------------------------------------------------------------
   let detectedClient = null;
+  let detectGeneration = 0; // guards against stale responses from prior detection rounds
 
   function detectCurrentClient() {
     if (!chrome.tabs) return;
 
+    const gen = ++detectGeneration;
+
     chrome.tabs.query({}, (tabs) => {
       if (!tabs || tabs.length === 0) return;
+      if (gen !== detectGeneration) return; // superseded
 
-      let found = false;
+      let resolved = false;
       for (const tab of tabs) {
-        if (found) break;
         try {
           chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (response) => {
             if (chrome.runtime.lastError) return;
-            if (found) return;
+            if (resolved) return;
+            if (gen !== detectGeneration) return; // superseded
             if (response && response.clientName) {
-              found = true;
+              resolved = true;
               detectedClient = response.clientName;
               onClientDetected(response.clientName);
             }
@@ -1130,36 +1134,92 @@
     });
   }
 
+  function fillFormFromClient(entry) {
+    if (!entry) return;
+
+    if (newClientPattern) newClientPattern.value = entry.pattern || "";
+    if (newClientReview) {
+      newClientReview.value = entry.defaultCategory || "";
+      applySelectVisualForCategory(newClientReview);
+    }
+
+    const o = entry.overrides || {};
+    if (newClientImage) {
+      newClientImage.value = o.Image || "";
+      applySelectVisualForCategory(newClientImage);
+    }
+    if (newClientProfile) {
+      newClientProfile.value = o.Profile || "";
+      applySelectVisualForCategory(newClientProfile);
+    }
+    if (newClientQuestion) {
+      newClientQuestion.value = o.Question || "";
+      applySelectVisualForCategory(newClientQuestion);
+    }
+    if (newClientMentionCategory) {
+      newClientMentionCategory.value = entry.mentionCategory || "";
+      applySelectVisualForCategory(newClientMentionCategory);
+    }
+    if (newClientAliases) {
+      newClientAliases.value = Array.isArray(entry.aliases) ? entry.aliases.join("\n") : "";
+    }
+    if (newClientIncludePatternInContent) {
+      newClientIncludePatternInContent.checked = (entry.includePatternInContent !== false);
+    }
+    if (newClientNote) {
+      newClientNote.value = entry.note ? String(entry.note) : "";
+    }
+  }
+
   function onClientDetected(clientName) {
     if (detectedBanner && detectedNameEl) {
       detectedNameEl.textContent = clientName;
       detectedBanner.style.display = "flex";
     }
 
-    // Pre-fill pattern if form is empty
-    if (newClientPattern && !newClientPattern.value) {
-      newClientPattern.value = clientName;
-    }
+    if (!currentDict) return;
 
-    // Auto-expand matching client in the list
-    if (currentDict) {
-      const match = (currentDict.clients || []).find(c => {
-        const rx = globToRegex(c.pattern);
-        return rx && rx.test(clientName);
-      });
-      if (match) {
-        openClientKey = patternKey(match.pattern);
-        renderClients();
+    // Find matching client rule
+    const match = (currentDict.clients || []).find(c => {
+      const rx = globToRegex(c.pattern);
+      return rx && rx.test(clientName);
+    });
+
+    if (match) {
+      // Auto-fill form with existing client data
+      fillFormFromClient(match);
+      // Auto-expand in list
+      openClientKey = patternKey(match.pattern);
+      renderClients();
+
+      // Update banner to show it already exists
+      if (btnUseDetected) btnUseDetected.textContent = "Refresh Form";
+    } else {
+      // New client — just pre-fill the pattern
+      if (newClientPattern && !newClientPattern.value) {
+        newClientPattern.value = clientName;
       }
+      if (btnUseDetected) btnUseDetected.textContent = "Fill Form";
     }
   }
 
   if (btnUseDetected) {
     btnUseDetected.addEventListener("click", () => {
-      if (detectedClient && newClientPattern) {
+      if (!detectedClient) return;
+
+      const match = (currentDict.clients || []).find(c => {
+        const rx = globToRegex(c.pattern);
+        return rx && rx.test(detectedClient);
+      });
+
+      if (match) {
+        fillFormFromClient(match);
+        openClientKey = patternKey(match.pattern);
+        renderClients();
+      } else if (newClientPattern) {
         newClientPattern.value = detectedClient;
-        newClientPattern.focus();
       }
+      if (newClientPattern) newClientPattern.focus();
     });
   }
 
@@ -1176,5 +1236,10 @@
 
   // Detect CMS client after dictionary loads (small delay to let storage callback finish)
   setTimeout(detectCurrentClient, 300);
+
+  // Re-detect when options page regains focus (user may have switched CMS tabs/clients)
+  window.addEventListener("focus", () => {
+    setTimeout(detectCurrentClient, 200);
+  });
 
 })();
