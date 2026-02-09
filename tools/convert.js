@@ -148,11 +148,12 @@ for (const id of backup.order) {
 
   // Everything else is a normal category
   output.categories.push({
-    id:     id,
-    name:   group.name,
-    color:  group.color,
-    fColor: group.fColor || '#FFFFFF',
-    words:  words
+    id:      id,
+    name:    group.name,
+    color:   group.color,
+    fColor:  group.fColor || '#FFFFFF',
+    enabled: true,
+    words:   words
   });
 }
 

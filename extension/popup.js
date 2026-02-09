@@ -421,9 +421,12 @@
 
   // Force-open an editor (no toggle). Used by add/edit/remove callbacks
   // so the user stays in the category they were editing.
+  let focusAddInputAfterRender = false;
+
   function openEditor(key) {
     openEditorKey = key;
     editing = null;
+    focusAddInputAfterRender = true;
     renderAll();
   }
 
@@ -750,6 +753,11 @@
       });
 
       renderIgnoreWords();
+
+      if (focusAddInputAfterRender) {
+        focusAddInputAfterRender = false;
+        setTimeout(() => { try { addInput.focus(); } catch (_) {} }, 0);
+      }
     }
 
     catListEl.appendChild(editor);
@@ -988,6 +996,11 @@
       });
 
       renderWordList();
+
+      if (focusAddInputAfterRender) {
+        focusAddInputAfterRender = false;
+        setTimeout(() => { try { addInput.focus(); } catch (_) {} }, 0);
+      }
     }
 
     catListEl.appendChild(editor);

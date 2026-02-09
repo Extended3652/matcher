@@ -802,7 +802,8 @@
         if (addExactCb.checked && !word.startsWith("//")) {
           word = "//" + word;
         }
-        if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
+        // Sync textarea edits into the array first (in case user typed directly)
+        currentDict.ignoreList = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
         if (currentDict.ignoreList.includes(word)) {
           showMsg('"' + word + '" already in Ignore List', "error");
           return;
@@ -840,6 +841,11 @@
     editor.appendChild(body);
 
     header.addEventListener("click", () => {
+      // Close any open category section first
+      if (!ignoreEditorOpen) {
+        document.querySelectorAll(".cat-editor:not(.ignore-editor) .cat-body").forEach(b => b.classList.remove("open"));
+        document.querySelectorAll(".cat-editor:not(.ignore-editor) .cat-arrow").forEach(a => a.classList.remove("open"));
+      }
       ignoreEditorOpen = !ignoreEditorOpen;
       body.classList.toggle("open", ignoreEditorOpen);
       arrow.classList.toggle("open", ignoreEditorOpen);
@@ -992,7 +998,8 @@
           if (addExactCb.checked && !word.startsWith("//")) {
             word = "//" + word;
           }
-          if (!Array.isArray(cat.words)) cat.words = [];
+          // Sync textarea edits into the array first (in case user typed directly)
+          cat.words = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
           if (cat.words.includes(word)) {
             showMsg('"' + word + '" already in ' + (cat.name || "category"), "error");
             return;
@@ -1048,6 +1055,7 @@
         const isOpen = body.classList.contains("open");
         document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
         document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+        ignoreEditorOpen = false; // sync state when closing all sections
         if (!isOpen) {
           body.classList.add("open");
           arrow.classList.add("open");
