@@ -562,7 +562,8 @@
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
           categories: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
-          clients: clientRules.length
+          clients: clientRules.length,
+          clientName: getCmsClientName() || ""
         });
         break;
 

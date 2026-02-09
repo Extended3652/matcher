@@ -16,7 +16,7 @@
     }
 
     h1 { font-size: 22px; margin-bottom: 8px; }
-    h2 { font-size: 16px; margin: 20px 0 8px; }
+    h2 { font-size: 16px; margin: 0; }
     h3 { font-size: 14px; margin: 16px 0 6px; color: #555; }
 
     .section {
@@ -26,6 +26,23 @@
       padding: 16px;
       margin-bottom: 16px;
     }
+
+    /* Collapsible section headers */
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-arrow {
+      transition: transform 0.2s;
+      font-size: 12px;
+      color: #999;
+    }
+    .section-arrow.open { transform: rotate(90deg); }
+    .section-body { display: none; margin-top: 12px; }
+    .section-body.open { display: block; }
 
     .row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
     .row label { min-width: 120px; font-weight: 500; }
@@ -170,6 +187,18 @@
       background: #fbfbfb;
       padding: 12px;
       margin-bottom: 12px;
+    }
+
+    .client-add-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      margin: 0 0 10px;
+      color: #444;
+      font-size: 14px;
+      font-weight: 600;
     }
 
     .client-add-grid {
@@ -343,132 +372,150 @@
 
   <div id="msg" class="msg"></div>
 
-  <!-- Import / Export -->
+  <!-- Categories (expanded by default, most-used section) -->
   <div class="section">
-    <h2>Import / Export</h2>
-    <div class="toolbar">
-      <button id="btnExport">Export Dictionary (JSON)</button>
-      <button id="btnImportHT">Import HighlightThis Backup</button>
-      <button id="btnImportJSON">Import CMS Highlighter JSON</button>
-      <input type="file" id="importFile" accept=".json,*">
+    <div class="section-toggle" data-section="sectionCategories">
+      <span class="section-arrow open">&#9654;</span>
+      <h2>Categories</h2>
     </div>
-    <p style="font-size: 12px; color: #777;">
-      Import your existing HighlightThis backup file, or a previously exported CMS Highlighter dictionary.
-    </p>
-  </div>
-
-  <!-- Clients -->
-  <div class="section">
-    <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
-    <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
-      Match against the client name shown in the CMS header. Pattern supports * and ?.
-      Review uses the Default setting. Image/Profile/Question can override Default.
-      <span class="pill">No highlight</span> uses grey.
-    </p>
-
-    <div id="detectedClientBanner" style="display:none; padding:8px 12px; background:#eaf4fe; border:1px solid #b3d7f7; border-radius:4px; margin-bottom:10px; font-size:13px; align-items:center; gap:8px;">
-      Current CMS client: <strong id="detectedClientName"></strong>
-      <button id="btnUseDetectedClient" style="margin-left:8px; padding:3px 10px; border:1px solid #b3d7f7; border-radius:4px; background:#fff; cursor:pointer; font-size:12px;">Fill Form</button>
-    </div>
-
-    <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
-      <div class="client-add-grid">
-        <div class="field">
-          <label>Client Name</label>
-          <input type="text" id="newClientPattern" placeholder="Client name (supports * and ?)">
-        </div>
-
-        <div class="field">
-          <label>Default</label>
-          <select id="newClientReview"></select>
-        </div>
-
-        <div style="grid-column: 1 / -1; border-top: 1px solid #e5e5e5; padding-top: 6px; margin-top: 2px;">
-          <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Overrides</span>
-        </div>
-
-        <div class="field">
-          <label>Image</label>
-          <select id="newClientImage"></select>
-        </div>
-
-        <div class="field">
-          <label>Profile</label>
-          <select id="newClientProfile"></select>
-        </div>
-
-        <div class="field">
-          <label>Question</label>
-          <select id="newClientQuestion"></select>
-        </div>
-
-        <div style="grid-column: 1 / -1; border-top: 1px solid #e5e5e5; padding-top: 6px; margin-top: 2px;">
-          <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Mentions</span>
-        </div>
-
-        <div class="field">
-          <label>Category</label>
-          <select id="newClientMentionCategory"></select>
-        </div>
-
-        <div class="field" style="grid-column: 1 / -1;">
-          <label>Aliases (one per line, supports * and ?)</label>
-          <textarea id="newClientAliases" class="word-list" spellcheck="false" style="min-height: 90px;"></textarea>
-        </div>
-
-        <div class="field" style="grid-column: 1 / -1;">
-          <label style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="newClientIncludePatternInContent" checked>
-            Also treat Client Name as a mention in content
-          </label>
-        </div>
-
-        <div class="field" style="grid-column: 1 / -1;">
-          <label>Note</label>
-          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)">
-        </div>
+    <div class="section-body open" id="sectionCategories">
+      <div class="new-cat-form">
+        <input type="text" id="newCatName" placeholder="New category name">
+        <input type="color" id="newCatColor" value="#FF9900">
+        <button class="primary" id="btnAddCat">Add Category</button>
       </div>
 
-      <div class="client-add-actions">
-        <button class="primary" id="btnAddClient">Add Client</button>
-        <button id="btnClearClient">Clear</button>
-        <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
-      </div>
-    </div>
-
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients...">
-      <span id="clientShowing" class="muted"></span>
-    </div>
-
-    <div class="client-list">
-      <div class="client-list-header">
-        <span style="width:14px;"></span>
-        <span style="width:14px;"></span>
-        <span style="flex: 1;">Client pattern</span>
-        <span style="width: 360px;">Summary</span>
-        <span style="width: 90px; text-align:right;">Remove</span>
-      </div>
-      <div id="clientListBody" class="client-list-body"></div>
-    </div>
-
-    <div style="margin-top: 8px;">
-      <button class="primary" id="btnSaveClients">Save Clients</button>
+      <div id="catEditors"></div>
     </div>
   </div>
 
-  <!-- Categories -->
+  <!-- Clients (collapsed by default) -->
   <div class="section">
-    <h2>Categories</h2>
-
-    <div class="new-cat-form">
-      <input type="text" id="newCatName" placeholder="New category name">
-      <input type="color" id="newCatColor" value="#FF9900">
-      <button class="primary" id="btnAddCat">Add Category</button>
+    <div class="section-toggle" data-section="sectionClients">
+      <span class="section-arrow">&#9654;</span>
+      <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
     </div>
+    <div class="section-body" id="sectionClients">
+      <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
+        Match against the client name shown in the CMS header. Pattern supports * and ?.
+        Review uses the Default setting. Image/Profile/Question can override Default.
+        <span class="pill">No highlight</span> uses grey.
+      </p>
 
-    <div id="catEditors"></div>
+      <div id="detectedClientBanner" style="display:none; padding:8px 12px; background:#eaf4fe; border:1px solid #b3d7f7; border-radius:4px; margin-bottom:10px; font-size:13px; align-items:center; gap:8px;">
+        Current CMS client: <strong id="detectedClientName"></strong>
+        <button id="btnUseDetectedClient" style="margin-left:8px; padding:3px 10px; border:1px solid #b3d7f7; border-radius:4px; background:#fff; cursor:pointer; font-size:12px;">Fill Form</button>
+      </div>
+
+      <div class="client-add-header" id="toggleAddClient">
+        <span class="section-arrow" id="addClientArrow">&#9654;</span>
+        Add client
+      </div>
+
+      <div class="client-add-box" id="clientAddFormBody" style="display:none;">
+        <div class="client-add-grid">
+          <div class="field">
+            <label>Client Name</label>
+            <input type="text" id="newClientPattern" placeholder="Client name (supports * and ?)">
+          </div>
+
+          <div class="field">
+            <label>Default</label>
+            <select id="newClientReview"></select>
+          </div>
+
+          <div style="grid-column: 1 / -1; border-top: 1px solid #e5e5e5; padding-top: 6px; margin-top: 2px;">
+            <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Overrides</span>
+          </div>
+
+          <div class="field">
+            <label>Image</label>
+            <select id="newClientImage"></select>
+          </div>
+
+          <div class="field">
+            <label>Profile</label>
+            <select id="newClientProfile"></select>
+          </div>
+
+          <div class="field">
+            <label>Question</label>
+            <select id="newClientQuestion"></select>
+          </div>
+
+          <div style="grid-column: 1 / -1; border-top: 1px solid #e5e5e5; padding-top: 6px; margin-top: 2px;">
+            <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Mentions</span>
+          </div>
+
+          <div class="field">
+            <label>Category</label>
+            <select id="newClientMentionCategory"></select>
+          </div>
+
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Aliases (one per line, supports * and ?)</label>
+            <textarea id="newClientAliases" class="word-list" spellcheck="false" style="min-height: 90px;"></textarea>
+          </div>
+
+          <div class="field" style="grid-column: 1 / -1;">
+            <label style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="newClientIncludePatternInContent" checked>
+              Also treat Client Name as a mention in content
+            </label>
+          </div>
+
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Note</label>
+            <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)">
+          </div>
+        </div>
+
+        <div class="client-add-actions">
+          <button class="primary" id="btnAddClient">Add Client</button>
+          <button id="btnClearClient">Clear</button>
+          <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
+        </div>
+      </div>
+
+      <div class="clients-topbar">
+        <input type="text" id="clientSearch" placeholder="Search clients...">
+        <span id="clientShowing" class="muted"></span>
+      </div>
+
+      <div class="client-list">
+        <div class="client-list-header">
+          <span style="width:14px;"></span>
+          <span style="width:14px;"></span>
+          <span style="flex: 1;">Client pattern</span>
+          <span style="width: 360px;">Summary</span>
+          <span style="width: 90px; text-align:right;">Remove</span>
+        </div>
+        <div id="clientListBody" class="client-list-body"></div>
+      </div>
+
+      <div style="margin-top: 8px;">
+        <button class="primary" id="btnSaveClients">Save Clients</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import / Export (collapsed by default, rarely used) -->
+  <div class="section">
+    <div class="section-toggle" data-section="sectionImportExport">
+      <span class="section-arrow">&#9654;</span>
+      <h2>Import / Export</h2>
+    </div>
+    <div class="section-body" id="sectionImportExport">
+      <div class="toolbar">
+        <button id="btnExport">Export Dictionary (JSON)</button>
+        <button id="btnImportHT">Import HighlightThis Backup</button>
+        <button id="btnImportJSON">Import CMS Highlighter JSON</button>
+        <input type="file" id="importFile" accept=".json,*">
+      </div>
+      <p style="font-size: 12px; color: #777;">
+        Import your existing HighlightThis backup file, or a previously exported CMS Highlighter dictionary.
+      </p>
+    </div>
   </div>
 
   <script src="options.js"></script>

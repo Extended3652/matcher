@@ -297,9 +297,13 @@
           statsEl.textContent = "Not running on this page";
           return;
         }
-        statsEl.textContent =
+        let statsText =
           `${response.highlights} highlights | ${response.categories} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
+        if (response.clientName) {
+          statsText += ` | ${response.clientName}`;
+        }
+        statsEl.textContent = statsText;
       });
     });
   }
@@ -655,11 +659,6 @@
       flagRow.appendChild(csLabel);
       editor.appendChild(flagRow);
 
-      const hint = document.createElement("div");
-      hint.className = "hint";
-      hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move.";
-      editor.appendChild(hint);
-
       const list = document.createElement("div");
       list.className = "word-list";
       editor.appendChild(list);
@@ -899,11 +898,6 @@
       flagRow.appendChild(exactLabel);
       flagRow.appendChild(csLabel);
       editor.appendChild(flagRow);
-
-      const hint = document.createElement("div");
-      hint.className = "hint";
-      hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move.";
-      editor.appendChild(hint);
 
       const list = document.createElement("div");
       list.className = "word-list";

@@ -46,6 +46,35 @@
   const detectedNameEl = document.getElementById("detectedClientName");
   const btnUseDetected = document.getElementById("btnUseDetectedClient");
 
+  // Section toggle elements
+  const toggleAddClient = document.getElementById("toggleAddClient");
+  const clientAddFormBody = document.getElementById("clientAddFormBody");
+  const addClientArrow = document.getElementById("addClientArrow");
+
+  // ---------------------------------------------------------------------------
+  // Collapsible section toggles
+  // ---------------------------------------------------------------------------
+  document.querySelectorAll(".section-toggle[data-section]").forEach(toggle => {
+    toggle.addEventListener("click", () => {
+      const sectionId = toggle.dataset.section;
+      const body = document.getElementById(sectionId);
+      const arrow = toggle.querySelector(".section-arrow");
+      if (!body || !arrow) return;
+      const isOpen = body.classList.contains("open");
+      body.classList.toggle("open", !isOpen);
+      arrow.classList.toggle("open", !isOpen);
+    });
+  });
+
+  // Client add-form toggle
+  if (toggleAddClient && clientAddFormBody) {
+    toggleAddClient.addEventListener("click", () => {
+      const isOpen = clientAddFormBody.style.display !== "none";
+      clientAddFormBody.style.display = isOpen ? "none" : "block";
+      if (addClientArrow) addClientArrow.classList.toggle("open", !isOpen);
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -1304,6 +1333,20 @@
     if (detectedBanner && detectedNameEl) {
       detectedNameEl.textContent = clientName;
       detectedBanner.style.display = "flex";
+    }
+
+    // Auto-expand Clients section so the detected banner is visible
+    const clientsBody = document.getElementById("sectionClients");
+    const clientsArrow = document.querySelector('[data-section="sectionClients"] .section-arrow');
+    if (clientsBody && !clientsBody.classList.contains("open")) {
+      clientsBody.classList.add("open");
+      if (clientsArrow) clientsArrow.classList.add("open");
+    }
+
+    // Auto-expand add-client form so user can see the filled fields
+    if (clientAddFormBody && clientAddFormBody.style.display === "none") {
+      clientAddFormBody.style.display = "block";
+      if (addClientArrow) addClientArrow.classList.add("open");
     }
 
     if (!currentDict) return;
