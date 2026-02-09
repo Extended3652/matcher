@@ -740,6 +740,155 @@
   });
 
   // ---------------------------------------------------------------------------
+  // Dictionary Audit
+  // ---------------------------------------------------------------------------
+  function auditDictionary() {
+    const issues = [];
+    if (!currentDict) return issues;
+
+    const cats = currentDict.categories || [];
+    const ignoreWords = (currentDict.ignoreList || []).map(w => w.trim()).filter(w => w.length > 0);
+
+    // 1. Exact duplicates within each category
+    for (const cat of cats) {
+      const seen = new Map();
+      for (const word of (cat.words || [])) {
+        const trimmed = word.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) {
+          issues.push({ type: "duplicate", cat: cat.name, word: trimmed,
+            msg: '"' + trimmed + '" appears multiple times in "' + cat.name + '"' });
+        } else {
+          seen.set(key, trimmed);
+        }
+      }
+    }
+
+    // 2. Exact duplicates within ignore list
+    {
+      const seen = new Map();
+      for (const word of ignoreWords) {
+        const key = word.toLowerCase();
+        if (seen.has(key)) {
+          issues.push({ type: "duplicate", cat: "Ignore List", word: word,
+            msg: '"' + word + '" appears multiple times in Ignore List' });
+        } else {
+          seen.set(key, word);
+        }
+      }
+    }
+
+    // 3. Substring makes exact (//word) redundant in same category
+    for (const cat of cats) {
+      const words = (cat.words || []).map(w => w.trim()).filter(w => w.length > 0);
+      const substringSet = new Set();
+
+      for (const w of words) {
+        let stripped = w;
+        if (stripped.startsWith("CS:")) stripped = stripped.slice(3);
+        if (!stripped.startsWith("//")) {
+          substringSet.add(stripped.toLowerCase());
+        }
+      }
+
+      for (const w of words) {
+        let stripped = w;
+        if (stripped.startsWith("CS:")) stripped = stripped.slice(3);
+        if (stripped.startsWith("//")) {
+          const base = stripped.slice(2).toLowerCase();
+          if (substringSet.has(base)) {
+            issues.push({ type: "redundant", cat: cat.name, word: w,
+              msg: '"' + w + '" is redundant \u2014 "' + base + '" (substring) already covers it in "' + cat.name + '"' });
+          }
+        }
+      }
+    }
+
+    // 4. Cross-category shadows (same entry, lower priority never fires)
+    const globalSeen = new Map();
+    for (const cat of cats) {
+      if (cat.enabled === false) continue;
+      for (const word of (cat.words || [])) {
+        const key = word.trim().toLowerCase();
+        if (!key) continue;
+        if (globalSeen.has(key)) {
+          const firstCat = globalSeen.get(key);
+          if (firstCat !== cat.name) {
+            issues.push({ type: "shadow", cat: cat.name, word: word.trim(),
+              msg: '"' + word.trim() + '" in "' + cat.name + '" is shadowed by "' + firstCat + '" (higher priority)' });
+          }
+        } else {
+          globalSeen.set(key, cat.name);
+        }
+      }
+    }
+
+    // 5. Ignore vs category conflicts (identical entry in both = dead category entry)
+    if (ignoreWords.length > 0) {
+      const ignoreSet = new Set(ignoreWords.map(w => w.toLowerCase()));
+      for (const cat of cats) {
+        for (const word of (cat.words || [])) {
+          const trimmed = word.trim();
+          if (!trimmed) continue;
+          if (ignoreSet.has(trimmed.toLowerCase())) {
+            issues.push({ type: "conflict", cat: cat.name, word: trimmed,
+              msg: '"' + trimmed + '" in "' + cat.name + '" conflicts with identical Ignore List entry \u2014 will never highlight' });
+          }
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  function renderAudit() {
+    const banner = document.getElementById("auditBanner");
+    const summaryEl = document.getElementById("auditSummary");
+    const details = document.getElementById("auditDetails");
+    const arrow = document.getElementById("auditArrow");
+    if (!banner || !summaryEl || !details) return;
+
+    const issues = auditDictionary();
+
+    if (issues.length === 0) {
+      banner.style.display = "none";
+      return;
+    }
+
+    banner.style.display = "block";
+    summaryEl.textContent = "\u26A0 " + issues.length + " dictionary issue" + (issues.length > 1 ? "s" : "") + " found";
+
+    details.innerHTML = "";
+    const typeColors = { duplicate: "#e65100", redundant: "#f57f17", shadow: "#e65100", conflict: "#c62828" };
+    const typeLabels = { duplicate: "DUPLICATE", redundant: "REDUNDANT", shadow: "SHADOWED", conflict: "CONFLICT" };
+
+    for (const issue of issues) {
+      const div = document.createElement("div");
+      div.style.padding = "4px 0";
+      div.style.borderBottom = "1px solid #ffe082";
+      div.style.fontSize = "12px";
+
+      const badge = document.createElement("span");
+      badge.style.cssText = "display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:700; margin-right:6px; color:#fff; background:" + (typeColors[issue.type] || "#888");
+      badge.textContent = typeLabels[issue.type] || issue.type.toUpperCase();
+
+      div.appendChild(badge);
+      div.appendChild(document.createTextNode(issue.msg));
+      details.appendChild(div);
+    }
+
+    const header = document.getElementById("auditHeader");
+    if (header) {
+      header.onclick = () => {
+        const isOpen = details.style.display !== "none";
+        details.style.display = isOpen ? "none" : "block";
+        if (arrow) arrow.classList.toggle("open", !isOpen);
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Categories (Ignore List shown as top entry)
   // ---------------------------------------------------------------------------
   let ignoreEditorOpen = false;
@@ -1093,6 +1242,9 @@
 
       catEditorsEl.appendChild(editor);
     });
+
+    // Run audit after rendering categories
+    renderAudit();
   }
 
   btnAddCat.addEventListener("click", () => {

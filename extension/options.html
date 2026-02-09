@@ -489,6 +489,14 @@
       <h2>Categories</h2>
     </div>
     <div class="section-body open" id="sectionCategories">
+      <div id="auditBanner" style="display:none; margin-bottom:12px; padding:10px 12px; background:#fff8e1; border:1px solid #ffe082; border-radius:6px; font-size:13px;">
+        <div id="auditHeader" style="cursor:pointer; font-weight:600; display:flex; align-items:center; gap:6px;">
+          <span id="auditArrow" class="section-arrow">&#9654;</span>
+          <span id="auditSummary"></span>
+        </div>
+        <div id="auditDetails" style="display:none; margin-top:8px;"></div>
+      </div>
+
       <div class="new-cat-form">
         <input type="text" id="newCatName" placeholder="New category name">
         <input type="color" id="newCatColor" value="#FF9900">

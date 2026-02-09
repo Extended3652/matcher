@@ -691,10 +691,10 @@ test(
 );
 
 test(
-  'Straight apostrophe does NOT match curly apostrophe (different chars)',
+  'Straight apostrophe matches curly apostrophe (quote normalization)',
   { ignoreList: [], categories: [cat("C", ["don't"])] },
   "I don\u2019t like it.",
-  []  // U+0027 (') !== U+2019 (\u2019) — engine treats them as different characters
+  ["don\u2019t:C"]  // quote normalization: straight ' matches curly \u2019
 );
 
 test(
@@ -754,6 +754,113 @@ test(
   { ignoreList: [], categories: [cat("C", ["hello"], { enabled: false })] },
   "Hello world.",
   []
+);
+
+// =====================================================================
+console.log("\n=== QUOTE NORMALIZATION ===\n");
+
+test(
+  'Curly apostrophe in pattern matches straight apostrophe in text',
+  { ignoreList: [], categories: [cat("C", ["don\u2019t"])] },
+  "I don't like it.",
+  ["don't:C"]
+);
+
+test(
+  'Straight apostrophe in pattern matches curly in text (already tested above)',
+  { ignoreList: [], categories: [cat("C", ["it's"])] },
+  "It\u2019s great.",
+  ["It\u2019s:C"]
+);
+
+test(
+  'Curly double quotes in pattern match straight in text',
+  { ignoreList: [], categories: [cat("C", ["\u201Ctest\u201D"])] },
+  'She said "test" loudly.',
+  ['"test":C']
+);
+
+test(
+  'Straight double quotes in pattern match curly in text',
+  { ignoreList: [], categories: [cat("C", ['"hello"'])] },
+  "She said \u201Chello\u201D to him.",
+  ["\u201Chello\u201D:C"]
+);
+
+test(
+  'Wildcard with apostrophe: d*t still matches contractions with curly quote',
+  { ignoreList: [], categories: [cat("C", ["d*t"])] },
+  "It doesn\u2019t work and didn't either.",
+  ["doesn\u2019t:C", "didn't:C"]
+);
+
+test(
+  'Quote normalization in ignore list works too',
+  {
+    ignoreList: ["don't"],
+    categories: [cat("C", ["don\u2019t"])]
+  },
+  "I don\u2019t like it.",
+  []  // ignore "don't" (straight) blocks "don\u2019t" (curly) in text
+);
+
+test(
+  'LIT: prefix with quotes still normalizes',
+  { ignoreList: [], categories: [cat("C", ["LIT:it's"])] },
+  "It\u2019s great.",
+  ["It\u2019s:C"]  // LIT: only affects * and ?, not quote normalization
+);
+
+// =====================================================================
+console.log("\n=== ESCAPE PATTERNS (\\* \\? LITERALS) ===\n");
+
+test(
+  '\\* matches literal asterisk',
+  { ignoreList: [], categories: [cat("C", ["5\\*"])] },
+  "Rated 5* out of 10",
+  ["5*:C"]
+);
+
+test(
+  '\\*\\** matches literal ** with optional trailing wildcard',
+  { ignoreList: [], categories: [cat("C", ["\\*\\**"])] },
+  "The **bold** text and **italic** tag.",
+  ["**bold:C", "**:C", "**italic:C", "**:C"]  // wildcard * can match zero chars, so bare ** matches too
+);
+
+test(
+  '*\\*\\* matches optional leading wildcard then literal **',
+  { ignoreList: [], categories: [cat("C", ["*\\*\\*"])] },
+  "The **bold** text and end**.",
+  ["**:C", "bold**:C", "end**:C"]  // leading wildcard can match zero chars
+);
+
+test(
+  '\\? matches literal question mark',
+  { ignoreList: [], categories: [cat("C", ["what\\?"])] },
+  "She said what? Really?",
+  ["what?:C"]
+);
+
+test(
+  'Mixed escapes: \\*\\?test matches literal *?test',
+  { ignoreList: [], categories: [cat("C", ["\\*\\?test"])] },
+  "Enter *?test in the search box.",
+  ["*?test:C"]
+);
+
+test(
+  'LIT: prefix: LIT:** matches literal **',
+  { ignoreList: [], categories: [cat("C", ["LIT:**"])] },
+  "Use ** for bold and * for italic.",
+  ["**:C"]
+);
+
+test(
+  'Backslash at end of pattern is treated literally',
+  { ignoreList: [], categories: [cat("C", ["path\\"])] },
+  "The path\\ was wrong.",
+  ["path\\:C"]
 );
 
 // =====================================================================

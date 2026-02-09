@@ -79,7 +79,14 @@ function parseWordEntry(rawEntry) {
 // ---------------------------------------------------------------------------
 
 // Wildcard char class: word chars + apostrophes + hyphens (common within words)
-const WILD_CH = "(?:[^\\s\\p{P}]|['\u2019\\-])";
+const WILD_CH = "(?:[^\\s\\p{P}]|['\u2018\u2019\\-])";
+
+// Quote normalization: straight/curly quotes treated as equivalent in patterns
+function quoteClassFor(ch) {
+  if (ch === "'" || ch === "\u2018" || ch === "\u2019") return "['\u2018\u2019]";
+  if (ch === '"' || ch === "\u201C" || ch === "\u201D") return '["\u201C\u201D]';
+  return null;
+}
 
 function globToRegexFragment(pattern) {
   let result = "";
@@ -95,12 +102,11 @@ function globToRegexFragment(pattern) {
     if (ch === "\\") {
       const next = chars[i + 1];
       if (next === undefined) {
-        // trailing backslash, treat it literally
         result += "\\\\";
       } else {
-        // add escaped literal of next char
-        result += next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        i++; // consume next
+        const qc = quoteClassFor(next);
+        result += qc || next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        i++;
       }
       continue;
     }
@@ -123,7 +129,8 @@ function globToRegexFragment(pattern) {
     } else if (ch === " ") {
       result += "\\s+";
     } else {
-      result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const qc = quoteClassFor(ch);
+      result += qc || ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
   }
   return result;
@@ -140,7 +147,7 @@ function compileWordToRegexFragment(parsed) {
   }
 
   fragment += parsed.literal
-    ? parsed.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    ? [...parsed.pattern].map(ch => quoteClassFor(ch) || ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("")
     : globToRegexFragment(parsed.pattern);
 
   if (parsed.boundaryAfter) {
