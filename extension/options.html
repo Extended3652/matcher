@@ -372,30 +372,13 @@
 
   <div id="msg" class="msg"></div>
 
-  <!-- Categories (expanded by default, most-used section) -->
-  <div class="section">
-    <div class="section-toggle" data-section="sectionCategories">
-      <span class="section-arrow open">&#9654;</span>
-      <h2>Categories</h2>
-    </div>
-    <div class="section-body open" id="sectionCategories">
-      <div class="new-cat-form">
-        <input type="text" id="newCatName" placeholder="New category name">
-        <input type="color" id="newCatColor" value="#FF9900">
-        <button class="primary" id="btnAddCat">Add Category</button>
-      </div>
-
-      <div id="catEditors"></div>
-    </div>
-  </div>
-
-  <!-- Clients (collapsed by default) -->
+  <!-- Clients (expanded by default, top section) -->
   <div class="section">
     <div class="section-toggle" data-section="sectionClients">
-      <span class="section-arrow">&#9654;</span>
+      <span class="section-arrow open">&#9654;</span>
       <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
     </div>
-    <div class="section-body" id="sectionClients">
+    <div class="section-body open" id="sectionClients">
       <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
         Match against the client name shown in the CMS header. Pattern supports * and ?.
         Review uses the Default setting. Image/Profile/Question can override Default.
@@ -496,6 +479,23 @@
       <div style="margin-top: 8px;">
         <button class="primary" id="btnSaveClients">Save Clients</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Categories (expanded by default) -->
+  <div class="section">
+    <div class="section-toggle" data-section="sectionCategories">
+      <span class="section-arrow open">&#9654;</span>
+      <h2>Categories</h2>
+    </div>
+    <div class="section-body open" id="sectionCategories">
+      <div class="new-cat-form">
+        <input type="text" id="newCatName" placeholder="New category name">
+        <input type="color" id="newCatColor" value="#FF9900">
+        <button class="primary" id="btnAddCat">Add Category</button>
+      </div>
+
+      <div id="catEditors"></div>
     </div>
   </div>
 
