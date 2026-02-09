@@ -359,8 +359,22 @@
     if (dragIndex === null || dragIndex === dropIndex) return;
 
     const cats = currentDict.categories;
+
+    // Track which category was open so we can follow it to its new index
+    let openCatId = null;
+    if (openEditorKey && openEditorKey.startsWith("cat:")) {
+      const oldIdx = parseInt(openEditorKey.split(":")[1], 10);
+      if (cats[oldIdx]) openCatId = cats[oldIdx].id;
+    }
+
     const [moved] = cats.splice(dragIndex, 1);
     cats.splice(dropIndex, 0, moved);
+
+    // Update openEditorKey to follow the same category at its new index
+    if (openCatId) {
+      const newIdx = cats.findIndex(c => c.id === openCatId);
+      openEditorKey = newIdx >= 0 ? `cat:${newIdx}` : null;
+    }
 
     saveDictionaryAndRefresh();
     renderAll();
@@ -402,6 +416,14 @@
       openEditorKey = nextKey;
       editing = null;
     }
+    renderAll();
+  }
+
+  // Force-open an editor (no toggle). Used by add/edit/remove callbacks
+  // so the user stays in the category they were editing.
+  function openEditor(key) {
+    openEditorKey = key;
+    editing = null;
     renderAll();
   }
 
@@ -511,11 +533,12 @@
             // Editor keys are "cat:INDEX", not the category's uuid.
             const destIndex = currentDict.categories.indexOf(destCat);
 
-            // One save, one render, one editor open.
+            // One save, one render, open destination editor.
             saveDictionaryAndRefresh();
-            renderAll();
             if (destIndex !== -1) {
-              setOpenEditor(`cat:${destIndex}`);
+              openEditor(`cat:${destIndex}`);
+            } else {
+              renderAll();
             }
           });
 
@@ -671,20 +694,17 @@
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
                 // do nothing, keep original
-                renderAll();
-                setOpenEditor("ignore");
+                openEditor("ignore");
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
               saveDictionaryAndRefresh();
-              renderAll();
-              setOpenEditor("ignore");
+              openEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
               saveDictionaryAndRefresh();
-              renderAll();
-              setOpenEditor("ignore");
+              openEditor("ignore");
             }
           );
         });
@@ -714,9 +734,7 @@
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
-        renderIgnoreWords();
-        renderAll();
-        setOpenEditor("ignore");
+        openEditor("ignore");
       }
 
       addBtn.addEventListener("click", (e) => {
@@ -914,20 +932,17 @@
             (nextRaw) => {
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                renderAll();
-                setOpenEditor(key);
+                openEditor(key);
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
               saveDictionaryAndRefresh();
-              renderAll();
-              setOpenEditor(key);
+              openEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
               saveDictionaryAndRefresh();
-              renderAll();
-              setOpenEditor(key);
+              openEditor(key);
             }
           );
         });
@@ -957,9 +972,7 @@
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
-        renderWordList();
-        renderAll();
-        setOpenEditor(key);
+        openEditor(key);
       }
 
       addBtn.addEventListener("click", (e) => {

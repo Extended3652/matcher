@@ -566,6 +566,11 @@
         });
         break;
 
+      case "notify":
+        console.log("CMS Highlighter:", message.message || "");
+        sendResponse({ ok: true });
+        break;
+
       default:
         sendResponse({ error: "unknown action" });
     }

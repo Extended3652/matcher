@@ -803,6 +803,10 @@
           word = "//" + word;
         }
         if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
+        if (currentDict.ignoreList.includes(word)) {
+          showMsg('"' + word + '" already in Ignore List', "error");
+          return;
+        }
         insertAlphabetically(currentDict.ignoreList, word);
         wordArea.value = currentDict.ignoreList.join("\n");
         countSpan.textContent = currentDict.ignoreList.length + " words";
@@ -989,6 +993,10 @@
             word = "//" + word;
           }
           if (!Array.isArray(cat.words)) cat.words = [];
+          if (cat.words.includes(word)) {
+            showMsg('"' + word + '" already in ' + (cat.name || "category"), "error");
+            return;
+          }
           insertAlphabetically(cat.words, word);
           wordArea.value = cat.words.join("\n");
           countSpan.textContent = cat.words.length + " words";

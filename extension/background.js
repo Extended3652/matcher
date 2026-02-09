@@ -265,22 +265,33 @@ function addWordToCategory(text, catIndex, tab) {
 // Add a word to the ignore list
 // ---------------------------------------------------------------------------
 function addWordToIgnoreList(text, tab) {
-  chrome.storage.local.get(["dictionary"], (result) => {
+  chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"], (result) => {
     const dict = result.dictionary;
     if (!dict) return;
 
     if (!dict.ignoreList) dict.ignoreList = [];
 
-    if (dict.ignoreList.includes(text)) {
+    let word = text;
+    const isExact = result.contextExact || false;
+    const isCS = result.contextCaseSensitive || false;
+
+    // Apply prefixes (same as category adds)
+    if (isExact) word = "//" + word;
+    if (isCS) word = "CS:" + word;
+
+    if (dict.ignoreList.includes(word)) {
       notifyTab(tab, `"${text}" already in Ignore List`);
       return;
     }
 
     // Insert alphabetically instead of appending
-    insertAlphabetically(dict.ignoreList, text);
+    insertAlphabetically(dict.ignoreList, word);
 
     chrome.storage.local.set({ dictionary: dict }, () => {
-      notifyTab(tab, `Added "${text}" to Ignore List`);
+      notifyTab(
+        tab,
+        `Added "${text}" to Ignore List${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
+      );
       if (tab && tab.id) {
         chrome.tabs.sendMessage(tab.id, { action: "refresh" });
       }
