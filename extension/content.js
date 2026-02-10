@@ -339,6 +339,112 @@
     return merged;
   }
 
+  // ---------------------------------------------------------------------------
+  // Inline element detection (for cross-node matching)
+  // ---------------------------------------------------------------------------
+  const BLOCK_TAGS = new Set([
+    "ADDRESS","ARTICLE","ASIDE","BLOCKQUOTE","DETAILS","DIALOG","DD","DIV",
+    "DL","DT","FIELDSET","FIGCAPTION","FIGURE","FOOTER","FORM","H1","H2",
+    "H3","H4","H5","H6","HEADER","HGROUP","HR","LI","MAIN","NAV","OL","P",
+    "PRE","SECTION","TABLE","TBODY","TD","TFOOT","TH","THEAD","TR","UL"
+  ]);
+
+  function isBlockElement(el) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+    return BLOCK_TAGS.has(el.tagName);
+  }
+
+  // Find the nearest block-level ancestor of a text node
+  function blockAncestor(textNode) {
+    let el = textNode.parentElement;
+    while (el && !isBlockElement(el) && el !== document.body) {
+      el = el.parentElement;
+    }
+    return el || document.body;
+  }
+
+  // Group consecutive text nodes that share the same block ancestor.
+  // Each group's texts are concatenated for matching, then results are
+  // mapped back to individual nodes.
+  function groupTextNodes(nodes) {
+    const groups = [];
+    let currentGroup = null;
+
+    for (const node of nodes) {
+      const block = blockAncestor(node);
+      if (currentGroup && currentGroup.block === block) {
+        currentGroup.nodes.push(node);
+      } else {
+        currentGroup = { block, nodes: [node] };
+        groups.push(currentGroup);
+      }
+    }
+    return groups;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rendering for cross-node match groups
+  // ---------------------------------------------------------------------------
+  function highlightGroup(group) {
+    if (isBlockedRoute()) return;
+    if (!globalEnabled) return;
+    if (!compiledMatcher) return;
+
+    const nodes = group.nodes;
+    if (nodes.length === 0) return;
+
+    // Build combined text and offset map
+    const segments = []; // { node, start, end } in combined string
+    let combined = "";
+    for (const node of nodes) {
+      const text = node.textContent || "";
+      segments.push({ node, start: combined.length, end: combined.length + text.length });
+      combined += text;
+    }
+
+    if (!combined || combined.trim().length === 0) return;
+
+    const matches = sanitizeMatches(findMatchesForText(combined), combined.length);
+    if (matches.length === 0) return;
+
+    // For single-node groups, use the fast path
+    if (nodes.length === 1) {
+      renderMatchesIntoNode(nodes[0], matches);
+      return;
+    }
+
+    // Multi-node: map each match back to the nodes it spans.
+    // Process nodes from last to first so DOM mutations don't affect earlier nodes.
+    // First, build per-node match slices.
+    const nodeSlices = segments.map(() => []);
+    for (const match of matches) {
+      for (let si = 0; si < segments.length; si++) {
+        const seg = segments[si];
+        // Does this match overlap this segment?
+        const overlapStart = Math.max(match.start, seg.start);
+        const overlapEnd = Math.min(match.end, seg.end);
+        if (overlapStart < overlapEnd) {
+          nodeSlices[si].push({
+            start: overlapStart - seg.start,
+            end: overlapEnd - seg.start,
+            color: match.color,
+            fColor: match.fColor,
+            categoryName: match.categoryName
+          });
+        }
+      }
+    }
+
+    // Render per-node slices (process in reverse to preserve DOM order)
+    for (let si = segments.length - 1; si >= 0; si--) {
+      const slices = nodeSlices[si];
+      if (slices.length === 0) continue;
+      const node = segments[si].node;
+      if (!node || !node.parentNode) continue;
+      renderMatchesIntoNode(node, slices);
+    }
+  }
+
   function highlightTextNode(textNode) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -362,8 +468,11 @@
     const target = root || document.body;
     const textNodes = getTextNodes(target);
 
-    for (const node of textNodes) {
-      highlightTextNode(node);
+    // Group adjacent text nodes under the same block ancestor
+    // so multi-word patterns can match across inline element boundaries
+    const groups = groupTextNodes(textNodes);
+    for (const group of groups) {
+      highlightGroup(group);
     }
   }
 
