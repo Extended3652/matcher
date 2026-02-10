@@ -124,13 +124,24 @@ function globToRegexFragment(pattern) {
           // "* word" matches "prefix word" or just "word"
           result += "(?:" + WILD_CH + "+\\s+)?";
           i++; // consume the space
-        } else if (isLast && prev === " ") {
-          // Trailing wildcard after space: require at least one word char
-          result += WILD_CH + "+";
         } else if (isFirst || isLast) {
           result += WILD_CH + "*";
         } else {
-          result += WILD_CH + "*?";
+          // Middle wildcard: check literal context to decide space-bridging.
+          // Short patterns like h*d stay within one word; longer patterns
+          // like wal*mart can bridge a single space gap.
+          let litBefore = 0;
+          for (let j = i - 1; j >= 0 && chars[j] !== "*" && chars[j] !== "?" && chars[j] !== " "; j--) litBefore++;
+          let litAfter = 0;
+          for (let j = i + 1; j < chars.length && chars[j] !== "*" && chars[j] !== "?" && chars[j] !== " "; j++) litAfter++;
+
+          if (litBefore >= 2 && litAfter >= 2) {
+            // Enough context: allow optional single space bridge (lazy)
+            // e.g. wal*mart matches "walmart", "wal mart", "wal-mart"
+            result += WILD_CH + "*?(?:\\s" + WILD_CH + "*?)?";
+          } else {
+            result += WILD_CH + "*?";
+          }
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";

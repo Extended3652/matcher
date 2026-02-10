@@ -168,10 +168,31 @@ test(
 );
 
 test(
-  '* in middle stays within token (no spaces)',
+  '* in middle matches within token',
   { ignoreList: [], categories: [cat("C", ["s*n"])] },
   "The sun and scan are bright",
   ["sun:C", "scan:C"]
+);
+
+test(
+  '* in middle can match zero chars: wal*mart matches "walmart"',
+  { ignoreList: [], categories: [cat("C", ["wal*mart"])] },
+  "I shop at walmart every week.",
+  ["walmart:C"]
+);
+
+test(
+  '* in middle can match space: wal*mart matches "wal mart"',
+  { ignoreList: [], categories: [cat("C", ["wal*mart"])] },
+  "I shop at wal mart every week.",
+  ["wal mart:C"]
+);
+
+test(
+  '* in middle can match hyphen: wal*mart matches "wal-mart"',
+  { ignoreList: [], categories: [cat("C", ["wal*mart"])] },
+  "I shop at wal-mart every week.",
+  ["wal-mart:C"]
 );
 
 test(
