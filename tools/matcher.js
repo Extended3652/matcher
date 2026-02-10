@@ -119,6 +119,14 @@ function globToRegexFragment(pattern) {
         // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
         if (prev === " " && next === " ") {
           result += "[^\\s]+";
+        } else if (isFirst && next === " ") {
+          // Leading wildcard before space: optional word prefix
+          // "* word" matches "prefix word" or just "word"
+          result += "(?:" + WILD_CH + "+\\s+)?";
+          i++; // consume the space
+        } else if (isLast && prev === " ") {
+          // Trailing wildcard after space: require at least one word char
+          result += WILD_CH + "+";
         } else if (isFirst || isLast) {
           result += WILD_CH + "*";
         } else {

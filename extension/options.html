@@ -247,7 +247,7 @@
     }
 
     .client-list-body {
-      max-height: none;
+      max-height: 500px;
       overflow: auto;
     }
 
@@ -501,6 +501,11 @@
         <input type="text" id="newCatName" placeholder="New category name">
         <input type="color" id="newCatColor" value="#FF9900">
         <button class="primary" id="btnAddCat">Add Category</button>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <input type="text" id="catSearch" placeholder="Search words across all categories..." style="width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px;">
+        <span id="catSearchStatus" class="muted" style="margin-top:4px; display:none;"></span>
       </div>
 
       <div id="catEditors"></div>

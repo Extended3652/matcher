@@ -19,6 +19,8 @@
   const btnAddCat     = document.getElementById("btnAddCat");
   const newCatName    = document.getElementById("newCatName");
   const newCatColor   = document.getElementById("newCatColor");
+  const catSearchEl   = document.getElementById("catSearch");
+  const catSearchStatus = document.getElementById("catSearchStatus");
 
   // Clients UI
   const clientCountEl    = document.getElementById("clientCount");
@@ -1009,7 +1011,9 @@
     saveBtn.textContent = "Save Ignore List";
     saveBtn.addEventListener("click", () => {
       const lines = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      lines.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
       currentDict.ignoreList = lines;
+      wordArea.value = lines.join("\n");
       countSpan.textContent = lines.length + " words";
       saveDictionary("Ignore list saved (" + lines.length + " words)");
     });
@@ -1205,7 +1209,9 @@
       saveBtn.textContent = "Save Words";
       saveBtn.addEventListener("click", () => {
         const lines = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        lines.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
         cat.words = lines;
+        wordArea.value = lines.join("\n");
         countSpan.textContent = lines.length + " words";
         saveDictionary((cat.name || "Category") + ": saved " + lines.length + " words");
       });
@@ -1245,6 +1251,51 @@
 
     // Run audit after rendering categories
     renderAudit();
+
+    // Apply category search filter if active
+    applyCatSearchFilter();
+  }
+
+  function applyCatSearchFilter() {
+    const query = catSearchEl ? catSearchEl.value.trim().toLowerCase() : "";
+    const editors = catEditorsEl.querySelectorAll(".cat-editor");
+    let shown = 0;
+    let total = editors.length;
+
+    editors.forEach(editor => {
+      if (!query) {
+        editor.style.display = "";
+        // Remove any highlight marks
+        editor.querySelectorAll("mark.cat-search-hl").forEach(m => {
+          m.replaceWith(m.textContent);
+        });
+        shown++;
+        return;
+      }
+
+      // Check if any word in this editor matches the search
+      const textarea = editor.querySelector(".word-list");
+      const catName = editor.querySelector(".cat-header-name");
+      const nameText = catName ? catName.textContent.toLowerCase() : "";
+      let match = nameText.includes(query);
+
+      if (!match && textarea) {
+        const lines = textarea.value.split("\n");
+        match = lines.some(line => line.toLowerCase().includes(query));
+      }
+
+      editor.style.display = match ? "" : "none";
+      if (match) shown++;
+    });
+
+    if (catSearchStatus) {
+      if (query) {
+        catSearchStatus.style.display = "block";
+        catSearchStatus.textContent = "Showing " + shown + " of " + total + " categories";
+      } else {
+        catSearchStatus.style.display = "none";
+      }
+    }
   }
 
   btnAddCat.addEventListener("click", () => {
@@ -1555,6 +1606,13 @@
   [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
     .filter(Boolean)
     .forEach(sel => sel.addEventListener("change", () => applySelectVisualForCategory(sel)));
+
+  // Category search
+  if (catSearchEl) {
+    catSearchEl.addEventListener("input", () => {
+      applyCatSearchFilter();
+    });
+  }
 
   load();
 

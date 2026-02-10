@@ -864,6 +864,176 @@ test(
 );
 
 // =====================================================================
+console.log("\n=== USER-REPORTED BUG SCENARIOS ===\n");
+
+// --- long?term / long term / //long term ---
+test(
+  '"long?term" matches "long-term" (? = any single char)',
+  { ignoreList: [], categories: [cat("UA", ["long?term"])] },
+  "This is a long-term solution.",
+  ["long-term:UA"]
+);
+
+test(
+  '"long?term" matches "long term" (? matches space)',
+  { ignoreList: [], categories: [cat("UA", ["long?term"])] },
+  "This is a long term solution.",
+  ["long term:UA"]
+);
+
+test(
+  '"long term" (substring) matches "long term"',
+  { ignoreList: [], categories: [cat("UA", ["long term"])] },
+  "This is a long term solution.",
+  ["long term:UA"]
+);
+
+test(
+  '"//long term" (exact) matches "long term" with boundaries',
+  { ignoreList: [], categories: [cat("UA", ["//long term"])] },
+  "This is a long term solution.",
+  ["long term:UA"]
+);
+
+// --- help with itching ---
+test(
+  '"help with itching" matches full phrase',
+  { ignoreList: [], categories: [cat("UA", ["help with itching"])] },
+  "This product does help with itching on my skin.",
+  ["help with itching:UA"]
+);
+
+test(
+  '"help with itching" in high-pri beats "itching" in low-pri',
+  {
+    ignoreList: [],
+    categories: [
+      cat("UA", ["help with itching"]),
+      cat("AE", ["itching"])
+    ]
+  },
+  "This product does help with itching on my skin.",
+  ["help with itching:UA"]
+);
+
+// --- night*time routine ---
+test(
+  '"night*time routine" matches "nighttime routine"',
+  { ignoreList: [], categories: [cat("CBN", ["night*time routine"])] },
+  "My nighttime routine is simple.",
+  ["nighttime routine:CBN"]
+);
+
+test(
+  '"night*time routine" matches "night-time routine"',
+  { ignoreList: [], categories: [cat("CBN", ["night*time routine"])] },
+  "My night-time routine is simple.",
+  ["night-time routine:CBN"]
+);
+
+// --- within minutes the pain ---
+test(
+  '"within minutes the pain" matches full phrase',
+  { ignoreList: [], categories: [cat("UA", ["within minutes the pain"])] },
+  "Within minutes the pain was gone.",
+  ["Within minutes the pain:UA"]
+);
+
+test(
+  '"within minutes the pain" in high-pri beats "pain" in low-pri',
+  {
+    ignoreList: [],
+    categories: [
+      cat("UA", ["within minutes the pain"]),
+      cat("AE", ["pain"])
+    ]
+  },
+  "Within minutes the pain was gone.",
+  ["Within minutes the pain:UA"]
+);
+
+// --- from start to finish ---
+test(
+  '"from start to finish" matches full phrase',
+  { ignoreList: [], categories: [cat("FIN", ["from start to finish"])] },
+  "From start to finish this was great.",
+  ["From start to finish:FIN"]
+);
+
+// --- * pleasantly surprised ---
+test(
+  '"* pleasantly surprised" matches "was pleasantly surprised"',
+  { ignoreList: [], categories: [cat("C", ["* pleasantly surprised"])] },
+  "I was pleasantly surprised by the results.",
+  ["was pleasantly surprised:C"]
+);
+
+test(
+  '"* pleasantly surprised" does NOT match starting with a space',
+  { ignoreList: [], categories: [cat("C", ["* pleasantly surprised"])] },
+  "Overall, pleasantly surprised by this.",
+  ["pleasantly surprised:C"]  // when no word before, * matches zero chars but should not include leading space
+);
+
+// --- d*t know if th* w* old ---
+test(
+  '"d*t know if th* w* old" matches "don\'t know if they were old"',
+  { ignoreList: [], categories: [cat("C", ["d*t know if th* w* old"])] },
+  "I don't know if they were old.",
+  ["don't know if they were old:C"]
+);
+
+// --- strip* * skin ---
+test(
+  '"strip* * skin" matches "strips your skin"',
+  { ignoreList: [], categories: [cat("C", ["strip* * skin"])] },
+  "It strips your skin of moisture.",
+  ["strips your skin:C"]
+);
+
+test(
+  '"strip* * skin" matches "stripped my skin"',
+  { ignoreList: [], categories: [cat("C", ["strip* * skin"])] },
+  "It stripped my skin badly.",
+  ["stripped my skin:C"]
+);
+
+// --- cottontouch vs cotton ---
+test(
+  '"cottontouch" in high-pri beats "cotton" in low-pri (containment)',
+  {
+    ignoreList: [],
+    categories: [
+      cat("UA", ["cottontouch"]),
+      cat("AE", ["cotton"])
+    ]
+  },
+  "The cottontouch fabric is soft.",
+  ["cottontouch:UA"]
+);
+
+// --- decent sizing ---
+test(
+  '"decent sizing" matches full phrase',
+  { ignoreList: [], categories: [cat("C", ["decent sizing"])] },
+  "It has decent sizing for the price.",
+  ["decent sizing:C"]
+);
+
+test(
+  '"decent sizing" in high-pri beats "sizing" in low-pri',
+  {
+    ignoreList: [],
+    categories: [
+      cat("UA", ["decent sizing"]),
+      cat("AE", ["sizing"])
+    ]
+  },
+  "It has decent sizing for the price.",
+  ["decent sizing:UA"]
+);
+
+// =====================================================================
 // Summary
 // =====================================================================
 console.log("\n" + "=".repeat(60));
