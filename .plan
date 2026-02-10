@@ -1,0 +1,37 @@
+## Plan: Fix matching bugs, client height, search, and alphabetize
+
+### 1. Write tests for ALL user-reported failing patterns
+Reproduce each reported bug in the test suite to determine if it's an engine bug or a UI issue:
+- `long?term`, `long term`, `//long term`
+- `help with itching` (only "itching" showing)
+- `night*time routine` (only "routine")
+- `within minutes the pain` (split highlighting)
+- `from start to finish` (no effect)
+- `* pleasantly surprised` (leading space, only " pleasantly")
+- `d*t know if th* w* old`
+- `strip* * skin` (not matching "strips your skin")
+- `cottontouch` vs lower-priority `cotton`
+- `decent sizing` (only "sizing")
+
+### 2. Fix engine bugs identified by tests
+Based on analysis, likely bugs:
+- **Leading `*` matches zero chars** → `* word` can match starting at a space. Fix: use `WILD_CH+` (one or more) for `*` at start/end of pattern instead of `WILD_CH*` (zero or more). This prevents empty wildcard matches creating matches that start/end with whitespace.
+- **Multi-word patterns**: If tests show these work in the engine, the issue is in the content script's per-text-node processing (text spanning DOM elements). That would need a separate fix.
+
+### 3. Fix client list height (options.html)
+Change `max-height: none` → `max-height: 500px` — tall enough to see one fully-expanded client card without making the entire list show everything.
+
+### 4. Add category search on options page (options.html + options.js)
+Add a search input above the category editors. When user types, filter category editors to only show categories containing matching words. Also highlight matching words within visible textareas.
+
+### 5. Alphabetize word lists (options.js)
+When saving words (both category and ignore list), sort the lines alphabetically using the existing `sortKey()` function that strips prefixes.
+
+### 6. Run all tests, commit, push
+
+Files to modify:
+- `tools/matcher.js` — engine fix (WILD_CH+ for start/end wildcards)
+- `extension/matcher-core.js` — same engine fix
+- `tools/test_edge_cases.js` — add user scenario tests
+- `extension/options.html` — client height, search input
+- `extension/options.js` — search logic, alphabetize on save
