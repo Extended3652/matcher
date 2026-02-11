@@ -230,8 +230,9 @@
           }
 
           // Skip script/style/textarea/input/select/noscript
-          const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
+          const tag = node.parentElement.tagName;
+          if (tag === "SCRIPT" || tag === "STYLE" || tag === "TEXTAREA" ||
+              tag === "INPUT" || tag === "SELECT" || tag === "NOSCRIPT") {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -481,12 +482,16 @@
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     const spans = document.querySelectorAll("." + HL_CLASS);
+    const parentsToNormalize = new Set();
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
-      parent.normalize();
+      parentsToNormalize.add(parent);
     });
+
+    // Batch normalize after all spans are replaced (avoids repeated reflows)
+    parentsToNormalize.forEach(p => { try { p.normalize(); } catch (_) {} });
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
@@ -525,17 +530,34 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        // Deduplicate: collect unique element roots to highlight.
+        // If a parent element is in the batch, skip its child text nodes.
+        const roots = new Set();
+        let hasBody = false;
+
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
           if (item.type === "element") {
             if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
-              highlightAll(item.node);
+              hasBody = true;
+              break;
             }
+            roots.add(item.node);
           } else {
-            highlightTextNode(item.node);
+            // For text nodes, add the block ancestor so we get cross-node matching
+            const block = item.node.parentElement;
+            if (block) roots.add(block);
+          }
+        }
+
+        if (hasBody) {
+          highlightAll(document.body);
+        } else {
+          for (const root of roots) {
+            // Skip if this root is inside another root
+            if (root.parentNode && roots.has(root.parentNode)) continue;
+            highlightAll(root);
           }
         }
 

@@ -319,18 +319,20 @@
   function findMatches(text, compiled) {
     const { ignoreCompiled, compiledCategories } = compiled;
 
-    // --- Collect Ignore List match ranges ---
-    const ignoreRanges = [];
+    // --- Collect Ignore List match ranges (flat array for fast lookup) ---
+    let ignoreRanges = null;
     if (ignoreCompiled) {
+      const ranges = [];
       for (const rx of ignoreCompiled.regexes) {
         const re = rx.re;
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
           if (m[0].length === 0) { re.lastIndex++; continue; }
-          ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
+          ranges.push(m.index, m.index + m[0].length);
         }
       }
+      if (ranges.length > 0) ignoreRanges = ranges;
     }
 
     // --- Collect all category matches ---
@@ -341,15 +343,31 @@
       for (const rx of cat.regexes) {
         const re = rx.re;
         const metas = rx.metas;
+        const metaCount = metas.length;
 
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
           if (m[0].length === 0) { re.lastIndex++; continue; }
 
+          const mStart = m.index;
+          const mEnd = mStart + m[0].length;
+
+          // Quick ignore check before allocating match object
+          if (ignoreRanges) {
+            let ignored = false;
+            for (let ri = 0; ri < ignoreRanges.length; ri += 2) {
+              if (mStart < ignoreRanges[ri + 1] && mEnd > ignoreRanges[ri]) {
+                ignored = true;
+                break;
+              }
+            }
+            if (ignored) continue;
+          }
+
           // Identify which capture group matched
           let meta = null;
-          for (let gi = 1; gi < m.length; gi++) {
+          for (let gi = 1; gi <= metaCount; gi++) {
             if (m[gi] !== undefined) {
               meta = metas[gi - 1];
               break;
@@ -357,8 +375,8 @@
           }
 
           allMatches.push({
-            start:    m.index,
-            end:      m.index + m[0].length,
+            start:    mStart,
+            end:      mEnd,
             name:     cat.name,
             color:    cat.color,
             fColor:   cat.fColor,
@@ -370,18 +388,10 @@
       }
     }
 
-    // --- Remove matches that overlap with any Ignore range ---
-    let filtered = allMatches;
-    if (ignoreRanges.length > 0) {
-      filtered = allMatches.filter(match => {
-        return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
-      });
-    }
-
-    if (filtered.length === 0) return [];
+    if (allMatches.length === 0) return [];
 
     // Sort by start, then longer first (helps reduce churn)
-    filtered.sort((a, b) => {
+    allMatches.sort((a, b) => {
       if (a.start !== b.start) return a.start - b.start;
       const aLen = a.end - a.start;
       const bLen = b.end - b.start;
@@ -395,7 +405,7 @@
     const final = [];
     let winner = null;
 
-    for (const m of filtered) {
+    for (const m of allMatches) {
       if (!winner) {
         winner = m;
         continue;

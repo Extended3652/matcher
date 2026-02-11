@@ -83,6 +83,7 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let savingInProgress = false; // flag to ignore self-triggered storage changes
 
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
@@ -257,7 +258,9 @@
   }
 
   function saveDictionary(msg) {
+    savingInProgress = true;
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      savingInProgress = false;
       if (msg) showMsg(msg, "success");
     });
   }
@@ -1622,6 +1625,29 @@
   // Re-detect when options page regains focus (user may have switched CMS tabs/clients)
   window.addEventListener("focus", () => {
     setTimeout(detectCurrentClient, 200);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Live reload: when dictionary changes from popup or context menu, update
+  // our in-memory copy so we never overwrite external additions.
+  // ---------------------------------------------------------------------------
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (!changes.dictionary) return;
+    if (savingInProgress) return; // ignore our own saves
+
+    const newDict = changes.dictionary.newValue;
+    if (!newDict) return;
+
+    // Preserve structure
+    if (!Array.isArray(newDict.ignoreList)) newDict.ignoreList = [];
+    if (!Array.isArray(newDict.categories)) newDict.categories = [];
+    if (!Array.isArray(newDict.clients)) newDict.clients = [];
+
+    currentDict = newDict;
+    renderClients();
+    renderCategories();
+    showMsg("Dictionary updated from popup / context menu", "success");
   });
 
 })();

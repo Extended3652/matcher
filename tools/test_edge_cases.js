@@ -1055,6 +1055,144 @@ test(
 );
 
 // =====================================================================
+// USER-REPORTED PATTERN TESTS (shift issues)
+// =====================================================================
+
+// --- bait?*?switch → should match "bait and switch" ---
+// ? matches one char (any), * matches zero or more WILD_CH chars (lazy)
+test(
+  "bait?*?switch matches 'bait and switch'",
+  {
+    ignoreList: [],
+    categories: [cat("UA", ["bait?*?switch"])]
+  },
+  "This is a bait and switch tactic.",
+  ["bait and switch:UA"]
+);
+
+// bait?*?switch does NOT match "bait & switch" because * can't match punctuation (&).
+// Use "bait * switch" (space-surrounded wildcard) to match "bait & switch" since
+// space-surrounded * maps to [^\s]+ which includes punctuation.
+test(
+  "bait?*?switch does NOT match 'bait & switch' (& is punctuation, * can't match it)",
+  {
+    ignoreList: [],
+    categories: [cat("UA", ["bait?*?switch"])]
+  },
+  "Classic bait & switch.",
+  []
+);
+
+test(
+  "'bait * switch' (space-surrounded wildcard) DOES match 'bait & switch'",
+  {
+    ignoreList: [],
+    categories: [cat("UA", ["bait * switch"])]
+  },
+  "Classic bait & switch.",
+  ["bait & switch:UA"]
+);
+
+test(
+  "bait?*?switch matches 'bait-n-switch'",
+  {
+    ignoreList: [],
+    categories: [cat("UA", ["bait?*?switch"])]
+  },
+  "Complete bait-n-switch scheme.",
+  ["bait-n-switch:UA"]
+);
+
+// --- ease of appl* → should match "ease of applying" ---
+test(
+  "ease of appl* matches 'ease of applying'",
+  {
+    ignoreList: [],
+    categories: [cat("FIN", ["ease of appl*"])]
+  },
+  "I love the ease of applying this product.",
+  ["ease of applying:FIN"]
+);
+
+test(
+  "ease of appl* matches 'ease of application'",
+  {
+    ignoreList: [],
+    categories: [cat("FIN", ["ease of appl*"])]
+  },
+  "The ease of application was excellent.",
+  ["ease of application:FIN"]
+);
+
+// --- r*utine* with //routine overlap ---
+// r*utine* is wildcard, should contain "routine" match.
+// When //routine is in same category, the containment rule applies:
+// container (r*utine*) wins unless contained match is exact and container is not.
+// Here both overlap: r*utine* matches "routine" (via zero-char wildcards).
+// //routine is exact. r*utine* is wildcard.
+// Containment: r*utine* can match "routine" identically.
+// Since exact "routine" would be contained by "routine" from r*utine*,
+// and exact beats non-exact for contained match, //routine should win.
+test(
+  "//routine (exact) wins over r*utine* (wildcard) for the word 'routine'",
+  {
+    ignoreList: [],
+    categories: [
+      cat("PDCBN", ["r*utine*", "//routine"])
+    ]
+  },
+  "My daily routine is great.",
+  ["routine:PDCBN"]
+);
+
+// --- "uti" inside "routine" when r*utine* is in higher priority category ---
+test(
+  "r*utine* in priority 0 covers 'routine', prevents 'uti' from priority 1",
+  {
+    ignoreList: [],
+    categories: [
+      cat("PDCBN", ["r*utine*"]),
+      cat("MC", ["uti"])
+    ]
+  },
+  "My daily routine is effective.",
+  ["routine:PDCBN"]
+);
+
+// --- "I contacted" multi-word pattern ---
+test(
+  "'I contacted' matches as multi-word pattern",
+  {
+    ignoreList: [],
+    categories: [cat("CS", ["I contacted"])]
+  },
+  "I contacted the support team about this issue.",
+  ["I contacted:CS"]
+);
+
+// --- "along with the" multi-word pattern ---
+test(
+  "'along with the' matches as multi-word phrase",
+  {
+    ignoreList: [],
+    categories: [cat("PDCBN", ["along with the"])]
+  },
+  "This works great along with the other product.",
+  ["along with the:PDCBN"]
+);
+
+// --- "discomfort" simple substring ---
+test(
+  "'discomfort' matches as substring",
+  {
+    ignoreList: [],
+    categories: [cat("MC", ["discomfort"])]
+  },
+  "I felt some discomfort after using this product.",
+  ["discomfort:MC"]
+);
+
+// =====================================================================
 // Summary
 // =====================================================================
 console.log("\n" + "=".repeat(60));

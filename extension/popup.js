@@ -80,7 +80,7 @@
     return editing.entryIndex === entryIndex;
   }
 
-  function showMoveToCategoryDialog(excludeCatId) {
+  function showMoveToCategoryDialog(excludeCatId, showIgnoreList) {
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.style.position = "fixed";
@@ -114,6 +114,43 @@
       const listWrap = document.createElement("div");
       listWrap.style.padding = "8px";
       listWrap.style.overflow = "auto";
+
+      // Show "Ignore List" option when moving FROM a category
+      if (showIgnoreList) {
+        const ignBtn = document.createElement("button");
+        ignBtn.type = "button";
+        ignBtn.style.width = "100%";
+        ignBtn.style.display = "flex";
+        ignBtn.style.alignItems = "center";
+        ignBtn.style.gap = "10px";
+        ignBtn.style.textAlign = "left";
+        ignBtn.style.border = "1px solid #e5e7eb";
+        ignBtn.style.borderRadius = "10px";
+        ignBtn.style.padding = "10px 12px";
+        ignBtn.style.margin = "6px 0";
+        ignBtn.style.background = "#f9fafb";
+        ignBtn.style.cursor = "pointer";
+        ignBtn.style.fontSize = "13px";
+
+        const ignSw = document.createElement("span");
+        ignSw.style.width = "12px";
+        ignSw.style.height = "12px";
+        ignSw.style.borderRadius = "999px";
+        ignSw.style.border = "1px solid rgba(0,0,0,0.15)";
+        ignSw.style.background = "#d1d5db";
+        ignBtn.appendChild(ignSw);
+
+        const ignLabel = document.createElement("span");
+        ignLabel.textContent = "Ignore List (global)";
+        ignLabel.style.fontWeight = "500";
+        ignBtn.appendChild(ignLabel);
+
+        ignBtn.addEventListener("click", () => {
+          cleanup();
+          resolve({ _isIgnoreList: true });
+        });
+        listWrap.appendChild(ignBtn);
+      }
 
       const cats = (currentDict.categories || [])
         .filter(c => c && c.id && c.name && c.id !== excludeCatId);
@@ -154,7 +191,7 @@
         listWrap.appendChild(btn);
       });
 
-      if (cats.length === 0) {
+      if (cats.length === 0 && !showIgnoreList) {
         const empty = document.createElement("div");
         empty.style.padding = "10px 12px";
         empty.style.fontSize = "13px";
@@ -514,10 +551,11 @@
           const excludeCatId =
             (catIndex == null ? null : currentDict.categories[catIndex]?.id) || null;
 
-          showMoveToCategoryDialog(excludeCatId).then((destCat) => {
-            if (!destCat) return;
+          // Show ignore list option when moving FROM a category (not from ignore list itself)
+          const canMoveToIgnore = (scope !== "ignore");
 
-            if (!destCat.words) destCat.words = [];
+          showMoveToCategoryDialog(excludeCatId, canMoveToIgnore).then((dest) => {
+            if (!dest) return;
 
             // Remove from source FIRST, before we insert into destination.
             // This prevents indexOf from finding a newly-inserted duplicate
@@ -531,14 +569,28 @@
               if (srcIdx !== -1) srcWords.splice(srcIdx, 1);
             }
 
+            // Handle "Move to Ignore List"
+            if (dest._isIgnoreList) {
+              if (!currentDict.ignoreList) currentDict.ignoreList = [];
+              if (!currentDict.ignoreList.includes(raw)) {
+                insertAlphabetically(currentDict.ignoreList, raw);
+              }
+              saveDictionaryAndRefresh();
+              openEditor("ignore");
+              return;
+            }
+
+            // Normal category destination
+            if (!dest.words) dest.words = [];
+
             // Now insert into destination (avoid duplicates by raw string)
-            if (!destCat.words.includes(raw)) {
-              insertAlphabetically(destCat.words, raw);
+            if (!dest.words.includes(raw)) {
+              insertAlphabetically(dest.words, raw);
             }
 
             // Find the destination's current index so we can open its editor.
             // Editor keys are "cat:INDEX", not the category's uuid.
-            const destIndex = currentDict.categories.indexOf(destCat);
+            const destIndex = currentDict.categories.indexOf(dest);
 
             // One save, one render, open destination editor.
             saveDictionaryAndRefresh();
