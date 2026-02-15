@@ -145,27 +145,27 @@
 
     const clientName = getCmsClientName();
     if (!clientName) {
-      console.debug("CMS Highlighter: no client name element found on page");
+      console.log("CMS Highlighter [client]: no client name element found on page");
       return;
     }
 
     const rule = findClientRule(clientName);
     if (!rule) {
-      console.debug("CMS Highlighter: no client rule matches '%s' (%d rules loaded)", clientName, clientRules.length);
+      console.log("CMS Highlighter [client]: no rule matches '%s' (%d rules loaded)", clientName, clientRules.length);
       return;
     }
 
     const type = getCmsContentType();
     const catName = pickClientCategory(rule, type);
     if (!catName) {
-      console.debug("CMS Highlighter: client '%s' type '%s' has no category set (default=%s, overrides=%o)",
+      console.log("CMS Highlighter [client]: '%s' type='%s' — no category set (default=%s, overrides=%o)",
         clientName, type, rule.defaultCategory || "(none)", rule.overrides || {});
       return;
     }
 
     const style = categoryStyleByName.get(catName);
     if (!style) {
-      console.warn("CMS Highlighter: category '%s' (from client '%s') not found in dictionary — was it renamed? Available: %s",
+      console.warn("CMS Highlighter [client]: category '%s' (from client '%s') not found — was it renamed? Available: %s",
         catName, clientName, [...categoryStyleByName.keys()].join(", "));
       return;
     }
@@ -179,7 +179,7 @@
     el.style.padding = "2px 6px";
     el.setAttribute("data-client-hl", "1");
 
-    console.debug("CMS Highlighter: client '%s' → type '%s' → category '%s' (%s)", clientName, type, catName, style.color);
+    console.log("CMS Highlighter [client]: '%s' → type='%s' → category='%s' (%s)", clientName, type, catName, style.color);
   }
 
   // ---------------------------------------------------------------------------
