@@ -68,7 +68,9 @@
   }
 
   function getCmsContentType() {
-    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    const el = document.querySelector(".navbar-inner .decisionAreaLabel")
+            || document.querySelector(".decisionAreaLabel")
+            || document.querySelector("[class*='decisionArea']");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
     if (raw.includes("image") || raw.includes("photo") || raw.includes("media")) return "Image";
@@ -156,13 +158,15 @@
     const type = getCmsContentType();
     const catName = pickClientCategory(rule, type);
     if (!catName) {
-      console.debug("CMS Highlighter: client '%s' type '%s' has no category set (rule: %s)", clientName, type, rule.pattern);
+      console.debug("CMS Highlighter: client '%s' type '%s' has no category set (default=%s, overrides=%o)",
+        clientName, type, rule.defaultCategory || "(none)", rule.overrides || {});
       return;
     }
 
     const style = categoryStyleByName.get(catName);
     if (!style) {
-      console.warn("CMS Highlighter: category '%s' (from client '%s') not found in dictionary — was it renamed?", catName, clientName);
+      console.warn("CMS Highlighter: category '%s' (from client '%s') not found in dictionary — was it renamed? Available: %s",
+        catName, clientName, [...categoryStyleByName.keys()].join(", "));
       return;
     }
 
@@ -175,7 +179,7 @@
     el.style.padding = "2px 6px";
     el.setAttribute("data-client-hl", "1");
 
-    console.debug("CMS Highlighter: client '%s' → type '%s' → category '%s'", clientName, type, catName);
+    console.debug("CMS Highlighter: client '%s' → type '%s' → category '%s' (%s)", clientName, type, catName, style.color);
   }
 
   // ---------------------------------------------------------------------------
@@ -625,7 +629,8 @@
       console.log(
         "CMS Highlighter: compiled " +
         (compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0) +
-        " categories, " + clientRules.length + " client rules"
+        " categories, " + clientRules.length + " client rules" +
+        (clientRules.length > 0 ? " [" + clientRules.map(r => r.pattern).join(", ") + "]" : "")
       );
 
       if (callback) callback();
