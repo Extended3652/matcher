@@ -308,7 +308,7 @@ function notifyTab(tab, message) {
     try {
       chrome.tabs.sendMessage(tab.id, { action: "notify", message: message });
     } catch (e) {
-      // ignore
+      console.warn("CMS Highlighter: notify failed:", e.message);
     }
   }
   console.log("CMS Highlighter:", message);

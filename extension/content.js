@@ -57,7 +57,9 @@
   // Client-name highlight
   // ---------------------------------------------------------------------------
   function getCmsClientNameEl() {
-    return document.querySelector(".navbar-inner .client-name");
+    return document.querySelector(".navbar-inner .client-name")
+        || document.querySelector(".client-name")
+        || document.querySelector("[class*='client-name']");
   }
 
   function getCmsClientName() {
@@ -97,7 +99,8 @@
     }
     rules.sort((a, b) => {
       if (a._isWild !== b._isWild) return a._isWild ? 1 : -1;
-      return 0;
+      // Alphabetical tiebreaker for stable ordering
+      return String(a.pattern || "").localeCompare(String(b.pattern || ""));
     });
     return rules;
   }
@@ -139,17 +142,29 @@
     if (!globalEnabled) return;
 
     const clientName = getCmsClientName();
-    if (!clientName) return;
+    if (!clientName) {
+      console.debug("CMS Highlighter: no client name element found on page");
+      return;
+    }
 
     const rule = findClientRule(clientName);
-    if (!rule) return;
+    if (!rule) {
+      console.debug("CMS Highlighter: no client rule matches '%s' (%d rules loaded)", clientName, clientRules.length);
+      return;
+    }
 
     const type = getCmsContentType();
     const catName = pickClientCategory(rule, type);
-    if (!catName) return;
+    if (!catName) {
+      console.debug("CMS Highlighter: client '%s' type '%s' has no category set (rule: %s)", clientName, type, rule.pattern);
+      return;
+    }
 
     const style = categoryStyleByName.get(catName);
-    if (!style) return;
+    if (!style) {
+      console.warn("CMS Highlighter: category '%s' (from client '%s') not found in dictionary — was it renamed?", catName, clientName);
+      return;
+    }
 
     const el = getCmsClientNameEl();
     if (!el) return;
@@ -159,6 +174,8 @@
     el.style.borderRadius = "3px";
     el.style.padding = "2px 6px";
     el.setAttribute("data-client-hl", "1");
+
+    console.debug("CMS Highlighter: client '%s' → type '%s' → category '%s'", clientName, type, catName);
   }
 
   // ---------------------------------------------------------------------------
@@ -491,7 +508,7 @@
     });
 
     // Batch normalize after all spans are replaced (avoids repeated reflows)
-    parentsToNormalize.forEach(p => { try { p.normalize(); } catch (_) {} });
+    parentsToNormalize.forEach(p => { try { p.normalize(); } catch (e) { console.warn("CMS Highlighter: normalize failed:", e.message); } });
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
@@ -546,7 +563,7 @@
             roots.add(item.node);
           } else {
             // For text nodes, add the block ancestor so we get cross-node matching
-            const block = item.node.parentElement;
+            const block = blockAncestor(item.node);
             if (block) roots.add(block);
           }
         }

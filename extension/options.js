@@ -619,7 +619,7 @@
       sReview.addEventListener("change", () => {
         entry.defaultCategory = sReview.value ? sReview.value : null;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Client updated: Default → " + (sReview.value || "(no highlight)"));
       });
 
       sImg.addEventListener("change", () => {
@@ -627,7 +627,7 @@
         if (sImg.value) entry.overrides.Image = sImg.value;
         else delete entry.overrides.Image;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Client updated: Image → " + (sImg.value || "-"));
       });
 
       sPro.addEventListener("change", () => {
@@ -635,7 +635,7 @@
         if (sPro.value) entry.overrides.Profile = sPro.value;
         else delete entry.overrides.Profile;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Client updated: Profile → " + (sPro.value || "-"));
       });
 
       sQ.addEventListener("change", () => {
@@ -643,7 +643,7 @@
         if (sQ.value) entry.overrides.Question = sQ.value;
         else delete entry.overrides.Question;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Client updated: Question → " + (sQ.value || "-"));
       });
 
       sMCat.addEventListener("change", () => {
@@ -1136,8 +1136,28 @@
       nameInput.type = "text";
       nameInput.value = cat.name || "";
       nameInput.addEventListener("change", () => {
-        cat.name = nameInput.value;
-        nameSpan.textContent = nameInput.value;
+        const oldName = cat.name;
+        const newName = nameInput.value.trim();
+        if (!newName) {
+          nameInput.value = oldName;
+          return;
+        }
+        cat.name = newName;
+        nameSpan.textContent = newName;
+
+        // Update client rules that reference the old category name
+        if (oldName && oldName !== newName && Array.isArray(currentDict.clients)) {
+          for (const client of currentDict.clients) {
+            if (client.defaultCategory === oldName) client.defaultCategory = newName;
+            if (client.overrides) {
+              if (client.overrides.Image === oldName) client.overrides.Image = newName;
+              if (client.overrides.Profile === oldName) client.overrides.Profile = newName;
+              if (client.overrides.Question === oldName) client.overrides.Question = newName;
+            }
+            if (client.mentionCategory === oldName) client.mentionCategory = newName;
+          }
+        }
+
         saveDictionary();
         renderClients(); // refresh dropdowns and swatches
       });
@@ -1228,6 +1248,20 @@
         const n = (cat.words && cat.words.length) ? cat.words.length : 0;
         if (confirm('Delete "' + nm + '" and all its ' + n + " words?")) {
           currentDict.categories.splice(index, 1);
+
+          // Clean up client references to this deleted category
+          if (nm && Array.isArray(currentDict.clients)) {
+            for (const client of currentDict.clients) {
+              if (client.defaultCategory === nm) client.defaultCategory = null;
+              if (client.overrides) {
+                if (client.overrides.Image === nm) delete client.overrides.Image;
+                if (client.overrides.Profile === nm) delete client.overrides.Profile;
+                if (client.overrides.Question === nm) delete client.overrides.Question;
+              }
+              if (client.mentionCategory === nm) client.mentionCategory = null;
+            }
+          }
+
           saveDictionary('Deleted "' + nm + '"');
           renderCategories();
           renderClients();
@@ -1492,7 +1526,7 @@
             }
           });
         } catch (e) {
-          // tab doesn't have content script
+          console.debug("CMS Highlighter: tab", tab.id, "not reachable:", e.message);
         }
       }
     });
