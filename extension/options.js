@@ -1604,6 +1604,12 @@
       openClientKey = patternKey(match.pattern);
       renderClients();
 
+      // Auto-scroll to the expanded client card
+      setTimeout(() => {
+        const openCard = clientListBodyEl.querySelector(".client-body.open");
+        if (openCard) openCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+
       // Update banner to show it already exists
       if (btnUseDetected) btnUseDetected.textContent = "Refresh Form";
     } else {

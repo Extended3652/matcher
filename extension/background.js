@@ -178,13 +178,23 @@ function buildContextMenu() {
 }
 
 // ---------------------------------------------------------------------------
+// Sanitize text selected from CMS pages (strip invisible chars, normalize WS)
+// ---------------------------------------------------------------------------
+function sanitizeSelection(text) {
+  return String(text || "")
+    .replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, "")  // zero-width / soft-hyphen
+    .replace(/\s+/g, " ")                                 // NBSP + multi-space → single space
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
 // Handle context menu clicks
 // ---------------------------------------------------------------------------
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   const menuId = info.menuItemId;
-  const selectedText = info.selectionText;
+  const selectedText = sanitizeSelection(info.selectionText);
 
-  if (!selectedText || selectedText.trim().length === 0) return;
+  if (!selectedText || selectedText.length === 0) return;
 
   // Toggle exact mode
   if (menuId === MENU_EXACT_ID) {

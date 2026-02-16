@@ -54,8 +54,14 @@
     const boundaryBefore = /^[\s\n\r\t]/.test(text);
     const boundaryAfter  = /[\s\n\r\t]$/.test(text);
 
+    // Strip zero-width / invisible characters that CMS pages inject
+    text = text.replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, "");
+
     // Strip all leading/trailing whitespace
     text = text.trim();
+
+    // Normalize internal whitespace: NBSP→space, collapse runs to single space
+    text = text.replace(/\s+/g, " ");
 
     if (text.length === 0) return null;
 
@@ -118,12 +124,14 @@
         if (ch === "*") {
           const prev = chars[i - 1];
           const next = chars[i + 1];
+          const prevIsSpace = prev !== undefined && /\s/.test(prev);
+          const nextIsSpace = next !== undefined && /\s/.test(next);
 
           // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
           // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
-          if (prev === " " && next === " ") {
+          if (prevIsSpace && nextIsSpace) {
             result += "[^\\s]+";
-          } else if (isFirst && next === " ") {
+          } else if (isFirst && nextIsSpace) {
             // Leading wildcard before space: optional word prefix
             // "* word" matches "prefix word" or just "word"
             result += "(?:" + WILD_CH + "+\\s+)?";
@@ -135,9 +143,9 @@
             // Short patterns like h*d stay within one word; longer patterns
             // like wal*mart can bridge a single space gap.
             let litBefore = 0;
-            for (let j = i - 1; j >= 0 && chars[j] !== "*" && chars[j] !== "?" && chars[j] !== " "; j--) litBefore++;
+            for (let j = i - 1; j >= 0 && chars[j] !== "*" && chars[j] !== "?" && !/\s/.test(chars[j]); j--) litBefore++;
             let litAfter = 0;
-            for (let j = i + 1; j < chars.length && chars[j] !== "*" && chars[j] !== "?" && chars[j] !== " "; j++) litAfter++;
+            for (let j = i + 1; j < chars.length && chars[j] !== "*" && chars[j] !== "?" && !/\s/.test(chars[j]); j++) litAfter++;
 
             if (litBefore >= 2 && litAfter >= 2) {
               // Enough context: allow optional single space bridge (lazy)
@@ -149,7 +157,7 @@
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
-      } else if (ch === " ") {
+      } else if (/\s/.test(ch)) {
         result += "\\s+";
       } else {
         const qc = quoteClassFor(ch);

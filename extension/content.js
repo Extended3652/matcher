@@ -499,21 +499,12 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Content root scoping — prefer CMS content containers over document.body
+  // Full-page highlight — always walks document.body for reliability.
+  // CMS content can appear in many container types; scoping to specific
+  // selectors risks missing dynamically-loaded areas.
   // ---------------------------------------------------------------------------
-  function getContentRoots() {
-    const roots = document.querySelectorAll(
-      "div.ugcAndDetails, dd.moderatable, div.read"
-    );
-    if (roots.length > 0) return [...roots];
-    return [document.body];
-  }
-
   function highlightPage() {
-    const roots = getContentRoots();
-    for (const root of roots) {
-      highlightAll(root);
-    }
+    highlightAll(document.body);
   }
 
   // ---------------------------------------------------------------------------
