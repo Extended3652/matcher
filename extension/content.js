@@ -499,6 +499,24 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Content root scoping — prefer CMS content containers over document.body
+  // ---------------------------------------------------------------------------
+  function getContentRoots() {
+    const roots = document.querySelectorAll(
+      "div.ugcAndDetails, dd.moderatable, div.read"
+    );
+    if (roots.length > 0) return [...roots];
+    return [document.body];
+  }
+
+  function highlightPage() {
+    const roots = getContentRoots();
+    for (const root of roots) {
+      highlightAll(root);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
@@ -573,7 +591,7 @@
         }
 
         if (hasBody) {
-          highlightAll(document.body);
+          highlightPage();
         } else {
           for (const root of roots) {
             // Skip if this root is inside another root
@@ -629,8 +647,7 @@
       console.log(
         "CMS Highlighter: compiled " +
         (compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0) +
-        " categories, " + clientRules.length + " client rules" +
-        (clientRules.length > 0 ? " [" + clientRules.map(r => r.pattern).join(", ") + "]" : "")
+        " categories, " + clientRules.length + " client rules"
       );
 
       if (callback) callback();
@@ -640,7 +657,7 @@
   function applyHighlights() {
     removeAllHighlights();
     if (globalEnabled) {
-      highlightAll(document.body);
+      highlightPage();
       applyClientHighlight();
       startObserver();
     } else {
@@ -659,7 +676,7 @@
 
     loadAndCompile(() => {
       if (globalEnabled) {
-        highlightAll(document.body);
+        highlightPage();
         applyClientHighlight();
         startObserver();
       }
@@ -689,7 +706,7 @@
         globalEnabled = !!message.enabled;
         if (globalEnabled) {
           removeAllHighlights();
-          highlightAll(document.body);
+          highlightPage();
           applyClientHighlight();
           startObserver();
         } else {
