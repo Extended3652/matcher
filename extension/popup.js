@@ -80,7 +80,7 @@
     return editing.entryIndex === entryIndex;
   }
 
-  function showMoveToCategoryDialog(excludeCatId) {
+  function showMoveToCategoryDialog(excludeCatId, showIgnoreList) {
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.style.position = "fixed";
@@ -114,6 +114,43 @@
       const listWrap = document.createElement("div");
       listWrap.style.padding = "8px";
       listWrap.style.overflow = "auto";
+
+      // Show "Ignore List" option when moving FROM a category
+      if (showIgnoreList) {
+        const ignBtn = document.createElement("button");
+        ignBtn.type = "button";
+        ignBtn.style.width = "100%";
+        ignBtn.style.display = "flex";
+        ignBtn.style.alignItems = "center";
+        ignBtn.style.gap = "10px";
+        ignBtn.style.textAlign = "left";
+        ignBtn.style.border = "1px solid #e5e7eb";
+        ignBtn.style.borderRadius = "10px";
+        ignBtn.style.padding = "10px 12px";
+        ignBtn.style.margin = "6px 0";
+        ignBtn.style.background = "#f9fafb";
+        ignBtn.style.cursor = "pointer";
+        ignBtn.style.fontSize = "13px";
+
+        const ignSw = document.createElement("span");
+        ignSw.style.width = "12px";
+        ignSw.style.height = "12px";
+        ignSw.style.borderRadius = "999px";
+        ignSw.style.border = "1px solid rgba(0,0,0,0.15)";
+        ignSw.style.background = "#d1d5db";
+        ignBtn.appendChild(ignSw);
+
+        const ignLabel = document.createElement("span");
+        ignLabel.textContent = "Ignore List (global)";
+        ignLabel.style.fontWeight = "500";
+        ignBtn.appendChild(ignLabel);
+
+        ignBtn.addEventListener("click", () => {
+          cleanup();
+          resolve({ _isIgnoreList: true });
+        });
+        listWrap.appendChild(ignBtn);
+      }
 
       const cats = (currentDict.categories || [])
         .filter(c => c && c.id && c.name && c.id !== excludeCatId);
@@ -154,7 +191,7 @@
         listWrap.appendChild(btn);
       });
 
-      if (cats.length === 0) {
+      if (cats.length === 0 && !showIgnoreList) {
         const empty = document.createElement("div");
         empty.style.padding = "10px 12px";
         empty.style.fontSize = "13px";
@@ -232,8 +269,9 @@
     });
   }
 
-  function saveDictionary() {
+  function saveDictionaryAndRefresh() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      refreshActiveTab();
       updateStats();
     });
   }
@@ -296,10 +334,13 @@
           statsEl.textContent = "Not running on this page";
           return;
         }
-
-        statsEl.textContent =
-          `${response.highlights} highlights | ${response.cats || 0} categories | ` +
+        let statsText =
+          `${response.highlights} highlights | ${response.categories} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
+        if (response.clientName) {
+          statsText += ` | ${response.clientName}`;
+        }
+        statsEl.textContent = statsText;
       });
     });
   }
@@ -359,10 +400,24 @@
     if (dragIndex === null || dragIndex === dropIndex) return;
 
     const cats = currentDict.categories;
+
+    // Track which category was open so we can follow it to its new index
+    let openCatId = null;
+    if (openEditorKey && openEditorKey.startsWith("cat:")) {
+      const oldIdx = parseInt(openEditorKey.split(":")[1], 10);
+      if (cats[oldIdx]) openCatId = cats[oldIdx].id;
+    }
+
     const [moved] = cats.splice(dragIndex, 1);
     cats.splice(dropIndex, 0, moved);
 
-    saveDictionary();
+    // Update openEditorKey to follow the same category at its new index
+    if (openCatId) {
+      const newIdx = cats.findIndex(c => c.id === openCatId);
+      openEditorKey = newIdx >= 0 ? `cat:${newIdx}` : null;
+    }
+
+    saveDictionaryAndRefresh();
     renderAll();
   }
 
@@ -402,6 +457,17 @@
       openEditorKey = nextKey;
       editing = null;
     }
+    renderAll();
+  }
+
+  // Force-open an editor (no toggle). Used by add/edit/remove callbacks
+  // so the user stays in the category they were editing.
+  let focusAddInputAfterRender = false;
+
+  function openEditor(key) {
+    openEditorKey = key;
+    editing = null;
+    focusAddInputAfterRender = true;
     renderAll();
   }
 
@@ -485,23 +551,15 @@
           const excludeCatId =
             (catIndex == null ? null : currentDict.categories[catIndex]?.id) || null;
 
-          showMoveToCategoryDialog(excludeCatId).then((destCat) => {
-            if (!destCat) return;
+          // Show ignore list option when moving FROM a category (not from ignore list itself)
+          const canMoveToIgnore = (scope !== "ignore");
 
-            if (!destCat.words) destCat.words = [];
+          showMoveToCategoryDialog(excludeCatId, canMoveToIgnore).then((dest) => {
+            if (!dest) return;
 
-            // Avoid duplicates (by raw string)
-            if (!destCat.words.includes(raw)) {
-              // Insert alphabetically into destination
-              insertAlphabetically(destCat.words, raw);
-            }
-
-            // Remove from source BY VALUE, not by index.
-            // We can't use onRemove() here — it splices by the entryIndex
-            // captured at render time, but insertAlphabetically may have
-            // already shifted indices if dest and source are the same array.
-            // onRemove also does its own save/render/setOpenEditor which
-            // would fight with ours below. So we do it directly.
+            // Remove from source FIRST, before we insert into destination.
+            // This prevents indexOf from finding a newly-inserted duplicate
+            // when source and dest are the same array.
             if (scope === "ignore") {
               const srcIdx = currentDict.ignoreList.indexOf(raw);
               if (srcIdx !== -1) currentDict.ignoreList.splice(srcIdx, 1);
@@ -511,15 +569,35 @@
               if (srcIdx !== -1) srcWords.splice(srcIdx, 1);
             }
 
+            // Handle "Move to Ignore List"
+            if (dest._isIgnoreList) {
+              if (!currentDict.ignoreList) currentDict.ignoreList = [];
+              if (!currentDict.ignoreList.includes(raw)) {
+                insertAlphabetically(currentDict.ignoreList, raw);
+              }
+              saveDictionaryAndRefresh();
+              openEditor("ignore");
+              return;
+            }
+
+            // Normal category destination
+            if (!dest.words) dest.words = [];
+
+            // Now insert into destination (avoid duplicates by raw string)
+            if (!dest.words.includes(raw)) {
+              insertAlphabetically(dest.words, raw);
+            }
+
             // Find the destination's current index so we can open its editor.
             // Editor keys are "cat:INDEX", not the category's uuid.
-            const destIndex = currentDict.categories.indexOf(destCat);
+            const destIndex = currentDict.categories.indexOf(dest);
 
-            // One save, one render, one editor open.
-            saveDictionary();
-            renderAll();
+            // One save, one render, open destination editor.
+            saveDictionaryAndRefresh();
             if (destIndex !== -1) {
-              setOpenEditor(`cat:${destIndex}`);
+              openEditor(`cat:${destIndex}`);
+            } else {
+              renderAll();
             }
           });
 
@@ -633,11 +711,6 @@
       flagRow.appendChild(csLabel);
       editor.appendChild(flagRow);
 
-      const hint = document.createElement("div");
-      hint.className = "hint";
-      hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move.";
-      editor.appendChild(hint);
-
       const list = document.createElement("div");
       list.className = "word-list";
       editor.appendChild(list);
@@ -675,20 +748,17 @@
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
                 // do nothing, keep original
-                renderAll();
-                setOpenEditor("ignore");
+                openEditor("ignore");
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
-              saveDictionary();
-              renderAll();
-              setOpenEditor("ignore");
+              saveDictionaryAndRefresh();
+              openEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
-              saveDictionary();
-              renderAll();
-              setOpenEditor("ignore");
+              saveDictionaryAndRefresh();
+              openEditor("ignore");
             }
           );
         });
@@ -713,14 +783,12 @@
         // Insert alphabetically instead of appending
         insertAlphabetically(currentDict.ignoreList, raw);
         addInput.value = "";
-        saveDictionary();
+        saveDictionaryAndRefresh();
 
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
-        renderIgnoreWords();
-        renderAll();
-        setOpenEditor("ignore");
+        openEditor("ignore");
       }
 
       addBtn.addEventListener("click", (e) => {
@@ -736,6 +804,11 @@
       });
 
       renderIgnoreWords();
+
+      if (focusAddInputAfterRender) {
+        focusAddInputAfterRender = false;
+        setTimeout(() => { try { addInput.focus(); } catch (_) {} }, 0);
+      }
     }
 
     catListEl.appendChild(editor);
@@ -765,7 +838,7 @@
     colorInput.addEventListener("input", () => {
       swatch.style.backgroundColor = colorInput.value;
       cat.color = colorInput.value;
-      saveDictionary();
+      saveDictionaryAndRefresh();
     });
 
     swatch.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -808,7 +881,7 @@
     toggleInput.checked = cat.enabled !== false;
     toggleInput.addEventListener("change", () => {
       cat.enabled = toggleInput.checked;
-      saveDictionary();
+      saveDictionaryAndRefresh();
     });
 
     const toggleSlider = document.createElement("span");
@@ -878,11 +951,6 @@
       flagRow.appendChild(csLabel);
       editor.appendChild(flagRow);
 
-      const hint = document.createElement("div");
-      hint.className = "hint";
-      hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move.";
-      editor.appendChild(hint);
-
       const list = document.createElement("div");
       list.className = "word-list";
       editor.appendChild(list);
@@ -918,20 +986,17 @@
             (nextRaw) => {
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                renderAll();
-                setOpenEditor(key);
+                openEditor(key);
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
-              saveDictionary();
-              renderAll();
-              setOpenEditor(key);
+              saveDictionaryAndRefresh();
+              openEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
-              saveDictionary();
-              renderAll();
-              setOpenEditor(key);
+              saveDictionaryAndRefresh();
+              openEditor(key);
             }
           );
         });
@@ -956,14 +1021,12 @@
         // Insert alphabetically instead of appending
         insertAlphabetically(cat.words, raw);
         addInput.value = "";
-        saveDictionary();
+        saveDictionaryAndRefresh();
 
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
-        renderWordList();
-        renderAll();
-        setOpenEditor(key);
+        openEditor(key);
       }
 
       addBtn.addEventListener("click", (e) => {
@@ -979,6 +1042,11 @@
       });
 
       renderWordList();
+
+      if (focusAddInputAfterRender) {
+        focusAddInputAfterRender = false;
+        setTimeout(() => { try { addInput.focus(); } catch (_) {} }, 0);
+      }
     }
 
     catListEl.appendChild(editor);

@@ -54,8 +54,14 @@
     const boundaryBefore = /^[\s\n\r\t]/.test(text);
     const boundaryAfter  = /[\s\n\r\t]$/.test(text);
 
+    // Strip zero-width / invisible characters that CMS pages inject
+    text = text.replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, "");
+
     // Strip all leading/trailing whitespace
     text = text.trim();
+
+    // Normalize internal whitespace: NBSP→space, collapse runs to single space
+    text = text.replace(/\s+/g, " ");
 
     if (text.length === 0) return null;
 
@@ -81,10 +87,20 @@
   // STEP 2: Convert a glob pattern into a regex fragment string.
   // Supports escaping: \* and \? mean literal characters, not wildcards.
   // ---------------------------------------------------------------------------
+
+  // Wildcard char class: word chars + apostrophes + hyphens (common within words)
+  const WILD_CH = "(?:[^\\s\\p{P}]|['\u2018\u2019\\-])";
+
+  // Quote normalization: straight/curly quotes treated as equivalent in patterns
+  function quoteClassFor(ch) {
+    if (ch === "'" || ch === "\u2018" || ch === "\u2019") return "['\u2018\u2019]";
+    if (ch === '"' || ch === "\u201C" || ch === "\u201D") return '["\u201C\u201D]';
+    return null;
+  }
+
   function globToRegexFragment(pattern) {
     let result = "";
     const chars = [...pattern];
-    const hasLiteralSpace = pattern.includes(" ");
 
     for (let i = 0; i < chars.length; i++) {
       const ch = chars[i];
@@ -95,12 +111,11 @@
       if (ch === "\\") {
         const next = chars[i + 1];
         if (next === undefined) {
-          // trailing backslash, treat it literally
           result += "\\\\";
         } else {
-          // add escaped literal of next char
-          result += next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          i++; // consume next
+          const qc = quoteClassFor(next);
+          result += qc || next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          i++;
         }
         continue;
       }
@@ -108,22 +123,44 @@
         if (ch === "*") {
           const prev = chars[i - 1];
           const next = chars[i + 1];
+          const prevIsSpace = prev !== undefined && /\s/.test(prev);
+          const nextIsSpace = next !== undefined && /\s/.test(next);
 
           // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
           // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
-          if (prev === " " && next === " ") {
+          if (prevIsSpace && nextIsSpace) {
             result += "[^\\s]+";
+          } else if (isFirst && nextIsSpace) {
+            // Leading wildcard before space: optional word prefix
+            // "* word" matches "prefix word" or just "word"
+            result += "(?:" + WILD_CH + "+\\s+)?";
+            i++; // consume the space
           } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
+            result += WILD_CH + "*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            // Middle wildcard: check literal context to decide space-bridging.
+            // Short patterns like h*d stay within one word; longer patterns
+            // like wal*mart can bridge a single space gap.
+            let litBefore = 0;
+            for (let j = i - 1; j >= 0 && chars[j] !== "*" && chars[j] !== "?" && !/\s/.test(chars[j]); j--) litBefore++;
+            let litAfter = 0;
+            for (let j = i + 1; j < chars.length && chars[j] !== "*" && chars[j] !== "?" && !/\s/.test(chars[j]); j++) litAfter++;
+
+            if (litBefore >= 2 && litAfter >= 2) {
+              // Enough context: allow optional single space bridge (lazy)
+              // e.g. wal*mart matches "walmart", "wal mart", "wal-mart"
+              result += WILD_CH + "*?(?:\\s" + WILD_CH + "*?)?";
+            } else {
+              result += WILD_CH + "*?";
+            }
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
-      } else if (ch === " ") {
+      } else if (/\s/.test(ch)) {
         result += "\\s+";
       } else {
-        result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const qc = quoteClassFor(ch);
+        result += qc || ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       }
     }
     return result;
@@ -140,7 +177,7 @@
     }
 
     fragment += parsed.literal
-      ? parsed.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      ? [...parsed.pattern].map(ch => quoteClassFor(ch) || ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("")
       : globToRegexFragment(parsed.pattern);
 
     if (parsed.boundaryAfter) {
@@ -289,18 +326,20 @@
   function findMatches(text, compiled) {
     const { ignoreCompiled, compiledCategories } = compiled;
 
-    // --- Collect Ignore List match ranges ---
-    const ignoreRanges = [];
+    // --- Collect Ignore List match ranges (flat array for fast lookup) ---
+    let ignoreRanges = null;
     if (ignoreCompiled) {
+      const ranges = [];
       for (const rx of ignoreCompiled.regexes) {
         const re = rx.re;
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
           if (m[0].length === 0) { re.lastIndex++; continue; }
-          ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
+          ranges.push(m.index, m.index + m[0].length);
         }
       }
+      if (ranges.length > 0) ignoreRanges = ranges;
     }
 
     // --- Collect all category matches ---
@@ -311,15 +350,31 @@
       for (const rx of cat.regexes) {
         const re = rx.re;
         const metas = rx.metas;
+        const metaCount = metas.length;
 
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
           if (m[0].length === 0) { re.lastIndex++; continue; }
 
+          const mStart = m.index;
+          const mEnd = mStart + m[0].length;
+
+          // Quick ignore check before allocating match object
+          if (ignoreRanges) {
+            let ignored = false;
+            for (let ri = 0; ri < ignoreRanges.length; ri += 2) {
+              if (mStart < ignoreRanges[ri + 1] && mEnd > ignoreRanges[ri]) {
+                ignored = true;
+                break;
+              }
+            }
+            if (ignored) continue;
+          }
+
           // Identify which capture group matched
           let meta = null;
-          for (let gi = 1; gi < m.length; gi++) {
+          for (let gi = 1; gi <= metaCount; gi++) {
             if (m[gi] !== undefined) {
               meta = metas[gi - 1];
               break;
@@ -327,31 +382,23 @@
           }
 
           allMatches.push({
-            start:    m.index,
-            end:      m.index + m[0].length,
+            start:    mStart,
+            end:      mEnd,
             name:     cat.name,
             color:    cat.color,
             fColor:   cat.fColor,
             priority: i,
             isWildcard: meta ? !!meta.hasWildcard : false,
-            isExact: meta ? !!meta.exact : false,
+            isExact: meta ? !!meta.isExact : false,
           });
         }
       }
     }
 
-    // --- Remove matches that overlap with any Ignore range ---
-    let filtered = allMatches;
-    if (ignoreRanges.length > 0) {
-      filtered = allMatches.filter(match => {
-        return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
-      });
-    }
-
-    if (filtered.length === 0) return [];
+    if (allMatches.length === 0) return [];
 
     // Sort by start, then longer first (helps reduce churn)
-    filtered.sort((a, b) => {
+    allMatches.sort((a, b) => {
       if (a.start !== b.start) return a.start - b.start;
       const aLen = a.end - a.start;
       const bLen = b.end - b.start;
@@ -365,7 +412,7 @@
     const final = [];
     let winner = null;
 
-    for (const m of filtered) {
+    for (const m of allMatches) {
       if (!winner) {
         winner = m;
         continue;

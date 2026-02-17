@@ -178,13 +178,23 @@ function buildContextMenu() {
 }
 
 // ---------------------------------------------------------------------------
+// Sanitize text selected from CMS pages (strip invisible chars, normalize WS)
+// ---------------------------------------------------------------------------
+function sanitizeSelection(text) {
+  return String(text || "")
+    .replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, "")  // zero-width / soft-hyphen
+    .replace(/\s+/g, " ")                                 // NBSP + multi-space → single space
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
 // Handle context menu clicks
 // ---------------------------------------------------------------------------
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   const menuId = info.menuItemId;
-  const selectedText = info.selectionText;
+  const selectedText = sanitizeSelection(info.selectionText);
 
-  if (!selectedText || selectedText.trim().length === 0) return;
+  if (!selectedText || selectedText.length === 0) return;
 
   // Toggle exact mode
   if (menuId === MENU_EXACT_ID) {
@@ -265,22 +275,33 @@ function addWordToCategory(text, catIndex, tab) {
 // Add a word to the ignore list
 // ---------------------------------------------------------------------------
 function addWordToIgnoreList(text, tab) {
-  chrome.storage.local.get(["dictionary"], (result) => {
+  chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"], (result) => {
     const dict = result.dictionary;
     if (!dict) return;
 
     if (!dict.ignoreList) dict.ignoreList = [];
 
-    if (dict.ignoreList.includes(text)) {
+    let word = text;
+    const isExact = result.contextExact || false;
+    const isCS = result.contextCaseSensitive || false;
+
+    // Apply prefixes (same as category adds)
+    if (isExact) word = "//" + word;
+    if (isCS) word = "CS:" + word;
+
+    if (dict.ignoreList.includes(word)) {
       notifyTab(tab, `"${text}" already in Ignore List`);
       return;
     }
 
     // Insert alphabetically instead of appending
-    insertAlphabetically(dict.ignoreList, text);
+    insertAlphabetically(dict.ignoreList, word);
 
     chrome.storage.local.set({ dictionary: dict }, () => {
-      notifyTab(tab, `Added "${text}" to Ignore List`);
+      notifyTab(
+        tab,
+        `Added "${text}" to Ignore List${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
+      );
       if (tab && tab.id) {
         chrome.tabs.sendMessage(tab.id, { action: "refresh" });
       }
@@ -297,7 +318,7 @@ function notifyTab(tab, message) {
     try {
       chrome.tabs.sendMessage(tab.id, { action: "notify", message: message });
     } catch (e) {
-      // ignore
+      console.warn("CMS Highlighter: notify failed:", e.message);
     }
   }
   console.log("CMS Highlighter:", message);
@@ -312,7 +333,7 @@ chrome.runtime.onInstalled.addListener((details) => {
       if (!result.dictionary) {
         chrome.storage.local.set({
           enabled: true,
-          dictionary: { ignoreList: [], categories: [] },
+          dictionary: { ignoreList: [], categories: [], clients: [] },
           contextExact: false,
           contextCaseSensitive: false,
         });

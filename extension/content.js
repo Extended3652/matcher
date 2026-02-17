@@ -2,7 +2,9 @@
 // CMS Highlighter - Content Script
 // - Walk text nodes
 // - Wrap matches in spans
-// - Client name in navbar can be highlighted based on dict.clients rules
+// - Client name in navbar highlighted based on dict.clients rules
+// - Mentions/aliases highlighted in review text
+// - Auto-refreshes when options page saves (storage.onChanged)
 // =============================================================================
 
 (function() {
@@ -10,18 +12,18 @@
 
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
-
-  // Guardrails
   const MAX_SPAN_LEN = 120;
 
   let globalEnabled = true;
 
   // Compiled matcher
   let compiledMatcher = null;
+  let mentionMatcher = null;
 
   // Client highlight config
   let clientRules = [];
   let categoryStyleByName = new Map();
+  let lastMentionClient = null; // cache to avoid redundant recompilation
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -45,7 +47,7 @@
       if (!name) continue;
       map.set(name, {
         color: c.color || "#FFFF00",
-        fColor: c.fColor || "#000000"
+        fColor: c.fColor || "#FFFFFF"
       });
     }
     return map;
@@ -55,7 +57,9 @@
   // Client-name highlight
   // ---------------------------------------------------------------------------
   function getCmsClientNameEl() {
-    return document.querySelector(".navbar-inner .client-name");
+    return document.querySelector(".navbar-inner .client-name")
+        || document.querySelector(".client-name")
+        || document.querySelector("[class*='client-name']");
   }
 
   function getCmsClientName() {
@@ -64,10 +68,12 @@
   }
 
   function getCmsContentType() {
-    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    const el = document.querySelector(".navbar-inner .decisionAreaLabel")
+            || document.querySelector(".decisionAreaLabel")
+            || document.querySelector("[class*='decisionArea']");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
-    if (raw.includes("image")) return "Image";
+    if (raw.includes("image") || raw.includes("photo") || raw.includes("media")) return "Image";
     if (raw.includes("profile")) return "Profile";
     if (raw.includes("question")) return "Question";
     return "Default";
@@ -76,22 +82,34 @@
   function globToRegex(pattern) {
     const p = String(pattern || "").trim();
     if (!p) return null;
-
-    // Escape regex specials, then convert * and ? to wildcards
     const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
     const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
+  }
 
-    try {
-      return new RegExp(rx, "i");
-    } catch (e) {
-      return null;
+  function patternHasWildcard(pattern) {
+    return /[*?]/.test(String(pattern || ""));
+  }
+
+  // Sort client rules: specific (non-wildcard) patterns first so they match
+  // before catch-all wildcard patterns like *-*-*
+  function prepareClientRules(clients) {
+    const rules = Array.isArray(clients) ? clients.slice() : [];
+    for (const r of rules) {
+      r._rx = globToRegex(r.pattern);
+      r._isWild = patternHasWildcard(r.pattern);
     }
+    rules.sort((a, b) => {
+      if (a._isWild !== b._isWild) return a._isWild ? 1 : -1;
+      // Alphabetical tiebreaker for stable ordering
+      return String(a.pattern || "").localeCompare(String(b.pattern || ""));
+    });
+    return rules;
   }
 
   function findClientRule(clientName) {
     const name = String(clientName || "").trim();
     if (!name) return null;
-
     for (const r of clientRules) {
       if (!r || !r._rx) continue;
       if (r._rx.test(name)) return r;
@@ -101,21 +119,16 @@
 
   function pickClientCategory(rule, contentType) {
     if (!rule) return null;
-
     const overrides = rule.overrides || {};
-
     if (contentType === "Image" && overrides.Image) return overrides.Image;
     if (contentType === "Profile" && overrides.Profile) return overrides.Profile;
     if (contentType === "Question" && overrides.Question) return overrides.Question;
-
-    // Default: blank means no highlight
     return rule.defaultCategory || null;
   }
 
   function clearClientHighlight() {
     const el = getCmsClientNameEl();
     if (!el) return;
-
     if (el.hasAttribute("data-client-hl")) {
       el.style.backgroundColor = "";
       el.style.color = "";
@@ -127,24 +140,35 @@
 
   function applyClientHighlight() {
     clearClientHighlight();
-
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
 
     const clientName = getCmsClientName();
-    if (!clientName) return;
+    if (!clientName) {
+      console.log("CMS Highlighter [client]: no client name element found on page");
+      return;
+    }
 
     const rule = findClientRule(clientName);
-    if (!rule) return;
+    if (!rule) {
+      console.log("CMS Highlighter [client]: no rule matches '%s' (%d rules loaded)", clientName, clientRules.length);
+      return;
+    }
 
     const type = getCmsContentType();
     const catName = pickClientCategory(rule, type);
-
-    // blank means no highlight
-    if (!catName) return;
+    if (!catName) {
+      console.log("CMS Highlighter [client]: '%s' type='%s' — no category set (default=%s, overrides=%o)",
+        clientName, type, rule.defaultCategory || "(none)", rule.overrides || {});
+      return;
+    }
 
     const style = categoryStyleByName.get(catName);
-    if (!style) return;
+    if (!style) {
+      console.warn("CMS Highlighter [client]: category '%s' (from client '%s') not found — was it renamed? Available: %s",
+        catName, clientName, [...categoryStyleByName.keys()].join(", "));
+      return;
+    }
 
     const el = getCmsClientNameEl();
     if (!el) return;
@@ -154,12 +178,60 @@
     el.style.borderRadius = "3px";
     el.style.padding = "2px 6px";
     el.setAttribute("data-client-hl", "1");
+
+    console.log("CMS Highlighter [client]: '%s' → type='%s' → category='%s' (%s)", clientName, type, catName, style.color);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mentions: compile alias patterns for the current client
+  // ---------------------------------------------------------------------------
+  function buildMentionMatcher() {
+    const clientName = getCmsClientName();
+
+    // Skip rebuild if client hasn't changed
+    if (clientName === lastMentionClient) return;
+    lastMentionClient = clientName;
+    mentionMatcher = null;
+
+    if (!clientName) return;
+
+    const rule = findClientRule(clientName);
+    if (!rule || !rule.mentionCategory) return;
+
+    const mentionCat = rule.mentionCategory;
+    const style = categoryStyleByName.get(mentionCat);
+    if (!style) return;
+
+    const words = [];
+    if (Array.isArray(rule.aliases)) {
+      for (const a of rule.aliases) {
+        const trimmed = String(a || "").trim();
+        if (trimmed) words.push(trimmed);
+      }
+    }
+    if (rule.includePatternInContent !== false && rule.pattern) {
+      words.push(String(rule.pattern).trim());
+    }
+    if (words.length === 0) return;
+
+    mentionMatcher = MatcherEngine.compileAll({
+      ignoreList: [],
+      categories: [{
+        id: "__mentions__",
+        name: mentionCat,
+        color: style.color,
+        fColor: style.fColor,
+        enabled: true,
+        words: words
+      }]
+    });
   }
 
   // ---------------------------------------------------------------------------
   // DOM walking
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
+    const clientEl = getCmsClientNameEl();
     const nodes = [];
     const walker = document.createTreeWalker(
       root,
@@ -173,9 +245,15 @@
             return NodeFilter.FILTER_REJECT;
           }
 
+          // Skip the client-name element (handled separately by applyClientHighlight)
+          if (clientEl && (node.parentElement === clientEl || clientEl.contains(node.parentElement))) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
           // Skip script/style/textarea/input/select/noscript
-          const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
+          const tag = node.parentElement.tagName;
+          if (tag === "SCRIPT" || tag === "STYLE" || tag === "TEXTAREA" ||
+              tag === "INPUT" || tag === "SELECT" || tag === "NOSCRIPT") {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -205,7 +283,6 @@
   // ---------------------------------------------------------------------------
   function sanitizeMatches(matches, textLen) {
     if (!Array.isArray(matches) || matches.length === 0) return [];
-
     const out = [];
     for (const m of matches) {
       if (!m) continue;
@@ -238,7 +315,7 @@
       const span = document.createElement("span");
       span.className = HL_CLASS;
       span.style.backgroundColor = match.color || "#FFFF00";
-      span.style.color = match.fColor || "#000000";
+      span.style.color = match.fColor || "#FFFFFF";
       span.setAttribute("data-hl-cat", match.categoryName);
       span.textContent = text.slice(match.start, match.end);
       frag.appendChild(span);
@@ -258,27 +335,136 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Run matcher on text
+  // Run matcher on text (includes mention matches)
   // ---------------------------------------------------------------------------
   function findMatchesForText(text) {
-    if (!text || !compiledMatcher) return [];
-    return MatcherEngine.findMatches(text, compiledMatcher) || [];
+    if (!text) return [];
+
+    const mainMatches = compiledMatcher
+      ? (MatcherEngine.findMatches(text, compiledMatcher) || [])
+      : [];
+
+    if (!mentionMatcher) return mainMatches;
+
+    const mentionMatches = MatcherEngine.findMatches(text, mentionMatcher) || [];
+    if (mentionMatches.length === 0) return mainMatches;
+
+    // Merge: main matches have priority; add non-overlapping mention matches
+    const merged = [...mainMatches];
+    for (const mm of mentionMatches) {
+      const overlaps = mainMatches.some(m => mm.start < m.end && mm.end > m.start);
+      if (!overlaps) {
+        merged.push(mm);
+      }
+    }
+    merged.sort((a, b) => a.start - b.start);
+    return merged;
   }
 
-  function highlightTextNode(textNode) {
+  // ---------------------------------------------------------------------------
+  // Inline element detection (for cross-node matching)
+  // ---------------------------------------------------------------------------
+  const BLOCK_TAGS = new Set([
+    "ADDRESS","ARTICLE","ASIDE","BLOCKQUOTE","DETAILS","DIALOG","DD","DIV",
+    "DL","DT","FIELDSET","FIGCAPTION","FIGURE","FOOTER","FORM","H1","H2",
+    "H3","H4","H5","H6","HEADER","HGROUP","HR","LI","MAIN","NAV","OL","P",
+    "PRE","SECTION","TABLE","TBODY","TD","TFOOT","TH","THEAD","TR","UL"
+  ]);
+
+  function isBlockElement(el) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+    return BLOCK_TAGS.has(el.tagName);
+  }
+
+  // Find the nearest block-level ancestor of a text node
+  function blockAncestor(textNode) {
+    let el = textNode.parentElement;
+    while (el && !isBlockElement(el) && el !== document.body) {
+      el = el.parentElement;
+    }
+    return el || document.body;
+  }
+
+  // Group consecutive text nodes that share the same block ancestor.
+  // Each group's texts are concatenated for matching, then results are
+  // mapped back to individual nodes.
+  function groupTextNodes(nodes) {
+    const groups = [];
+    let currentGroup = null;
+
+    for (const node of nodes) {
+      const block = blockAncestor(node);
+      if (currentGroup && currentGroup.block === block) {
+        currentGroup.nodes.push(node);
+      } else {
+        currentGroup = { block, nodes: [node] };
+        groups.push(currentGroup);
+      }
+    }
+    return groups;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rendering for cross-node match groups
+  // ---------------------------------------------------------------------------
+  function highlightGroup(group) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
     if (!compiledMatcher) return;
 
-    if (!textNode || !textNode.parentNode) return;
+    const nodes = group.nodes;
+    if (nodes.length === 0) return;
 
-    const text = textNode.textContent;
-    if (!text || text.trim().length === 0) return;
+    // Build combined text and offset map
+    const segments = []; // { node, start, end } in combined string
+    let combined = "";
+    for (const node of nodes) {
+      const text = node.textContent || "";
+      segments.push({ node, start: combined.length, end: combined.length + text.length });
+      combined += text;
+    }
 
-    const matches = sanitizeMatches(findMatchesForText(text), text.length);
+    if (!combined || combined.trim().length === 0) return;
+
+    const matches = sanitizeMatches(findMatchesForText(combined), combined.length);
     if (matches.length === 0) return;
 
-    renderMatchesIntoNode(textNode, matches);
+    // For single-node groups, use the fast path
+    if (nodes.length === 1) {
+      renderMatchesIntoNode(nodes[0], matches);
+      return;
+    }
+
+    // Multi-node: map each match back to the nodes it spans.
+    // Process nodes from last to first so DOM mutations don't affect earlier nodes.
+    // First, build per-node match slices.
+    const nodeSlices = segments.map(() => []);
+    for (const match of matches) {
+      for (let si = 0; si < segments.length; si++) {
+        const seg = segments[si];
+        // Does this match overlap this segment?
+        const overlapStart = Math.max(match.start, seg.start);
+        const overlapEnd = Math.min(match.end, seg.end);
+        if (overlapStart < overlapEnd) {
+          nodeSlices[si].push({
+            start: overlapStart - seg.start,
+            end: overlapEnd - seg.start,
+            color: match.color,
+            fColor: match.fColor,
+            categoryName: match.categoryName
+          });
+        }
+      }
+    }
+
+    // Render per-node slices (process in reverse to preserve DOM order)
+    for (let si = segments.length - 1; si >= 0; si--) {
+      const slices = nodeSlices[si];
+      if (slices.length === 0) continue;
+      const node = segments[si].node;
+      if (!node || !node.parentNode) continue;
+      renderMatchesIntoNode(node, slices);
+    }
   }
 
   function highlightAll(root) {
@@ -289,27 +475,52 @@
     const target = root || document.body;
     const textNodes = getTextNodes(target);
 
-    for (const node of textNodes) {
-      highlightTextNode(node);
+    // Group adjacent text nodes under the same block ancestor
+    // so multi-word patterns can match across inline element boundaries
+    const groups = groupTextNodes(textNodes);
+    for (const group of groups) {
+      highlightGroup(group);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Full-page highlight — always walks document.body for reliability.
+  // CMS content can appear in many container types; scoping to specific
+  // selectors risks missing dynamically-loaded areas.
+  // ---------------------------------------------------------------------------
+  function highlightPage() {
+    highlightAll(document.body);
   }
 
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    // Pause observer so our own DOM mutations don't queue up spurious work
+    if (observer) observer.disconnect();
+    pendingNodes = [];
+
     const spans = document.querySelectorAll("." + HL_CLASS);
+    const parentsToNormalize = new Set();
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
-      parent.normalize();
+      parentsToNormalize.add(parent);
     });
+
+    // Batch normalize after all spans are replaced (avoids repeated reflows)
+    parentsToNormalize.forEach(p => { try { p.normalize(); } catch (e) { console.warn("CMS Highlighter: normalize failed:", e.message); } });
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
 
     clearClientHighlight();
+
+    // Re-attach observer (startObserver checks and reconnects)
+    if (observer) {
+      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -326,6 +537,16 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
+        // Handle in-place text changes (characterData)
+        if (mutation.type === "characterData") {
+          const node = mutation.target;
+          if (node.nodeType === Node.TEXT_NODE &&
+              node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
+            pendingNodes.push({ type: "text", node });
+          }
+          continue;
+        }
+
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
@@ -343,26 +564,54 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        // Deduplicate: collect unique element roots to highlight.
+        // If a parent element is in the batch, skip its child text nodes.
+        const roots = new Set();
+        let hasBody = false;
+
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
           if (item.type === "element") {
             if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
-              highlightAll(item.node);
+              hasBody = true;
+              break;
             }
+            roots.add(item.node);
           } else {
-            highlightTextNode(item.node);
+            // For text nodes, add the block ancestor so we get cross-node matching.
+            // Clear MARKER_ATTR on the text node's parent so it can be re-walked
+            // (needed for characterData mutations where text changed in-place).
+            if (item.node.parentElement && item.node.parentElement.hasAttribute(MARKER_ATTR)) {
+              item.node.parentElement.removeAttribute(MARKER_ATTR);
+            }
+            const block = blockAncestor(item.node);
+            if (block) roots.add(block);
           }
         }
 
-        // Also update the client-name highlight when the header changes
+        if (hasBody) {
+          highlightPage();
+        } else {
+          for (const root of roots) {
+            // Skip if any ancestor is already in the roots set
+            let dominated = false;
+            let p = root.parentNode;
+            while (p && p !== document.body) {
+              if (roots.has(p)) { dominated = true; break; }
+              p = p.parentNode;
+            }
+            if (dominated) continue;
+            highlightAll(root);
+          }
+        }
+
+        // Also update client highlight when header changes
         applyClientHighlight();
       }, 80);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
   }
 
   function stopObserver() {
@@ -374,17 +623,13 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Init + messages
+  // Load dictionary and compile
   // ---------------------------------------------------------------------------
-  function init() {
-    if (isBlockedRoute()) {
-      console.log("CMS Highlighter: disabled on this route");
-      return;
-    }
-
+  function loadAndCompile(callback) {
     chrome.storage.local.get(["dictionary", "enabled"], (result) => {
       if (chrome.runtime.lastError) {
         console.error("CMS Highlighter: storage error", chrome.runtime.lastError);
+        if (callback) callback();
         return;
       }
 
@@ -393,18 +638,17 @@
       const dict = result.dictionary;
       if (!dict || !dict.categories) {
         console.log("CMS Highlighter: no dictionary found in storage.");
+        if (callback) callback();
         return;
       }
 
-      // Compile matcher
       compiledMatcher = MatcherEngine.compileAll(dict);
-
-      // Build client highlight maps
       categoryStyleByName = buildCategoryStyleMap(dict);
-      clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-      for (const r of clientRules) {
-        r._rx = globToRegex(r.pattern);
-      }
+      clientRules = prepareClientRules(dict.clients);
+
+      // Force mention matcher rebuild since dictionary changed
+      lastMentionClient = null;
+      buildMentionMatcher();
 
       console.log(
         "CMS Highlighter: compiled " +
@@ -412,13 +656,50 @@
         " categories, " + clientRules.length + " client rules"
       );
 
+      if (callback) callback();
+    });
+  }
+
+  function applyHighlights() {
+    removeAllHighlights();
+    if (globalEnabled) {
+      highlightPage();
+      applyClientHighlight();
+      startObserver();
+    } else {
+      stopObserver();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Init + messages
+  // ---------------------------------------------------------------------------
+  function init() {
+    if (isBlockedRoute()) {
+      console.log("CMS Highlighter: disabled on this route");
+      return;
+    }
+
+    loadAndCompile(() => {
       if (globalEnabled) {
-        highlightAll(document.body);
+        highlightPage();
         applyClientHighlight();
         startObserver();
       }
     });
   }
+
+  // Auto-refresh when options page saves (debounced to avoid rapid recompilation)
+  let storageChangeTimer = null;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (!changes.dictionary && !changes.enabled) return;
+
+    if (storageChangeTimer) clearTimeout(storageChangeTimer);
+    storageChangeTimer = setTimeout(() => {
+      loadAndCompile(applyHighlights);
+    }, 500);
+  });
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !message.action) {
@@ -431,7 +712,7 @@
         globalEnabled = !!message.enabled;
         if (globalEnabled) {
           removeAllHighlights();
-          highlightAll(document.body);
+          highlightPage();
           applyClientHighlight();
           startObserver();
         } else {
@@ -442,40 +723,29 @@
         break;
 
       case "refresh":
-        chrome.storage.local.get(["dictionary", "enabled"], (result) => {
-          globalEnabled = result.enabled !== false;
-
-          const dict = result.dictionary;
-          if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
-
-            categoryStyleByName = buildCategoryStyleMap(dict);
-            clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-            for (const r of clientRules) {
-              r._rx = globToRegex(r.pattern);
-            }
-          }
-
-          removeAllHighlights();
-          if (globalEnabled) {
-            highlightAll(document.body);
-            applyClientHighlight();
-            startObserver();
-          } else {
-            stopObserver();
-          }
-
+        loadAndCompile(() => {
+          applyHighlights();
           sendResponse({ ok: true });
         });
         return true;
+
+      case "getClientName":
+        sendResponse({ clientName: getCmsClientName() });
+        break;
 
       case "getStats":
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
-          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
-          clients: clientRules.length
+          categories: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
+          clients: clientRules.length,
+          clientName: getCmsClientName() || ""
         });
+        break;
+
+      case "notify":
+        console.log("CMS Highlighter:", message.message || "");
+        sendResponse({ ok: true });
         break;
 
       default:
