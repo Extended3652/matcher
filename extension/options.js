@@ -1508,26 +1508,49 @@
 
     const gen = ++detectGeneration;
 
-    chrome.tabs.query({}, (tabs) => {
-      if (!tabs || tabs.length === 0) return;
-      if (gen !== detectGeneration) return; // superseded
+    // Try the most-recently-active CMS tab first, then fall back to all tabs
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (activeTabs) => {
+      if (gen !== detectGeneration) return;
 
-      let resolved = false;
-      for (const tab of tabs) {
-        try {
-          chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (response) => {
-            if (chrome.runtime.lastError) return;
-            if (resolved) return;
-            if (gen !== detectGeneration) return; // superseded
-            if (response && response.clientName) {
-              resolved = true;
-              detectedClient = response.clientName;
-              onClientDetected(response.clientName);
-            }
-          });
-        } catch (e) {
-          console.debug("CMS Highlighter: tab", tab.id, "not reachable:", e.message);
+      function tryTabs(tabs) {
+        let resolved = false;
+        for (const tab of tabs) {
+          try {
+            chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (response) => {
+              if (chrome.runtime.lastError) return;
+              if (resolved) return;
+              if (gen !== detectGeneration) return;
+              if (response && response.clientName) {
+                resolved = true;
+                detectedClient = response.clientName;
+                onClientDetected(response.clientName);
+              }
+            });
+          } catch (e) {
+            console.debug("CMS Highlighter: tab", tab.id, "not reachable:", e.message);
+          }
         }
+        return resolved;
+      }
+
+      // First try active tab(s)
+      if (activeTabs && activeTabs.length > 0) {
+        tryTabs(activeTabs);
+        // Give active tab 200ms to respond before querying all tabs
+        setTimeout(() => {
+          if (gen !== detectGeneration) return;
+          if (detectedClient) return; // active tab already responded
+          chrome.tabs.query({}, (allTabs) => {
+            if (gen !== detectGeneration) return;
+            if (detectedClient) return;
+            if (allTabs) tryTabs(allTabs);
+          });
+        }, 200);
+      } else {
+        chrome.tabs.query({}, (allTabs) => {
+          if (gen !== detectGeneration) return;
+          if (allTabs) tryTabs(allTabs);
+        });
       }
     });
   }

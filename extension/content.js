@@ -467,21 +467,6 @@
     }
   }
 
-  function highlightTextNode(textNode) {
-    if (isBlockedRoute()) return;
-    if (!globalEnabled) return;
-    if (!compiledMatcher) return;
-    if (!textNode || !textNode.parentNode) return;
-
-    const text = textNode.textContent;
-    if (!text || text.trim().length === 0) return;
-
-    const matches = sanitizeMatches(findMatchesForText(text), text.length);
-    if (matches.length === 0) return;
-
-    renderMatchesIntoNode(textNode, matches);
-  }
-
   function highlightAll(root) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -511,6 +496,10 @@
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    // Pause observer so our own DOM mutations don't queue up spurious work
+    if (observer) observer.disconnect();
+    pendingNodes = [];
+
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parentsToNormalize = new Set();
     spans.forEach(span => {
@@ -527,6 +516,11 @@
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
 
     clearClientHighlight();
+
+    // Re-attach observer (startObserver checks and reconnects)
+    if (observer) {
+      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -543,6 +537,16 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
+        // Handle in-place text changes (characterData)
+        if (mutation.type === "characterData") {
+          const node = mutation.target;
+          if (node.nodeType === Node.TEXT_NODE &&
+              node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
+            pendingNodes.push({ type: "text", node });
+          }
+          continue;
+        }
+
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
@@ -575,7 +579,12 @@
             }
             roots.add(item.node);
           } else {
-            // For text nodes, add the block ancestor so we get cross-node matching
+            // For text nodes, add the block ancestor so we get cross-node matching.
+            // Clear MARKER_ATTR on the text node's parent so it can be re-walked
+            // (needed for characterData mutations where text changed in-place).
+            if (item.node.parentElement && item.node.parentElement.hasAttribute(MARKER_ATTR)) {
+              item.node.parentElement.removeAttribute(MARKER_ATTR);
+            }
             const block = blockAncestor(item.node);
             if (block) roots.add(block);
           }
@@ -585,8 +594,14 @@
           highlightPage();
         } else {
           for (const root of roots) {
-            // Skip if this root is inside another root
-            if (root.parentNode && roots.has(root.parentNode)) continue;
+            // Skip if any ancestor is already in the roots set
+            let dominated = false;
+            let p = root.parentNode;
+            while (p && p !== document.body) {
+              if (roots.has(p)) { dominated = true; break; }
+              p = p.parentNode;
+            }
+            if (dominated) continue;
             highlightAll(root);
           }
         }
@@ -596,7 +611,7 @@
       }, 80);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
   }
 
   function stopObserver() {
