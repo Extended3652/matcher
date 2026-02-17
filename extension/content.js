@@ -542,7 +542,7 @@
           const node = mutation.target;
           if (node.nodeType === Node.TEXT_NODE &&
               node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
-            pendingNodes.push({ type: "text", node });
+            pendingNodes.push({ type: "text", node, isCharacterData: true });
           }
           continue;
         }
@@ -552,7 +552,8 @@
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
             pendingNodes.push({ type: "element", node });
           } else if (node.nodeType === Node.TEXT_NODE) {
-            if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
+            if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS) &&
+                !node.parentElement.hasAttribute(MARKER_ATTR)) {
               pendingNodes.push({ type: "text", node });
             }
           }
@@ -580,9 +581,9 @@
             roots.add(item.node);
           } else {
             // For text nodes, add the block ancestor so we get cross-node matching.
-            // Clear MARKER_ATTR on the text node's parent so it can be re-walked
-            // (needed for characterData mutations where text changed in-place).
-            if (item.node.parentElement && item.node.parentElement.hasAttribute(MARKER_ATTR)) {
+            // Only clear MARKER_ATTR for characterData mutations (text changed in-place);
+            // addedNodes text already skips parents with MARKER_ATTR to prevent loops.
+            if (item.isCharacterData && item.node.parentElement && item.node.parentElement.hasAttribute(MARKER_ATTR)) {
               item.node.parentElement.removeAttribute(MARKER_ATTR);
             }
             const block = blockAncestor(item.node);
