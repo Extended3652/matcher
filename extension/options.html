@@ -405,6 +405,30 @@
         </div>
       </div>
 
+      <div style="margin-top: 10px; border-top: 1px solid #e8e8e8; padding-top: 10px;">
+        <h3 style="margin: 0 0 8px; font-size: 13px; color: #666;">Mentions in content <span class="muted">(optional — how the client appears in review/content text)</span></h3>
+        <div class="client-add-grid">
+          <div class="field">
+            <label>Mentions category</label>
+            <select id="newClientMentionCategory"></select>
+          </div>
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Aliases (one per line, supports * and ?)</label>
+            <textarea id="newClientAliases" style="width:100%; min-height:60px; font-family:monospace; font-size:12px; resize:vertical;" spellcheck="false" placeholder="Alternate names or patterns to match in content text"></textarea>
+          </div>
+          <div class="field" style="grid-column: 1 / -1;">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+              <input type="checkbox" id="newClientIncludePatternInContent" checked>
+              Also treat the main Client Name pattern as a mention in content
+            </label>
+          </div>
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Note</label>
+            <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)" style="width:100%;">
+          </div>
+        </div>
+      </div>
+
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>

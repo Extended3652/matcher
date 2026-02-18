@@ -216,7 +216,18 @@
   }
 
   function saveDictionary(msg) {
+    const serialized = JSON.stringify(currentDict);
+    const byteSize = new Blob([serialized]).size;
+    const QUOTA_WARN = 4 * 1024 * 1024; // Warn at 4 MB (chrome.storage.local default limit is 5 MB)
+    if (byteSize > QUOTA_WARN) {
+      showMsg("Warning: dictionary is " + (byteSize / 1024 / 1024).toFixed(1) + " MB — approaching storage limit", "error");
+    }
+
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      if (chrome.runtime.lastError) {
+        showMsg("Save failed: " + chrome.runtime.lastError.message, "error");
+        return;
+      }
       if (msg) showMsg(msg, "success");
     });
   }
@@ -757,18 +768,37 @@
 
       const colorRow = document.createElement("div");
       colorRow.className = "color-picker-row";
-      colorRow.innerHTML =
-        "<label>BG Color:</label>" +
-        '<input type="color" class="bg-color" value="' + (cat.color || "#FFFF00") + '">' +
-        "<label>Text Color:</label>" +
-        '<input type="color" class="fg-color" value="' + (cat.fColor || "#FFFFFF") + '">' +
-        '<span class="preview" style="padding:2px 8px; border-radius:3px; background:' + (cat.color || "#FFFF00") + "; color:" + (cat.fColor || "#FFFFFF") + '">Preview</span>';
+
+      const bgLabel = document.createElement("label");
+      bgLabel.textContent = "BG Color:";
+      colorRow.appendChild(bgLabel);
+
+      const bgInput = document.createElement("input");
+      bgInput.type = "color";
+      bgInput.className = "bg-color";
+      bgInput.value = /^#[0-9A-Fa-f]{6}$/.test(cat.color) ? cat.color : "#FFFF00";
+      colorRow.appendChild(bgInput);
+
+      const fgLabel = document.createElement("label");
+      fgLabel.textContent = "Text Color:";
+      colorRow.appendChild(fgLabel);
+
+      const fgInput = document.createElement("input");
+      fgInput.type = "color";
+      fgInput.className = "fg-color";
+      fgInput.value = /^#[0-9A-Fa-f]{6}$/.test(cat.fColor) ? cat.fColor : "#FFFFFF";
+      colorRow.appendChild(fgInput);
+
+      const preview = document.createElement("span");
+      preview.className = "preview";
+      preview.style.padding = "2px 8px";
+      preview.style.borderRadius = "3px";
+      preview.style.background = bgInput.value;
+      preview.style.color = fgInput.value;
+      preview.textContent = "Preview";
+      colorRow.appendChild(preview);
 
       body.appendChild(colorRow);
-
-      const bgInput = colorRow.querySelector(".bg-color");
-      const fgInput = colorRow.querySelector(".fg-color");
-      const preview = colorRow.querySelector(".preview");
 
       bgInput.addEventListener("input", () => {
         cat.color = bgInput.value;
@@ -975,9 +1005,43 @@
     reader.readAsText(file);
   });
 
+  function validateImportedDictionary(data) {
+    if (!data || typeof data !== "object") return "Not a valid dictionary (expected an object)";
+    if (!Array.isArray(data.categories)) return "Missing or invalid 'categories' array";
+
+    for (let i = 0; i < data.categories.length; i++) {
+      const cat = data.categories[i];
+      if (!cat || typeof cat !== "object") return "Category at index " + i + " is not an object";
+      if (typeof cat.name !== "string" || !cat.name.trim()) return "Category at index " + i + " has a missing or empty name";
+      if (!Array.isArray(cat.words)) return 'Category "' + cat.name + '" is missing a words array';
+      for (let j = 0; j < cat.words.length; j++) {
+        if (typeof cat.words[j] !== "string") return 'Category "' + cat.name + '" word at index ' + j + " is not a string";
+      }
+    }
+
+    if (data.ignoreList !== undefined && !Array.isArray(data.ignoreList)) return "'ignoreList' must be an array";
+    if (data.ignoreList) {
+      for (let i = 0; i < data.ignoreList.length; i++) {
+        if (typeof data.ignoreList[i] !== "string") return "ignoreList entry at index " + i + " is not a string";
+      }
+    }
+
+    if (data.clients !== undefined && !Array.isArray(data.clients)) return "'clients' must be an array";
+    if (data.clients) {
+      for (let i = 0; i < data.clients.length; i++) {
+        const c = data.clients[i];
+        if (!c || typeof c !== "object") return "Client at index " + i + " is not an object";
+        if (typeof c.pattern !== "string" || !c.pattern.trim()) return "Client at index " + i + " has a missing or empty pattern";
+      }
+    }
+
+    return null; // valid
+  }
+
   function importCMSJSON(data) {
-    if (!data.categories || !Array.isArray(data.categories)) {
-      showMsg("Not a valid CMS Highlighter dictionary", "error");
+    const err = validateImportedDictionary(data);
+    if (err) {
+      showMsg("Invalid dictionary: " + err, "error");
       return;
     }
 
