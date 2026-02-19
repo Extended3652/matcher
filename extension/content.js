@@ -490,4 +490,27 @@
   } else {
     init();
   }
+
+  // Auto-refresh when the dictionary is changed from the options page.
+  // (Right-click adds send an explicit "refresh" message; this catches everything else.)
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.dictionary) return;
+    if (isBlockedRoute()) return;
+
+    const dict = changes.dictionary.newValue;
+    if (!dict || !dict.categories) return;
+
+    compiledMatcher = MatcherEngine.compileAll(dict);
+    categoryStyleByName = buildCategoryStyleMap(dict);
+    clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+    for (const r of clientRules) {
+      r._rx = globToRegex(r.pattern);
+    }
+
+    removeAllHighlights();
+    if (globalEnabled) {
+      highlightAll(document.body);
+      applyClientHighlight();
+    }
+  });
 })();
