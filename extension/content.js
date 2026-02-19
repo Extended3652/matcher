@@ -299,12 +299,15 @@
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     const spans = document.querySelectorAll("." + HL_CLASS);
+    const parents = new Set();
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
-      parent.normalize();
+      parents.add(parent);
     });
+    // Normalize once per parent, not once per span (avoids redundant reflows)
+    parents.forEach(p => p.normalize());
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
@@ -326,6 +329,20 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
+        // Text node content changed in-place (e.g. SPA framework updating nodeValue/data)
+        if (mutation.type === "characterData") {
+          const node = mutation.target;
+          if (
+            node.nodeType === Node.TEXT_NODE &&
+            node.parentElement &&
+            !node.parentElement.classList.contains(HL_CLASS) &&
+            !node.parentElement.hasAttribute(MARKER_ATTR)
+          ) {
+            pendingNodes.push({ type: "text", node });
+          }
+          continue;
+        }
+
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
@@ -362,7 +379,7 @@
       }, 80);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
   function stopObserver() {

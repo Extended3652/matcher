@@ -77,11 +77,16 @@
     return safeStr(raw).replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
   }
 
+  // Binary search: O(log n) comparisons instead of O(n).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);
-    let i = 0;
-    while (i < arr.length && sortKey(arr[i]) < key) i++;
-    arr.splice(i, 0, word);
+    let lo = 0, hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sortKey(arr[mid]) < key) lo = mid + 1;
+      else hi = mid;
+    }
+    arr.splice(lo, 0, word);
   }
 
   function normalizePattern(p) {
@@ -107,13 +112,15 @@
     return map;
   }
 
-  function makeCategorySelect(opts) {
+  function makeCategorySelect(opts, stMapArg) {
     // opts:
     // - mode: "review" or "override"
     // - value: current value (string or null)
     // review: includes "(no highlight)" + categories
     // override: includes "-" (inherit) + categories
+    // stMapArg: optional pre-built style map to avoid redundant Map construction
     const sel = document.createElement("select");
+    const stMap = stMapArg || getCategoryStyleByName();
 
     function resetSelectVisual() {
       sel.style.backgroundColor = "";
@@ -126,7 +133,7 @@
         resetSelectVisual();
         return;
       }
-      const st = getCategoryStyleByName().get(v);
+      const st = stMap.get(v);
       if (!st) {
         resetSelectVisual();
         return;
@@ -156,7 +163,6 @@
       sel.appendChild(makeOption("", "(no highlight)", null));
     }
 
-    const stMap = getCategoryStyleByName();
     for (const name of getCategoryNames()) {
       sel.appendChild(makeOption(name, name, stMap.get(name) || null));
     }
@@ -240,7 +246,7 @@
   // ---------------------------------------------------------------------------
   // Clients
   // ---------------------------------------------------------------------------
-  function populateAddClientDropdowns() {
+  function populateAddClientDropdowns(stMap) {
     // We build temp <select>s so we inherit the same options + styling logic
     // then move options into the real DOM selects.
     newClientReview.innerHTML = "";
@@ -248,10 +254,10 @@
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
 
-    const reviewSel = makeCategorySelect({ mode: "review", value: "" });
-    const imgSel = makeCategorySelect({ mode: "override", value: "" });
-    const proSel = makeCategorySelect({ mode: "override", value: "" });
-    const qSel = makeCategorySelect({ mode: "override", value: "" });
+    const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
+    const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
     while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
@@ -266,7 +272,7 @@
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
       newClientMentionCategory.innerHTML = "";
-      const mentionSel = makeCategorySelect({ mode: "override", value: "" });
+      const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
       while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
       newClientMentionCategory.value = "";
     }
@@ -315,7 +321,8 @@
       ? ("Showing " + list.length)
       : ("Showing " + list.length + " of " + all.length);
 
-    populateAddClientDropdowns();
+    const styleByName = getCategoryStyleByName();
+    populateAddClientDropdowns(styleByName);
 
     clientListBodyEl.innerHTML = "";
 
@@ -336,8 +343,6 @@
       clientListBodyEl.appendChild(div);
       return;
     }
-
-    const styleByName = getCategoryStyleByName();
 
     list.forEach((entry) => {
       const pat = safeStr(entry.pattern);
@@ -413,7 +418,7 @@
       fReview.className = "field";
       const lReview = document.createElement("label");
       lReview.textContent = "Header: Review (Default)";
-      const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" });
+      const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
@@ -422,7 +427,7 @@
       fImg.className = "field";
       const lImg = document.createElement("label");
       lImg.textContent = "Header: Image override";
-      const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" });
+      const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
       grid.appendChild(fImg);
@@ -431,7 +436,7 @@
       fPro.className = "field";
       const lPro = document.createElement("label");
       lPro.textContent = "Header: Profile override";
-      const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" });
+      const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
       grid.appendChild(fPro);
@@ -440,7 +445,7 @@
       fQ.className = "field";
       const lQ = document.createElement("label");
       lQ.textContent = "Header: Question override";
-      const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" });
+      const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
       grid.appendChild(fQ);
@@ -458,7 +463,7 @@
       fMCat.className = "field";
       const lMCat = document.createElement("label");
       lMCat.textContent = "Mentions: Category";
-      const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" });
+      const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
       fMCat.appendChild(lMCat);
       fMCat.appendChild(sMCat);
       mGrid.appendChild(fMCat);
@@ -770,17 +775,23 @@
       const fgInput = colorRow.querySelector(".fg-color");
       const preview = colorRow.querySelector(".preview");
 
+      // Update local preview while dragging - no save/re-render on every pixel
       bgInput.addEventListener("input", () => {
-        cat.color = bgInput.value;
         colorPrev.style.backgroundColor = bgInput.value;
         preview.style.background = bgInput.value;
+      });
+      // Persist and refresh client swatches only when picker is released
+      bgInput.addEventListener("change", () => {
+        cat.color = bgInput.value;
         saveDictionary();
-        renderClients(); // update client swatches + dropdown styling
+        renderClients();
       });
 
       fgInput.addEventListener("input", () => {
-        cat.fColor = fgInput.value;
         preview.style.color = fgInput.value;
+      });
+      fgInput.addEventListener("change", () => {
+        cat.fColor = fgInput.value;
         saveDictionary();
         renderClients();
       });

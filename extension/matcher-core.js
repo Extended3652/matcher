@@ -84,7 +84,6 @@
   function globToRegexFragment(pattern) {
     let result = "";
     const chars = [...pattern];
-    const hasLiteralSpace = pattern.includes(" ");
 
     for (let i = 0; i < chars.length; i++) {
       const ch = chars[i];
@@ -334,7 +333,7 @@
             fColor:   cat.fColor,
             priority: i,
             isWildcard: meta ? !!meta.hasWildcard : false,
-            isExact: meta ? !!meta.exact : false,
+            isExact: meta ? !!meta.isExact : false,
           });
         }
       }
