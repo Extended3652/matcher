@@ -240,9 +240,11 @@
               const openBody = clientListBodyEl.querySelector(".client-body.open");
               if (openBody) openBody.parentElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
             }, 50);
-            break;
+            return;
           }
         }
+        // Client not in database — pre-fill the "add" field so it's ready to save
+        newClientPattern.value = clientName;
       });
     });
   }
