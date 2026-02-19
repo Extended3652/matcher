@@ -11,10 +11,7 @@
   // Elements
   // ---------------------------------------------------------------------------
   const msgEl         = document.getElementById("msg");
-  const ignoreArea    = document.getElementById("ignoreListArea");
-  const ignoreCount   = document.getElementById("ignoreCount");
   const catEditorsEl  = document.getElementById("catEditors");
-  const btnSaveIgnore = document.getElementById("btnSaveIgnore");
   const btnExport     = document.getElementById("btnExport");
   const btnImportHT   = document.getElementById("btnImportHT");
   const btnImportJSON = document.getElementById("btnImportJSON");
@@ -217,7 +214,6 @@
       if (!Array.isArray(currentDict.categories)) currentDict.categories = [];
       if (!Array.isArray(currentDict.clients)) currentDict.clients = [];
 
-      renderIgnoreList();
       renderClients();
       renderCategories();
       preSelectCurrentClient();
@@ -265,22 +261,6 @@
       if (msg) showMsg(msg, "success");
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // Ignore List
-  // ---------------------------------------------------------------------------
-  function renderIgnoreList() {
-    const words = currentDict.ignoreList || [];
-    ignoreArea.value = words.join("\n");
-    ignoreCount.textContent = "(" + words.length + " words)";
-  }
-
-  btnSaveIgnore.addEventListener("click", () => {
-    const lines = ignoreArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    currentDict.ignoreList = lines;
-    saveDictionary("Ignore list saved (" + lines.length + " words)");
-    ignoreCount.textContent = "(" + lines.length + " words)";
-  });
 
   // ---------------------------------------------------------------------------
   // Clients
@@ -746,6 +726,107 @@
   // ---------------------------------------------------------------------------
   function renderCategories() {
     catEditorsEl.innerHTML = "";
+    if (!currentDict) return;
+
+    // ---- Ignore List (pinned top category) ----
+    (function buildIgnoreEditor() {
+      const ignWords = currentDict.ignoreList || [];
+
+      const ignEditor = document.createElement("div");
+      ignEditor.className = "cat-editor";
+
+      const ignHeader = document.createElement("div");
+      ignHeader.className = "cat-header";
+
+      const ignArrow = document.createElement("span");
+      ignArrow.className = "cat-arrow";
+      ignArrow.textContent = "\u25b6";
+      ignHeader.appendChild(ignArrow);
+
+      const ignSwatch = document.createElement("span");
+      ignSwatch.style.display = "inline-block";
+      ignSwatch.style.width = "14px";
+      ignSwatch.style.height = "14px";
+      ignSwatch.style.borderRadius = "3px";
+      ignSwatch.style.backgroundColor = "#aaaaaa";
+      ignSwatch.style.border = "1px solid rgba(0,0,0,0.2)";
+      ignHeader.appendChild(ignSwatch);
+
+      const ignNameSpan = document.createElement("span");
+      ignNameSpan.className = "cat-header-name";
+      ignNameSpan.textContent = "Ignore List";
+      ignHeader.appendChild(ignNameSpan);
+
+      const ignCountSpan = document.createElement("span");
+      ignCountSpan.className = "cat-header-count";
+      ignCountSpan.textContent = ignWords.length + " words";
+      ignHeader.appendChild(ignCountSpan);
+
+      ignEditor.appendChild(ignHeader);
+
+      const ignBody = document.createElement("div");
+      ignBody.className = "cat-body";
+
+      const ignHelp = document.createElement("p");
+      ignHelp.style.fontSize = "11px";
+      ignHelp.style.color = "#999";
+      ignHelp.style.marginBottom = "6px";
+      ignHelp.textContent = "Words here block highlights from all categories. One per line. Wildcards (* ?) work.";
+      ignBody.appendChild(ignHelp);
+
+      const ignArea = document.createElement("textarea");
+      ignArea.className = "word-list";
+      ignArea.spellcheck = false;
+      ignArea.value = ignWords.join("\n");
+      ignBody.appendChild(ignArea);
+
+      const ignAddRow = document.createElement("div");
+      ignAddRow.className = "add-word-row";
+      const ignAddInput = document.createElement("input");
+      ignAddInput.type = "text";
+      ignAddInput.placeholder = "Quick add a word (Enter to add)";
+      ignAddInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && ignAddInput.value.trim()) {
+          const word = ignAddInput.value.trim();
+          if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
+          insertAlphabetically(currentDict.ignoreList, word);
+          ignArea.value = currentDict.ignoreList.join("\n");
+          ignCountSpan.textContent = currentDict.ignoreList.length + " words";
+          ignAddInput.value = "";
+          saveDictionary('Added "' + word + '" to Ignore List');
+        }
+      });
+      ignAddRow.appendChild(ignAddInput);
+      ignBody.appendChild(ignAddRow);
+
+      const ignSaveRow = document.createElement("div");
+      ignSaveRow.style.marginTop = "10px";
+      const ignSaveBtn = document.createElement("button");
+      ignSaveBtn.className = "primary";
+      ignSaveBtn.textContent = "Save Ignore List";
+      ignSaveBtn.addEventListener("click", () => {
+        const lines = ignArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        currentDict.ignoreList = lines;
+        ignCountSpan.textContent = lines.length + " words";
+        saveDictionary("Ignore list saved (" + lines.length + " words)");
+      });
+      ignSaveRow.appendChild(ignSaveBtn);
+      ignBody.appendChild(ignSaveRow);
+
+      ignHeader.addEventListener("click", () => {
+        const isOpen = ignBody.classList.contains("open");
+        document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
+        document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+        if (!isOpen) {
+          ignBody.classList.add("open");
+          ignArrow.classList.add("open");
+        }
+      });
+
+      ignEditor.appendChild(ignBody);
+      catEditorsEl.appendChild(ignEditor);
+    })();
+
     if (!currentDict.categories) return;
 
     currentDict.categories.forEach((cat, index) => {
@@ -1085,7 +1166,6 @@
     currentDict = data;
     openClientKey = null;
     saveDictionary("Imported " + data.categories.length + " categories, " + data.clients.length + " clients");
-    renderIgnoreList();
     renderClients();
     renderCategories();
   }
@@ -1129,7 +1209,6 @@
     currentDict = dict;
     openClientKey = null;
     saveDictionary("Imported HighlightThis backup: " + dict.categories.length + " categories, " + totalWords + " words");
-    renderIgnoreList();
     renderClients();
     renderCategories();
   }
