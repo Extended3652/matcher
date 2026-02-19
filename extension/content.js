@@ -299,12 +299,15 @@
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     const spans = document.querySelectorAll("." + HL_CLASS);
+    const parents = new Set();
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
-      parent.normalize();
+      parents.add(parent);
     });
+    // Normalize once per parent, not once per span (avoids redundant reflows)
+    parents.forEach(p => p.normalize());
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));

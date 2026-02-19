@@ -41,11 +41,16 @@
   }
 
   // Inserts word into arr at the correct alphabetical position (by bare word).
+  // Binary search: O(log n) comparisons instead of O(n).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);
-    let i = 0;
-    while (i < arr.length && sortKey(arr[i]) < key) i++;
-    arr.splice(i, 0, word);
+    let lo = 0, hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sortKey(arr[mid]) < key) lo = mid + 1;
+      else hi = mid;
+    }
+    arr.splice(lo, 0, word);
   }
 
   // ---------------------------------------------------------------------------
@@ -762,8 +767,12 @@
     colorInput.className = "cat-color-input";
     colorInput.value = cat.color || "#FFFF00";
 
+    // Live preview while dragging - no storage writes on every pixel
     colorInput.addEventListener("input", () => {
       swatch.style.backgroundColor = colorInput.value;
+    });
+    // Persist only when picker is released/committed
+    colorInput.addEventListener("change", () => {
       cat.color = colorInput.value;
       saveDictionary();
     });

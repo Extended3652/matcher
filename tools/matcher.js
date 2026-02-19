@@ -80,7 +80,6 @@ function parseWordEntry(rawEntry) {
 function globToRegexFragment(pattern) {
   let result = "";
   const chars = [...pattern];
-  const hasLiteralSpace = pattern.includes(" ");
 
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i];
