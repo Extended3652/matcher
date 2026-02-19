@@ -88,6 +88,14 @@
     return safeStr(p).trim();
   }
 
+  function globToRegex(pattern) {
+    const p = safeStr(pattern).trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
+  }
+
   function patternKey(p) {
     return normalizePattern(p).toLowerCase();
   }
@@ -212,6 +220,30 @@
       renderIgnoreList();
       renderClients();
       renderCategories();
+      preSelectCurrentClient();
+    });
+  }
+
+  function preSelectCurrentClient() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs || !tabs[0]) return;
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.clientName) return;
+        const clientName = response.clientName;
+        const clients = currentDict.clients || [];
+        for (const c of clients) {
+          const rx = globToRegex(safeStr(c.pattern));
+          if (rx && rx.test(clientName)) {
+            openClientKey = patternKey(c.pattern);
+            renderClients();
+            setTimeout(() => {
+              const openBody = clientListBodyEl.querySelector(".client-body.open");
+              if (openBody) openBody.parentElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }, 50);
+            break;
+          }
+        }
+      });
     });
   }
 
