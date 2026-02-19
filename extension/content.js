@@ -326,6 +326,20 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
+        // Text node content changed in-place (e.g. SPA framework updating nodeValue/data)
+        if (mutation.type === "characterData") {
+          const node = mutation.target;
+          if (
+            node.nodeType === Node.TEXT_NODE &&
+            node.parentElement &&
+            !node.parentElement.classList.contains(HL_CLASS) &&
+            !node.parentElement.hasAttribute(MARKER_ATTR)
+          ) {
+            pendingNodes.push({ type: "text", node });
+          }
+          continue;
+        }
+
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
@@ -362,7 +376,7 @@
       }, 80);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
   function stopObserver() {

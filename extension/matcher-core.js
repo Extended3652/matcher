@@ -334,7 +334,7 @@
             fColor:   cat.fColor,
             priority: i,
             isWildcard: meta ? !!meta.hasWildcard : false,
-            isExact: meta ? !!meta.exact : false,
+            isExact: meta ? !!meta.isExact : false,
           });
         }
       }
