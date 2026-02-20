@@ -10,6 +10,7 @@
 
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
 
   // Guardrails
   const MAX_SPAN_LEN = 120;
@@ -175,7 +176,7 @@
 
           // Skip script/style/textarea/input/select/noscript
           const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
+          if (SKIP_TAGS.has(tag)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -298,6 +299,7 @@
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    stopObserver(); // Disconnect before DOM cleanup to prevent observer feedback loop
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
     spans.forEach(span => {
@@ -329,12 +331,15 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
-        // Text node content changed in-place (e.g. SPA framework updating nodeValue/data)
+        // Text node content changed in-place (e.g. SPA framework updating nodeValue/data).
+        // Skip contentEditable nodes: typing in CMS editors would otherwise trigger
+        // regex matching on every keystroke.
         if (mutation.type === "characterData") {
           const node = mutation.target;
           if (
             node.nodeType === Node.TEXT_NODE &&
             node.parentElement &&
+            !node.parentElement.isContentEditable &&
             !node.parentElement.classList.contains(HL_CLASS) &&
             !node.parentElement.hasAttribute(MARKER_ATTR)
           ) {
@@ -387,6 +392,7 @@
       observer.disconnect();
       observer = null;
     }
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
     pendingNodes = [];
   }
 
