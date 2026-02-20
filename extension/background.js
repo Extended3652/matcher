@@ -329,11 +329,24 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // ---------------------------------------------------------------------------
-// Rebuild context menu when dictionary or menu toggles change
+// Rebuild context menu when dictionary or menu toggles change,
+// and notify content scripts so highlights update immediately.
 // ---------------------------------------------------------------------------
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+  if (changes.dictionary) {
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of tabs) {
+        if (!tab.id || !tab.url) continue;
+        if (!tab.url.includes("bazaarvoice.com")) continue;
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          // Suppress "no receiving end" errors for tabs without the content script.
+          void chrome.runtime.lastError;
+        });
+      }
+    });
   }
 });
