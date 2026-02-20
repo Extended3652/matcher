@@ -365,17 +365,43 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        let needsFullScan = false;
+        const elementRoots = [];
+        const orphanTextNodes = [];
+
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
           if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
-              highlightAll(item.node);
+            const node = item.node;
+            if (node === document.body || node === document.documentElement) {
+              needsFullScan = true;
+              break;
             }
+            elementRoots.push(node);
           } else {
-            highlightTextNode(item.node);
+            orphanTextNodes.push(item.node);
+          }
+        }
+
+        if (needsFullScan) {
+          highlightAll(document.body);
+        } else {
+          // Remove roots that are descendants of another root in the batch
+          // so we never walk the same subtree more than once.
+          const dedupedRoots = elementRoots.filter((node, _, arr) =>
+            !arr.some(other => other !== node && other.contains(node))
+          );
+
+          for (const root of dedupedRoots) {
+            highlightAll(root);
+          }
+
+          // Handle orphan text nodes not already covered by a deduped root.
+          for (const node of orphanTextNodes) {
+            if (!node.parentNode) continue;
+            if (dedupedRoots.some(root => root.contains(node))) continue;
+            highlightTextNode(node);
           }
         }
 
