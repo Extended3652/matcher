@@ -258,10 +258,6 @@ function addWordToCategory(text, catIndex, tab) {
         tab,
         `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
       );
-      if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
-      }
-      buildContextMenu();
     });
   });
 }
@@ -286,10 +282,6 @@ function addWordToIgnoreList(text, tab) {
 
     chrome.storage.local.set({ dictionary: dict }, () => {
       notifyTab(tab, `Added "${text}" to Ignore List`);
-      if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
-      }
-      buildContextMenu();
     });
   });
 }
@@ -329,11 +321,31 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // ---------------------------------------------------------------------------
-// Rebuild context menu when dictionary or menu toggles change
+// Rebuild context menu and refresh tabs when storage changes
 // ---------------------------------------------------------------------------
+const CMS_TAB_URLS = [
+  "https://cms.bazaarvoice.com/*",
+  "https://workbench.bazaarvoice.com/*",
+  "http://minotaur:8124/*",
+];
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
+
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+
+  // Refresh all open CMS tabs whenever the dictionary or enabled flag changes.
+  // This covers both right-click adds and options-page saves with a single path.
+  if (changes.dictionary || changes.enabled) {
+    chrome.tabs.query({ url: CMS_TAB_URLS }, (tabs) => {
+      if (chrome.runtime.lastError) return;
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          void chrome.runtime.lastError; // suppress "no receiver" errors
+        });
+      }
+    });
   }
 });

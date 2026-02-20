@@ -12,7 +12,7 @@
   const HL_CLASS = "cms-hl";
 
   // Guardrails
-  const MAX_SPAN_LEN = 120;
+  const MAX_SPAN_LEN = 500;
 
   let globalEnabled = true;
 
@@ -360,18 +360,42 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        // Separate elements from text nodes, filter dead nodes
+        const elementNodes = [];
+        const textItems = [];
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
+          if (item.type === "element") elementNodes.push(item.node);
+          else textItems.push(item.node);
+        }
 
-          if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
-              highlightAll(item.node);
-            }
-          } else {
-            highlightTextNode(item.node);
+        // Build minimal ancestor set: no root is a descendant of another.
+        // This prevents walking the same subtree multiple times when a parent
+        // and its children are both in the same mutation batch.
+        const roots = [];
+        for (const node of elementNodes) {
+          if (node === document.body || node === document.documentElement) {
+            roots.length = 0;
+            roots.push(document.body);
+            break;
           }
+          let dominated = false;
+          for (const root of roots) {
+            if (root.contains(node)) { dominated = true; break; }
+          }
+          if (!dominated) {
+            for (let i = roots.length - 1; i >= 0; i--) {
+              if (node.contains(roots[i])) roots.splice(i, 1);
+            }
+            roots.push(node);
+          }
+        }
+
+        for (const root of roots) highlightAll(root);
+
+        // Process orphan text nodes not already covered by a root
+        for (const node of textItems) {
+          if (!roots.some(r => r.contains(node))) highlightTextNode(node);
         }
 
         // Also update the client-name highlight when the header changes
