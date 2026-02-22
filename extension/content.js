@@ -502,6 +502,40 @@
     return true;
   });
 
+  // Auto-refresh when the dictionary is changed from the options page.
+  // The options page saves directly to storage without sending a "refresh"
+  // message, so we listen here to pick up those changes (e.g. new client
+  // overrides for image/question types take effect without a page reload).
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (!changes.dictionary && !changes.enabled) return;
+
+    chrome.storage.local.get(["dictionary", "enabled"], (result) => {
+      if (chrome.runtime.lastError) return;
+
+      globalEnabled = result.enabled !== false;
+
+      const dict = result.dictionary;
+      if (dict && dict.categories) {
+        compiledMatcher = MatcherEngine.compileAll(dict);
+        categoryStyleByName = buildCategoryStyleMap(dict);
+        clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+        for (const r of clientRules) {
+          r._rx = globToRegex(r.pattern);
+        }
+      }
+
+      removeAllHighlights();
+      if (globalEnabled) {
+        highlightAll(document.body);
+        applyClientHighlight();
+        startObserver();
+      } else {
+        stopObserver();
+      }
+    });
+  });
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {

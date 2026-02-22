@@ -1017,15 +1017,22 @@
       if (!group) continue;
       if (!group.enabled) continue;
 
-      const words = (group.words || [])
+      const rawWords = (group.words || [])
         .map(w => String(w || "").replace(/[\n\r]+$/g, "").replace(/^[\n\r]+/, ""))
-        .filter(w => w.length > 0)
-        .map(w => group.findWords ? "//" + w : w);
+        .filter(w => w.length > 0);
+
+      // Ignore list entries are always plain substring matchers — don't add //
+      // prefix for the Unhighlight group even if findWords was true, because //
+      // restricts to whole-word boundaries and prevents suppressing sub-matches
+      // (e.g. //arsen would fail to block 'arse' inside 'arsenal').
+      const words = rawWords.map(w => group.findWords ? "//" + w : w);
 
       totalWords += words.length;
 
       if (group.name === "Unhighlight") {
-        dict.ignoreList = words;
+        // Strip // prefix from ignore list entries: substring matching is correct
+        // for suppression (whole-word-only ignore breaks cases like arsen/arsenal).
+        dict.ignoreList = rawWords;
         continue;
       }
 

@@ -335,11 +335,16 @@ function findMatches(text, compiled) {
     }
   }
 
-  // --- Remove matches that overlap with any Ignore range ---
+  // --- Remove matches fully contained by any Ignore range ---
+  // A category match is suppressed only when the ENTIRE match falls inside an
+  // ignore range (match.start >= ig.start && match.end <= ig.end).
+  // This lets compound patterns like "bait * switch" survive even when
+  // "//switch" is in the ignore list, because the compound match is *larger*
+  // than the ignore range and is therefore not fully contained by it.
   let filtered = allMatches;
   if (ignoreRanges.length > 0) {
     filtered = allMatches.filter(match => {
-      return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
+      return !ignoreRanges.some(ig => match.start >= ig.start && match.end <= ig.end);
     });
   }
 

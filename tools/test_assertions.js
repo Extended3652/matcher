@@ -442,6 +442,58 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Ignore list — containment semantics (Bug 3 / "switch" fix)
+// =============================================================================
+// The ignore filter now uses CONTAINMENT, not overlap.
+// A category match is suppressed only when it is fully inside an ignore range.
+// This means a larger compound match (e.g. "bait and switch") survives even
+// when a sub-term ("//switch") is in the ignore list.
+// =============================================================================
+section("12. Ignore list — containment (not overlap) semantics");
+
+assertMatches(
+  "//switch in ignore suppresses standalone 'switch'",
+  cfg([cat("a", "Cat", "#f00", ["switch", "bait * switch"])], ["//switch"]),
+  "the switch was broken",
+  []
+);
+
+assertMatches(
+  "//switch in ignore does NOT suppress 'bait and switch' compound match",
+  cfg([cat("a", "Cat", "#f00", ["switch", "bait * switch"])], ["//switch"]),
+  "classic bait and switch scheme",
+  [{ cat:"Cat", word:"bait and switch" }]
+);
+
+assertMatches(
+  "plain 'arsen' in ignore suppresses 'arse' inside 'arsenal'",
+  cfg([cat("a", "PRF", "#f00", ["arse"])], ["arsen"]),
+  "arsenal",
+  []
+);
+
+assertMatches(
+  "//arsen (exact) in ignore does NOT suppress 'arse' inside 'arsenal' — word boundary fails",
+  cfg([cat("a", "PRF", "#f00", ["arse"])], ["//arsen"]),
+  "arsenal",
+  [{ cat:"PRF", word:"arse" }]
+);
+
+assertMatches(
+  "ignore entry wider than match: 'easy to use' suppresses 'use' inside it",
+  cfg([cat("a", "Cat", "#f00", ["use"])], ["easy to use"]),
+  "This is easy to use daily",
+  []
+);
+
+assertMatches(
+  "ignore entry narrower than match: plain 'switch' in ignore does NOT block 'bait * switch' (larger match)",
+  cfg([cat("a", "Cat", "#f00", ["bait * switch"])], ["switch"]),
+  "classic bait and switch scheme",
+  [{ cat:"Cat", word:"bait and switch" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
