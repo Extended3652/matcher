@@ -261,6 +261,12 @@
 
   <div class="stats" id="stats">Loading...</div>
 
+  <!-- Quick-add client bar: visible only when active CMS tab has an unknown client -->
+  <div id="clientBar" style="display:none; padding: 7px 12px; background: #fff8e1; border-bottom: 1px solid #ffe082; font-size: 12px; display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+    <span id="clientBarLabel" style="flex:1; color:#5d4037;"></span>
+    <button id="btnQuickAddClient" style="padding: 4px 10px; font-size: 12px; border: 1px solid #f9a825; border-radius: 6px; background: #fffde7; cursor: pointer; white-space: nowrap;">+ Add Client</button>
+  </div>
+
   <div class="search-bar">
     <input type="text" id="popupSearch" placeholder="Search categories and words">
   </div>

@@ -145,24 +145,12 @@
     }
 
     /* Clients UI */
-    .clients-topbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
-    }
-
-    .clients-topbar input[type="text"] {
-      width: 320px;
-    }
-
     .client-add-box {
       border: 1px solid #e5e5e5;
       border-radius: 6px;
       background: #fbfbfb;
       padding: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .client-add-grid {
@@ -180,8 +168,15 @@
     }
 
     .client-add-grid .field input[type="text"],
-    .client-add-grid .field select {
+    .client-add-grid .field select,
+    .client-add-grid .field textarea {
       width: 100%;
+    }
+
+    .client-add-grid .field textarea {
+      min-height: 60px;
+      font-family: monospace;
+      font-size: 12px;
     }
 
     .client-add-actions {
@@ -190,6 +185,19 @@
       align-items: center;
       margin-top: 10px;
       flex-wrap: wrap;
+    }
+
+    /* Client search bar — sits between add-box and list */
+    .clients-filterbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .clients-filterbar input[type="text"] {
+      width: 320px;
     }
 
     .client-list {
@@ -329,6 +337,22 @@
       color: #888;
       font-size: 12px;
     }
+
+    /* Auto-detect banner */
+    #clientAutoDetect {
+      display: none;
+      background: #eaf4ff;
+      border: 1px solid #b3d8ff;
+      border-radius: 5px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #1a5276;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #clientAutoDetect.hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -371,16 +395,31 @@
       <span class="pill">No highlight</span> uses grey.
     </p>
 
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
-      <span id="clientShowing" class="muted"></span>
+    <!-- Default client-name-area color (when no rule or category match) -->
+    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <label style="font-size: 13px; font-weight: 500; min-width: 0;">Default client name color:</label>
+      <input type="color" id="clientNameDefaultColor" value="#dddddd" title="Background color for client name when no rule matches">
+      <input type="color" id="clientNameDefaultFColor" value="#222222" title="Text color for client name when no rule matches">
+      <span id="clientNameColorPreview" style="padding: 2px 10px; border-radius: 3px; font-size: 13px; border: 1px solid rgba(0,0,0,0.15);">Client Name</span>
+      <label style="font-size: 12px; display: flex; align-items: center; gap: 6px;">
+        <input type="checkbox" id="clientNameDefaultEnabled">
+        Enable default color
+      </label>
+      <span class="muted">Applied when the client name is found but no category is matched.</span>
     </div>
 
+    <!-- Auto-detect banner (shown when a CMS tab is open) -->
+    <div id="clientAutoDetect" class="hidden">
+      <span id="clientAutoDetectMsg"></span>
+      <button id="btnScrollToClient" style="padding: 4px 10px; font-size: 12px;">Go to client</button>
+    </div>
+
+    <!-- Add client form -->
     <div class="client-add-box">
       <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
       <div class="client-add-grid">
         <div class="field">
-          <label>Pattern</label>
+          <label>Client Name (pattern)</label>
           <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
         </div>
 
@@ -403,12 +442,40 @@
           <label>Question override</label>
           <select id="newClientQuestion"></select>
         </div>
+
+        <div class="field">
+          <label>Mentions: Category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Mentions: Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" placeholder="Alternate client name patterns to highlight as mentions"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Also treat Client Name as a mention in content
+          </label>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note (optional)</label>
+          <input type="text" id="newClientNote" placeholder="Not used for matching">
+        </div>
       </div>
 
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
       </div>
+    </div>
+
+    <!-- Search — below add form, just above results -->
+    <div class="clients-filterbar">
+      <input type="text" id="clientSearch" placeholder="Search clients (pattern, note, aliases...)">
+      <span id="clientShowing" class="muted"></span>
     </div>
 
     <div class="client-list">

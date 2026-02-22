@@ -1,6 +1,6 @@
 // =============================================================================
 // CMS Highlighter - Content Script
-// - Walk text nodes
+// - Walk text nodes (grouped by block container for cross-node phrase matching)
 // - Wrap matches in spans
 // - Client name in navbar can be highlighted based on dict.clients rules
 // =============================================================================
@@ -22,6 +22,21 @@
   // Client highlight config
   let clientRules = [];
   let categoryStyleByName = new Map();
+
+  // Default color for client name area when no rule/category match
+  let clientNameDefaultColor = null;
+  let clientNameDefaultFColor = null;
+
+  // Block-level tags used to group text nodes for cross-node phrase matching.
+  // Text nodes that share the same nearest block ancestor are concatenated so
+  // that multi-word patterns (e.g. "easy to swallow") can span inline elements.
+  const BLOCK_TAGS = new Set([
+    'P','DIV','LI','TD','TH','TR','TABLE','TBODY','THEAD','TFOOT',
+    'ARTICLE','SECTION','MAIN','HEADER','FOOTER','NAV','ASIDE',
+    'H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE',
+    'DL','DT','DD','FIGURE','FIGCAPTION','FORM','FIELDSET',
+    'DETAILS','SUMMARY','DIALOG'
+  ]);
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -67,7 +82,7 @@
     const el = document.querySelector(".navbar-inner .decisionAreaLabel");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
-    if (raw.includes("image")) return "Image";
+    if (raw.includes("image") || raw.includes("photo")) return "Image";
     if (raw.includes("profile")) return "Profile";
     if (raw.includes("question")) return "Question";
     return "Default";
@@ -135,22 +150,34 @@
     if (!clientName) return;
 
     const rule = findClientRule(clientName);
-    if (!rule) return;
+    let bgColor = null;
+    let fgColor = null;
 
-    const type = getCmsContentType();
-    const catName = pickClientCategory(rule, type);
+    if (rule) {
+      const type = getCmsContentType();
+      const catName = pickClientCategory(rule, type);
+      if (catName) {
+        const style = categoryStyleByName.get(catName);
+        if (style) {
+          bgColor = style.color;
+          fgColor = style.fColor;
+        }
+      }
+    }
 
-    // blank means no highlight
-    if (!catName) return;
+    // Fall back to global default client-name color (if set in dictionary)
+    if (!bgColor && clientNameDefaultColor) {
+      bgColor = clientNameDefaultColor;
+      fgColor = clientNameDefaultFColor || "#000000";
+    }
 
-    const style = categoryStyleByName.get(catName);
-    if (!style) return;
+    if (!bgColor) return;
 
     const el = getCmsClientNameEl();
     if (!el) return;
 
-    el.style.backgroundColor = style.color;
-    el.style.color = style.fColor;
+    el.style.backgroundColor = bgColor;
+    el.style.color = fgColor;
     el.style.borderRadius = "3px";
     el.style.padding = "2px 6px";
     el.setAttribute("data-client-hl", "1");
@@ -198,6 +225,17 @@
       nodes.push(walker.currentNode);
     }
     return nodes;
+  }
+
+  // Returns the nearest block-level ancestor element (or document.body).
+  // Used to group sibling inline text nodes together for cross-node matching.
+  function nearestBlock(node) {
+    let el = node.parentElement;
+    while (el && el !== document.body) {
+      if (BLOCK_TAGS.has(el.tagName || "")) return el;
+      el = el.parentElement;
+    }
+    return document.body;
   }
 
   // ---------------------------------------------------------------------------
@@ -265,6 +303,9 @@
     return MatcherEngine.findMatches(text, compiledMatcher) || [];
   }
 
+  // ---------------------------------------------------------------------------
+  // Single text-node highlight (used by observer for orphan nodes)
+  // ---------------------------------------------------------------------------
   function highlightTextNode(textNode) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -281,6 +322,55 @@
     renderMatchesIntoNode(textNode, matches);
   }
 
+  // ---------------------------------------------------------------------------
+  // Group-highlight: concatenate adjacent text nodes within the same block
+  // so that multi-word patterns can match across inline element boundaries.
+  // E.g. "easy to swallow" split across <em>to</em> will now be found.
+  // ---------------------------------------------------------------------------
+  function highlightNodeGroup(nodes) {
+    if (nodes.length === 0) return;
+
+    // Single-node fast path: no concatenation needed
+    if (nodes.length === 1) {
+      highlightTextNode(nodes[0]);
+      return;
+    }
+
+    // Build concatenated text and offset map
+    const parts = [];
+    let offset = 0;
+    for (const node of nodes) {
+      const text = node.textContent;
+      parts.push({ node, start: offset, end: offset + text.length, len: text.length });
+      offset += text.length;
+    }
+    const fullText = nodes.map(n => n.textContent).join("");
+
+    const matches = sanitizeMatches(findMatchesForText(fullText), fullText.length);
+    if (matches.length === 0) return;
+
+    // Apply each match's relevant slice to each text node
+    for (const part of parts) {
+      if (!part.node.parentNode) continue; // already replaced by an earlier part
+
+      const local = [];
+      for (const m of matches) {
+        if (m.start >= part.end || m.end <= part.start) continue;
+        local.push({
+          ...m,
+          start: Math.max(0, m.start - part.start),
+          end:   Math.min(part.len, m.end - part.start),
+        });
+      }
+      if (local.length > 0) {
+        renderMatchesIntoNode(part.node, local);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Highlight all text in a subtree, grouping nodes by block container
+  // ---------------------------------------------------------------------------
   function highlightAll(root) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -288,9 +378,19 @@
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
+    if (textNodes.length === 0) return;
 
+    // Group text nodes by their nearest block-level ancestor so that
+    // multi-word phrases spanning inline elements match correctly.
+    const blockGroups = new Map();
     for (const node of textNodes) {
-      highlightTextNode(node);
+      const block = nearestBlock(node);
+      if (!blockGroups.has(block)) blockGroups.set(block, []);
+      blockGroups.get(block).push(node);
+    }
+
+    for (const nodes of blockGroups.values()) {
+      highlightNodeGroup(nodes);
     }
   }
 
@@ -415,6 +515,26 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Helpers to load dict data into module-level state
+  // ---------------------------------------------------------------------------
+  function applyDict(dict) {
+    if (!dict || !dict.categories) return false;
+
+    compiledMatcher = MatcherEngine.compileAll(dict);
+    categoryStyleByName = buildCategoryStyleMap(dict);
+
+    clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+    for (const r of clientRules) {
+      r._rx = globToRegex(r.pattern);
+    }
+
+    clientNameDefaultColor  = dict.clientNameDefaultColor  || null;
+    clientNameDefaultFColor = dict.clientNameDefaultFColor || null;
+
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Init + messages
   // ---------------------------------------------------------------------------
   function init() {
@@ -431,20 +551,9 @@
 
       globalEnabled = result.enabled !== false;
 
-      const dict = result.dictionary;
-      if (!dict || !dict.categories) {
+      if (!applyDict(result.dictionary)) {
         console.log("CMS Highlighter: no dictionary found in storage.");
         return;
-      }
-
-      // Compile matcher
-      compiledMatcher = MatcherEngine.compileAll(dict);
-
-      // Build client highlight maps
-      categoryStyleByName = buildCategoryStyleMap(dict);
-      clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-      for (const r of clientRules) {
-        r._rx = globToRegex(r.pattern);
       }
 
       console.log(
@@ -485,17 +594,7 @@
       case "refresh":
         chrome.storage.local.get(["dictionary", "enabled"], (result) => {
           globalEnabled = result.enabled !== false;
-
-          const dict = result.dictionary;
-          if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
-
-            categoryStyleByName = buildCategoryStyleMap(dict);
-            clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-            for (const r of clientRules) {
-              r._rx = globToRegex(r.pattern);
-            }
-          }
+          applyDict(result.dictionary);
 
           removeAllHighlights();
           if (globalEnabled) {
@@ -517,6 +616,18 @@
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
         });
+        break;
+
+      case "getClientName":
+        sendResponse({
+          clientName: getCmsClientName(),
+          contentType: getCmsContentType()
+        });
+        break;
+
+      case "notify":
+        console.log("CMS Highlighter:", message.message);
+        sendResponse({ ok: true });
         break;
 
       default:

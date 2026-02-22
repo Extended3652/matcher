@@ -36,11 +36,22 @@
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
 
-  // Newer "Mentions" fields (must exist in options.html)
-  const newClientMentionCategory = document.getElementById("newClientMentionCategory");
-  const newClientAliases = document.getElementById("newClientAliases");
+  // Mentions fields
+  const newClientMentionCategory         = document.getElementById("newClientMentionCategory");
+  const newClientAliases                 = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
-  const newClientNote = document.getElementById("newClientNote");
+  const newClientNote                    = document.getElementById("newClientNote");
+
+  // Default client name color
+  const clientNameDefaultColorEl   = document.getElementById("clientNameDefaultColor");
+  const clientNameDefaultFColorEl  = document.getElementById("clientNameDefaultFColor");
+  const clientNameColorPreviewEl   = document.getElementById("clientNameColorPreview");
+  const clientNameDefaultEnabledEl = document.getElementById("clientNameDefaultEnabled");
+
+  // Auto-detect banner
+  const clientAutoDetectEl    = document.getElementById("clientAutoDetect");
+  const clientAutoDetectMsgEl = document.getElementById("clientAutoDetectMsg");
+  const btnScrollToClient     = document.getElementById("btnScrollToClient");
 
   // ---------------------------------------------------------------------------
   // State
@@ -48,10 +59,16 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let autoDetectedClientName = null; // client name from active CMS tab
 
-  // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
   const NO_HL_FG = "#555555";
+
+  const CMS_TAB_URLS = [
+    "https://cms.bazaarvoice.com/*",
+    "https://workbench.bazaarvoice.com/*",
+    "http://minotaur:8124/*",
+  ];
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -77,7 +94,6 @@
     return safeStr(raw).replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
   }
 
-  // Binary search: O(log n) comparisons instead of O(n).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);
     let lo = 0, hi = arr.length;
@@ -113,12 +129,6 @@
   }
 
   function makeCategorySelect(opts, stMapArg) {
-    // opts:
-    // - mode: "review" or "override"
-    // - value: current value (string or null)
-    // review: includes "(no highlight)" + categories
-    // override: includes "-" (inherit) + categories
-    // stMapArg: optional pre-built style map to avoid redundant Map construction
     const sel = document.createElement("select");
     const stMap = stMapArg || getCategoryStyleByName();
 
@@ -129,15 +139,9 @@
     }
 
     function applySelectVisualForValue(v) {
-      if (!v) {
-        resetSelectVisual();
-        return;
-      }
+      if (!v) { resetSelectVisual(); return; }
       const st = stMap.get(v);
-      if (!st) {
-        resetSelectVisual();
-        return;
-      }
+      if (!st) { resetSelectVisual(); return; }
       sel.style.backgroundColor = st.color || "";
       sel.style.color = st.fColor || "";
       sel.style.borderColor = "rgba(0,0,0,0.25)";
@@ -147,9 +151,6 @@
       const opt = document.createElement("option");
       opt.value = value;
       opt.textContent = label;
-
-      // Some Chrome builds will apply these option styles, some will not.
-      // Even if options do not style, the select styling still gives you color context.
       if (st && value) {
         opt.style.backgroundColor = st.color || "";
         opt.style.color = st.fColor || "";
@@ -183,7 +184,7 @@
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
-    const incPat = (entry.includePatternInContent !== false); // default true
+    const incPat = (entry.includePatternInContent !== false);
     const note = entry.note ? String(entry.note).trim() : "";
 
     let extra = "";
@@ -205,6 +206,111 @@
     return null;
   }
 
+  // Glob → RegExp (same logic as content.js, for client matching on this page)
+  function globToRegex(pattern) {
+    const p = String(pattern || "").trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
+  }
+
+  // Find which stored client entry matches the given CMS client name string
+  function findMatchingClientEntry(clientName) {
+    if (!currentDict || !clientName) return null;
+    const name = String(clientName).trim();
+    for (const entry of (currentDict.clients || [])) {
+      const rx = globToRegex(safeStr(entry.pattern));
+      if (rx && rx.test(name)) return entry;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Default client-name color UI
+  // ---------------------------------------------------------------------------
+  function updateClientNameColorPreview() {
+    const bg = clientNameDefaultColorEl.value;
+    const fg = clientNameDefaultFColorEl.value;
+    clientNameColorPreviewEl.style.backgroundColor = bg;
+    clientNameColorPreviewEl.style.color = fg;
+  }
+
+  function loadClientNameDefaultColors() {
+    const enabled = !!(currentDict && currentDict.clientNameDefaultColor);
+    clientNameDefaultEnabledEl.checked = enabled;
+
+    if (currentDict && currentDict.clientNameDefaultColor) {
+      clientNameDefaultColorEl.value  = currentDict.clientNameDefaultColor;
+      clientNameDefaultFColorEl.value = currentDict.clientNameDefaultFColor || "#222222";
+    }
+    updateClientNameColorPreview();
+  }
+
+  function saveClientNameDefaultColors() {
+    if (!currentDict) return;
+    if (clientNameDefaultEnabledEl.checked) {
+      currentDict.clientNameDefaultColor  = clientNameDefaultColorEl.value;
+      currentDict.clientNameDefaultFColor = clientNameDefaultFColorEl.value;
+    } else {
+      delete currentDict.clientNameDefaultColor;
+      delete currentDict.clientNameDefaultFColor;
+    }
+    saveDictionary("Default client name color saved");
+  }
+
+  clientNameDefaultColorEl.addEventListener("input", updateClientNameColorPreview);
+  clientNameDefaultFColorEl.addEventListener("input", updateClientNameColorPreview);
+  clientNameDefaultColorEl.addEventListener("change", saveClientNameDefaultColors);
+  clientNameDefaultFColorEl.addEventListener("change", saveClientNameDefaultColors);
+  clientNameDefaultEnabledEl.addEventListener("change", saveClientNameDefaultColors);
+
+  // ---------------------------------------------------------------------------
+  // Auto-detect current CMS client
+  // ---------------------------------------------------------------------------
+  function autoDetectCurrentClient() {
+    chrome.tabs.query({ url: CMS_TAB_URLS }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs || tabs.length === 0) return;
+      const tab = tabs[0];
+      chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.clientName) return;
+        autoDetectedClientName = response.clientName;
+
+        const match = findMatchingClientEntry(autoDetectedClientName);
+        if (match) {
+          // Show banner: client is already in list
+          clientAutoDetectMsgEl.textContent =
+            'CMS client: "' + autoDetectedClientName + '" — found in list as "' + match.pattern + '"';
+          clientAutoDetectEl.classList.remove("hidden");
+          openClientKey = patternKey(match.pattern);
+
+          btnScrollToClient.onclick = () => {
+            openClientKey = patternKey(match.pattern);
+            renderClients();
+            // Scroll to the open card
+            setTimeout(() => {
+              const cards = clientListBodyEl.querySelectorAll(".client-body.open");
+              if (cards.length > 0) {
+                cards[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }
+            }, 50);
+          };
+        } else {
+          // Show banner: client not in list
+          clientAutoDetectMsgEl.textContent =
+            'CMS client: "' + autoDetectedClientName + '" — not in list. Pre-filling add form.';
+          clientAutoDetectEl.classList.remove("hidden");
+          newClientPattern.value = autoDetectedClientName;
+          btnScrollToClient.textContent = "Clear";
+          btnScrollToClient.onclick = () => {
+            newClientPattern.value = "";
+            clientAutoDetectEl.classList.add("hidden");
+          };
+        }
+      });
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Load / Save
   // ---------------------------------------------------------------------------
@@ -218,6 +324,10 @@
       renderIgnoreList();
       renderClients();
       renderCategories();
+      loadClientNameDefaultColors();
+
+      // Auto-detect after data is loaded so findMatchingClientEntry works
+      autoDetectCurrentClient();
     });
   }
 
@@ -247,29 +357,26 @@
   // Clients
   // ---------------------------------------------------------------------------
   function populateAddClientDropdowns(stMap) {
-    // We build temp <select>s so we inherit the same options + styling logic
-    // then move options into the real DOM selects.
     newClientReview.innerHTML = "";
     newClientImage.innerHTML = "";
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
 
     const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
-    const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const imgSel    = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const proSel    = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const qSel      = makeCategorySelect({ mode: "override", value: "" }, stMap);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
-    while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
-    while (proSel.firstChild) newClientProfile.appendChild(proSel.firstChild);
-    while (qSel.firstChild) newClientQuestion.appendChild(qSel.firstChild);
+    while (imgSel.firstChild)    newClientImage.appendChild(imgSel.firstChild);
+    while (proSel.firstChild)    newClientProfile.appendChild(proSel.firstChild);
+    while (qSel.firstChild)      newClientQuestion.appendChild(qSel.firstChild);
 
-    newClientReview.value = "";
-    newClientImage.value = "";
+    newClientReview.value  = "";
+    newClientImage.value   = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
 
-    // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
       newClientMentionCategory.innerHTML = "";
       const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
@@ -394,7 +501,6 @@
         }
       });
       actions.appendChild(delBtn);
-
       header.appendChild(actions);
 
       const body = document.createElement("div");
@@ -403,6 +509,7 @@
       const grid = document.createElement("div");
       grid.className = "client-edit-grid";
 
+      // Client Name (pattern)
       const fPat = document.createElement("div");
       fPat.className = "field";
       const lPat = document.createElement("label");
@@ -414,6 +521,7 @@
       fPat.appendChild(iPat);
       grid.appendChild(fPat);
 
+      // Review (Default)
       const fReview = document.createElement("div");
       fReview.className = "field";
       const lReview = document.createElement("label");
@@ -423,6 +531,7 @@
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
 
+      // Image override
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
@@ -432,6 +541,7 @@
       fImg.appendChild(sImg);
       grid.appendChild(fImg);
 
+      // Profile override
       const fPro = document.createElement("div");
       fPro.className = "field";
       const lPro = document.createElement("label");
@@ -441,6 +551,7 @@
       fPro.appendChild(sPro);
       grid.appendChild(fPro);
 
+      // Question override
       const fQ = document.createElement("div");
       fQ.className = "field";
       const lQ = document.createElement("label");
@@ -452,9 +563,12 @@
 
       body.appendChild(grid);
 
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      // Mentions block
       const mentionsWrap = document.createElement("div");
       mentionsWrap.className = "client-mentions-wrap";
+      mentionsWrap.style.marginTop = "10px";
+      mentionsWrap.style.borderTop = "1px solid #eee";
+      mentionsWrap.style.paddingTop = "10px";
 
       const mGrid = document.createElement("div");
       mGrid.className = "client-edit-grid";
@@ -493,15 +607,8 @@
       cbInc.type = "checkbox";
       cbInc.checked = (entry.includePatternInContent !== false);
       lInc.appendChild(cbInc);
-      lInc.appendChild(document.createTextNode("Also treat the main Client Name as a mention in content (in addition to aliases)"));
+      lInc.appendChild(document.createTextNode("Also treat the main Client Name as a mention in content"));
       fInc.appendChild(lInc);
-
-      const incHelp = document.createElement("div");
-      incHelp.className = "muted";
-      incHelp.style.marginTop = "4px";
-      incHelp.textContent = "If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
-      fInc.appendChild(incHelp);
-
       mGrid.appendChild(fInc);
 
       const fNote = document.createElement("div");
@@ -520,6 +627,7 @@
       mentionsWrap.appendChild(mGrid);
       body.appendChild(mentionsWrap);
 
+      // --- Visuals refresh ---
       function refreshHeaderVisuals() {
         summary.textContent = formatSummary(entry);
 
@@ -547,6 +655,7 @@
         renderClients();
       }
 
+      // --- Field listeners ---
       iPat.addEventListener("change", () => {
         const newPat = normalizePattern(iPat.value);
         if (!newPat) {
@@ -636,9 +745,6 @@
       if (openClientKey === key) {
         body.classList.add("open");
         arrow.classList.add("open");
-      } else {
-        body.classList.remove("open");
-        arrow.classList.remove("open");
       }
 
       card.appendChild(header);
@@ -676,7 +782,7 @@
       note: newClientNote ? (newClientNote.value || "").trim() : ""
     };
 
-    if (newClientImage.value) entry.overrides.Image = newClientImage.value;
+    if (newClientImage.value)   entry.overrides.Image   = newClientImage.value;
     if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
     if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
 
@@ -684,12 +790,12 @@
     currentDict.clients = clients;
     ensureClientsSorted();
 
+    // Clear form
     newClientPattern.value = "";
     newClientReview.value = "";
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
-
     if (newClientMentionCategory) newClientMentionCategory.value = "";
     if (newClientAliases) newClientAliases.value = "";
     if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
@@ -712,7 +818,6 @@
       const editor = document.createElement("div");
       editor.className = "cat-editor";
 
-      // Header
       const header = document.createElement("div");
       header.className = "cat-header";
 
@@ -756,7 +861,6 @@
 
       editor.appendChild(header);
 
-      // Body
       const body = document.createElement("div");
       body.className = "cat-body";
 
@@ -775,12 +879,10 @@
       const fgInput = colorRow.querySelector(".fg-color");
       const preview = colorRow.querySelector(".preview");
 
-      // Update local preview while dragging - no save/re-render on every pixel
       bgInput.addEventListener("input", () => {
         colorPrev.style.backgroundColor = bgInput.value;
         preview.style.background = bgInput.value;
       });
-      // Persist and refresh client swatches only when picker is released
       bgInput.addEventListener("change", () => {
         cat.color = bgInput.value;
         saveDictionary();
@@ -806,7 +908,7 @@
         cat.name = nameInput.value;
         nameSpan.textContent = nameInput.value;
         saveDictionary();
-        renderClients(); // refresh dropdowns and swatches
+        renderClients();
       });
       nameRow.appendChild(nameInput);
       body.appendChild(nameRow);
@@ -1001,6 +1103,7 @@
     renderIgnoreList();
     renderClients();
     renderCategories();
+    loadClientNameDefaultColors();
   }
 
   function importHighlightThis(backup) {
@@ -1045,6 +1148,7 @@
     renderIgnoreList();
     renderClients();
     renderCategories();
+    loadClientNameDefaultColors();
   }
 
   // ---------------------------------------------------------------------------

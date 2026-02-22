@@ -17,11 +17,14 @@
 (function() {
   "use strict";
 
-  const masterToggle = document.getElementById("masterToggle");
-  const statsEl      = document.getElementById("stats");
-  const catListEl    = document.getElementById("catList");
-  const btnOptions   = document.getElementById("btnOptions");
-  const popupSearch  = document.getElementById("popupSearch");
+  const masterToggle    = document.getElementById("masterToggle");
+  const statsEl         = document.getElementById("stats");
+  const catListEl       = document.getElementById("catList");
+  const btnOptions      = document.getElementById("btnOptions");
+  const popupSearch     = document.getElementById("popupSearch");
+  const clientBarEl     = document.getElementById("clientBar");
+  const clientBarLabelEl = document.getElementById("clientBarLabel");
+  const btnQuickAddClient = document.getElementById("btnQuickAddClient");
 
   let currentDict = null;
 
@@ -244,6 +247,76 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Quick-add client bar
+  // ---------------------------------------------------------------------------
+  const CMS_TAB_URLS_POPUP = [
+    "https://cms.bazaarvoice.com/*",
+    "https://workbench.bazaarvoice.com/*",
+    "http://minotaur:8124/*",
+  ];
+
+  function globToRegexPopup(pattern) {
+    const p = String(pattern || "").trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
+  }
+
+  function detectClientBar() {
+    // Query any open CMS tab for the current client name
+    chrome.tabs.query({ url: CMS_TAB_URLS_POPUP }, (tabs) => {
+      if (!tabs || tabs.length === 0) return;
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.clientName) return;
+        const clientName = response.clientName;
+
+        // Check if already in client list
+        const clients = (currentDict && currentDict.clients) || [];
+        const alreadyListed = clients.some(c => {
+          const rx = globToRegexPopup(c.pattern);
+          return rx && rx.test(clientName);
+        });
+
+        if (alreadyListed) return; // already known, no need to prompt
+
+        // Show quick-add bar
+        clientBarLabelEl.textContent = 'Client "' + clientName + '" is not in the client list.';
+        clientBarEl.style.display = "flex";
+
+        btnQuickAddClient.onclick = () => {
+          if (!currentDict.clients) currentDict.clients = [];
+
+          // Don't double-add
+          const exists = currentDict.clients.some(c => {
+            const rx = globToRegexPopup(c.pattern);
+            return rx && rx.test(clientName);
+          });
+          if (exists) {
+            clientBarEl.style.display = "none";
+            return;
+          }
+
+          currentDict.clients.push({
+            pattern: clientName,
+            defaultCategory: null,
+            overrides: {},
+            mentionCategory: null,
+            aliases: [],
+            includePatternInContent: true,
+            note: ""
+          });
+
+          saveDictionary();
+
+          clientBarLabelEl.textContent = '"' + clientName + '" added — open Options to configure.';
+          btnQuickAddClient.style.display = "none";
+        };
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Load state
   // ---------------------------------------------------------------------------
   function loadState() {
@@ -257,6 +330,7 @@
 
       renderAll();
       updateStats();
+      detectClientBar();
     });
   }
 

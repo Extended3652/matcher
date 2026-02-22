@@ -329,16 +329,14 @@ const CMS_TAB_URLS = [
   "http://minotaur:8124/*",
 ];
 
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local") return;
+// Debounce tab refreshes so rapid options-page saves don't cause a flood of
+// re-highlights on the CMS tab (which was the "double refresh" symptom).
+let refreshDebounceTimer = null;
 
-  if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
-    buildContextMenu();
-  }
-
-  // Refresh all open CMS tabs whenever the dictionary or enabled flag changes.
-  // This covers both right-click adds and options-page saves with a single path.
-  if (changes.dictionary || changes.enabled) {
+function scheduleTabRefresh() {
+  if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
+  refreshDebounceTimer = setTimeout(() => {
+    refreshDebounceTimer = null;
     chrome.tabs.query({ url: CMS_TAB_URLS }, (tabs) => {
       if (chrome.runtime.lastError) return;
       for (const tab of tabs) {
@@ -347,5 +345,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
         });
       }
     });
+  }, 400);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+
+  if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
+    buildContextMenu();
+  }
+
+  // Refresh all open CMS tabs whenever the dictionary or enabled flag changes.
+  // Debounced to batch rapid consecutive saves from the options page.
+  if (changes.dictionary || changes.enabled) {
+    scheduleTabRefresh();
   }
 });
