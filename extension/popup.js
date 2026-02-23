@@ -504,8 +504,20 @@
           e.preventDefault();
           const nextRaw = normalizeTrim(input.value);
           if (!nextRaw) return; // stay in edit mode
+          const prevEditing = editing;
           editing = null;
-          onSave(nextRaw);
+          const err = onSave(nextRaw);
+          if (err) {
+            editing = prevEditing; // stay in edit mode
+            input.style.border = "1px solid #e74c3c";
+            input.style.backgroundColor = "#ffeaea";
+            input.title = err;
+            setTimeout(() => {
+              input.style.border = "1px solid #cfd8dc";
+              input.style.backgroundColor = "";
+              input.title = "";
+            }, 700);
+          }
           return;
         }
 
@@ -755,10 +767,7 @@
               // Avoid duplicate raw strings
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                // do nothing, keep original
-                renderAll();
-                setOpenEditor("ignore");
-                return;
+                return "Already exists in this list";
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
               saveDictionary();
@@ -1003,9 +1012,7 @@
             (nextRaw) => {
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                renderAll();
-                setOpenEditor(key);
-                return;
+                return "Already exists in this category";
               }
               cat.words[item2.entryIndex] = nextRaw;
               saveDictionary();
