@@ -52,6 +52,54 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Build effective dict — inject client aliases into their mention categories
+  // so that MatcherEngine.compileAll picks them up for text highlighting.
+  // We never mutate the stored dict; we shallow-clone each category's words array.
+  // ---------------------------------------------------------------------------
+  function buildEffectiveDict(dict) {
+    const clients = Array.isArray(dict.clients) ? dict.clients : [];
+    if (!clients.some(c => c && c.mentionCategory)) return dict;
+
+    const catsCopy = (dict.categories || []).map(c => ({
+      ...c,
+      words: Array.isArray(c.words) ? c.words.slice() : []
+    }));
+
+    const catByName = new Map();
+    for (const c of catsCopy) {
+      if (c.name) catByName.set(c.name, c);
+    }
+
+    for (const client of clients) {
+      if (!client || !client.mentionCategory) continue;
+      const target = catByName.get(client.mentionCategory);
+      if (!target) continue;
+
+      const existing = new Set(target.words);
+
+      // Add the main client pattern as a mention unless opted out
+      if (client.includePatternInContent !== false) {
+        const p = String(client.pattern || "").trim();
+        if (p && !existing.has(p)) {
+          target.words.push(p);
+          existing.add(p);
+        }
+      }
+
+      // Add each alias
+      for (const alias of (Array.isArray(client.aliases) ? client.aliases : [])) {
+        const a = String(alias || "").trim();
+        if (a && !existing.has(a)) {
+          target.words.push(a);
+          existing.add(a);
+        }
+      }
+    }
+
+    return { ...dict, categories: catsCopy };
+  }
+
+  // ---------------------------------------------------------------------------
   // Client-name highlight
   // ---------------------------------------------------------------------------
   function getCmsClientNameEl() {
@@ -417,7 +465,7 @@
       }
 
       // Compile matcher
-      compiledMatcher = MatcherEngine.compileAll(dict);
+      compiledMatcher = MatcherEngine.compileAll(buildEffectiveDict(dict));
 
       // Build client highlight maps
       categoryStyleByName = buildCategoryStyleMap(dict);
@@ -467,7 +515,7 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
+            compiledMatcher = MatcherEngine.compileAll(buildEffectiveDict(dict));
 
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
@@ -521,7 +569,7 @@
 
       const dict = result.dictionary;
       if (dict && dict.categories) {
-        compiledMatcher = MatcherEngine.compileAll(dict);
+        compiledMatcher = MatcherEngine.compileAll(buildEffectiveDict(dict));
         categoryStyleByName = buildCategoryStyleMap(dict);
         clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
         for (const r of clientRules) {
