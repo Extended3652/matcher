@@ -341,9 +341,28 @@
           return;
         }
 
-        statsEl.textContent =
+        statsEl.innerHTML = "";
+
+        const txt = document.createTextNode(
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
-          `${response.enabled ? "ON" : "OFF"}`;
+          `${response.enabled ? "ON" : "OFF"}`
+        );
+        statsEl.appendChild(txt);
+
+        if (response.clientName) {
+          statsEl.appendChild(document.createTextNode(" | "));
+
+          if (response.clientColor) {
+            const swatch = document.createElement("span");
+            swatch.style.cssText =
+              `display:inline-block;width:10px;height:10px;border-radius:2px;` +
+              `background:${response.clientColor};border:1px solid rgba(0,0,0,0.25);` +
+              `vertical-align:middle;margin-right:4px;`;
+            statsEl.appendChild(swatch);
+          }
+
+          statsEl.appendChild(document.createTextNode(response.clientName));
+        }
       });
     });
   }

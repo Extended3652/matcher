@@ -537,15 +537,22 @@
         });
         return true;
 
-      case "getStats":
+      case "getStats": {
+        const _clientName = getCmsClientName();
+        const _rule = findClientRule(_clientName);
+        const _catName = _rule ? pickClientCategory(_rule, getCmsContentType()) : null;
+        const _catStyle = _catName ? categoryStyleByName.get(_catName) : null;
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length,
-          clientName: getCmsClientName()
+          clientName: _clientName,
+          clientColor: _catStyle ? _catStyle.color : null,
+          clientFColor: _catStyle ? _catStyle.fColor : null,
         });
         break;
+      }
 
       default:
         sendResponse({ error: "unknown action" });
