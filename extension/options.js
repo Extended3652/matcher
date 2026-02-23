@@ -39,6 +39,9 @@
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
 
+  // Undo
+  const undoBtnEl = document.getElementById("btnUndo");
+
   // Test highlighter
   const testInputEl  = document.getElementById("testInput");
   const testOutputEl = document.getElementById("testOutput");
@@ -49,6 +52,7 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let lastUndoState = null;
 
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
@@ -60,8 +64,37 @@
   function showMsg(text, type) {
     msgEl.textContent = text;
     msgEl.className = "msg " + type;
+    undoBtnEl.style.display = "none";
     setTimeout(() => { msgEl.className = "msg"; }, 4000);
   }
+
+  function pushUndo() {
+    lastUndoState = JSON.parse(JSON.stringify(currentDict));
+  }
+
+  function showMsgWithUndo(text, type) {
+    msgEl.textContent = text;
+    msgEl.className = "msg " + type;
+    undoBtnEl.style.display = "inline-block";
+    setTimeout(() => { msgEl.className = "msg"; }, 4000);
+  }
+
+  function saveDictionaryWithUndo(msg) {
+    chrome.storage.local.set({ dictionary: currentDict }, () => {
+      showMsgWithUndo(msg, "success");
+      renderTestOutput();
+    });
+  }
+
+  undoBtnEl.addEventListener("click", () => {
+    if (!lastUndoState) return;
+    currentDict = lastUndoState;
+    lastUndoState = null;
+    openClientKey = null;
+    saveDictionary("Undo successful");
+    renderClients();
+    renderCategories();
+  });
 
   function safeStr(v) {
     return String(v || "");
@@ -486,9 +519,10 @@
         if (confirm('Remove client "' + p + '"?')) {
           const idx = (currentDict.clients || []).findIndex(c => patternKey(c.pattern) === patternKey(p));
           if (idx >= 0) {
+            pushUndo();
             currentDict.clients.splice(idx, 1);
-            saveDictionary('Removed client "' + p + '"');
             if (openClientKey === patternKey(p)) openClientKey = null;
+            saveDictionaryWithUndo('Removed client "' + p + '"');
             renderClients();
           }
         }
@@ -1067,8 +1101,9 @@
         const nm = cat.name || "";
         const n = (cat.words && cat.words.length) ? cat.words.length : 0;
         if (confirm('Delete "' + nm + '" and all its ' + n + " words?")) {
+          pushUndo();
           currentDict.categories.splice(index, 1);
-          saveDictionary('Deleted "' + nm + '"');
+          saveDictionaryWithUndo('Deleted "' + nm + '"');
           renderCategories();
           renderClients();
         }
@@ -1175,9 +1210,10 @@
     if (!Array.isArray(data.ignoreList)) data.ignoreList = [];
     if (!Array.isArray(data.clients)) data.clients = [];
 
+    pushUndo();
     currentDict = data;
     openClientKey = null;
-    saveDictionary("Imported " + data.categories.length + " categories, " + data.clients.length + " clients");
+    saveDictionaryWithUndo("Imported " + data.categories.length + " categories, " + data.clients.length + " clients");
     renderClients();
     renderCategories();
   }
@@ -1225,9 +1261,10 @@
       });
     }
 
+    pushUndo();
     currentDict = dict;
     openClientKey = null;
-    saveDictionary("Imported HighlightThis backup: " + dict.categories.length + " categories, " + totalWords + " words");
+    saveDictionaryWithUndo("Imported HighlightThis backup: " + dict.categories.length + " categories, " + totalWords + " words");
     renderClients();
     renderCategories();
   }
