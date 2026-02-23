@@ -14,9 +14,28 @@
 }
  
 /* Tooltip showing category name on hover */
-/* The parent span needs relative positioning for the tooltip */
 .cms-hl[data-hl-cat] {
   position: relative;
-  cursor: default;
+}
+
+.cms-hl[data-hl-cat]:hover::after {
+  content: attr(data-hl-cat);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 30, 30, 0.9);
+  color: #fff;
+  font-size: 11px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: normal;
+  line-height: 1.4;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 99999;
+  text-shadow: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 

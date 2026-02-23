@@ -266,16 +266,8 @@
 
 
   // ---------------------------------------------------------------------------
-  // Storage + refresh helpers
+  // Storage helpers
   // ---------------------------------------------------------------------------
-  function refreshActiveTab() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
-      }
-    });
-  }
-
   function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       updateStats();
