@@ -86,6 +86,14 @@
     arr.splice(lo, 0, word);
   }
 
+  function globToRegex(pattern) {
+    const p = safeStr(pattern).trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch(e) { return null; }
+  }
+
   function normalizePattern(p) {
     return safeStr(p).trim();
   }
@@ -205,6 +213,43 @@
   // ---------------------------------------------------------------------------
   // Load / Save
   // ---------------------------------------------------------------------------
+  function autoSelectCurrentClient() {
+    if (!chrome.tabs) return;
+    chrome.tabs.query({ url: "*://cms.bazaarvoice.com/*" }, (tabs) => {
+      if (!tabs || tabs.length === 0) return;
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getStats" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.clientName) return;
+        const clientName = response.clientName;
+
+        const clients = currentDict.clients || [];
+        const matched = clients.find(c => {
+          const rx = globToRegex(c.pattern);
+          return rx && rx.test(clientName);
+        });
+
+        if (matched) {
+          // Expand the matching client card and scroll to it
+          openClientKey = patternKey(matched.pattern);
+          renderClients();
+          setTimeout(() => {
+            const cards = clientListBodyEl.querySelectorAll(".client-card");
+            for (const card of cards) {
+              if (card.querySelector(".client-body.open")) {
+                card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                break;
+              }
+            }
+          }, 50);
+        } else {
+          // No existing entry — pre-fill the Add Client form and search
+          newClientPattern.value = clientName;
+          clientSearchEl.value = clientName;
+          renderClients();
+        }
+      });
+    });
+  }
+
   function load() {
     chrome.storage.local.get(["dictionary"], (result) => {
       currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
@@ -214,6 +259,7 @@
 
       renderClients();
       renderCategories();
+      autoSelectCurrentClient();
     });
   }
 
