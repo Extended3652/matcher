@@ -494,6 +494,67 @@ assertMatches(
 );
 
 // =============================================================================
+// 13. CS: prefix in the ignore list
+// =============================================================================
+// A CS: ignore entry is case-sensitive: it only suppresses category matches
+// that have the exact same casing. A plain (no CS:) ignore entry is
+// case-insensitive and suppresses all case variants.
+// =============================================================================
+section("13. CS: in ignore list");
+
+assertMatches(
+  "CS:HP in ignore suppresses 'HP' but not 'hp'",
+  cfg([cat("a", "Tech", "#f00", ["hp"])], ["CS:HP"]),
+  "The hp and HP products",
+  [{ cat:"Tech", word:"hp" }]
+);
+// Category "hp" is case-insensitive → matches "hp" AND "HP".
+// Ignore CS:HP is case-sensitive → ignore range covers only the capital "HP".
+// "hp" (lowercase) is NOT inside the ignore range → survives.
+// "HP" IS inside the ignore range → suppressed.
+
+assertMatches(
+  "plain (case-insensitive) ignore suppresses all case variants",
+  cfg([cat("a", "Tech", "#f00", ["hp"])], ["hp"]),
+  "The hp and HP products",
+  []
+);
+// Ignore "hp" is case-insensitive → covers both "hp" and "HP".
+// All category matches are suppressed.
+
+// =============================================================================
+// 14. Boundary markers + wildcards
+// =============================================================================
+// A word padded with spaces gets boundaryBefore + boundaryAfter flags.
+// When that word also contains a wildcard, both constraints apply:
+// the match must start and end at a word boundary, and the wildcard
+// expands within the token.
+// =============================================================================
+section("14. Boundary markers + wildcards");
+
+assertMatches(
+  "' amazon* ' does not match 'primeamazon' (no boundary before)",
+  cfg([cat("a", "Retail", "#f00", [" amazon* "])], []),
+  "primeamazon amazon amazonian",
+  [{ cat:"Retail", word:"amazon" }, { cat:"Retail", word:"amazonian" }]
+);
+// "primeamazon" — 'amazon' starts mid-token, boundary assertion fails → no match.
+// "amazon"    — preceded by space, followed by space → matches (wildcard expands to nothing).
+// "amazonian" — preceded by space, followed by end   → matches (wildcard expands to "ian").
+
+assertMatches(
+  "' *retailer ' boundary + wildcard: matches suffix form but not if no boundary before",
+  cfg([cat("a", "Retail", "#f00", [" *retailer "])], []),
+  "etailer eretailer retailer",
+  [{ cat:"Retail", word:"eretailer" }, { cat:"Retail", word:"retailer" }]
+);
+// "etailer"   — 7 chars, 'retailer' (8 chars) can't fit as a suffix → no match.
+// "eretailer" — at word boundary; * eats 'e', then 'retailer' matches → match.
+// "retailer"  — at word boundary; * eats nothing → match.
+// Note: hyphens and other punctuation ARE treated as word boundaries by the engine,
+// so 'e-retailer' would yield a match on just the 'retailer' sub-token.
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
