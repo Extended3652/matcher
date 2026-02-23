@@ -335,8 +335,11 @@
           if (
             node.nodeType === Node.TEXT_NODE &&
             node.parentElement &&
-            !node.parentElement.classList.contains(HL_CLASS) &&
-            !node.parentElement.hasAttribute(MARKER_ATTR)
+            !node.parentElement.classList.contains(HL_CLASS)
+            // Note: intentionally NOT checking MARKER_ATTR here. If the SPA
+            // updates a text node whose parent was previously processed, we
+            // must still re-highlight it — otherwise the updated content is
+            // silently missed.
           ) {
             pendingNodes.push({ type: "text", node });
           }

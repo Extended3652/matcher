@@ -85,7 +85,8 @@
     return editing.entryIndex === entryIndex;
   }
 
-  function showMoveToCategoryDialog(excludeCatId) {
+  function showMoveToCategoryDialog(excludeCatId, options) {
+    const allowIgnore = options && options.allowIgnore;
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.style.position = "fixed";
@@ -113,12 +114,50 @@
       header.style.borderBottom = "1px solid #e5e7eb";
       header.style.fontSize = "14px";
       header.style.fontWeight = "600";
-      header.textContent = "Move entry to which category?";
+      header.textContent = "Move entry to\u2026";
       modal.appendChild(header);
 
       const listWrap = document.createElement("div");
       listWrap.style.padding = "8px";
       listWrap.style.overflow = "auto";
+
+      // "Ignore List" option at the top (only when moving from a category)
+      if (allowIgnore) {
+        const ignBtn = document.createElement("button");
+        ignBtn.type = "button";
+        ignBtn.style.width = "100%";
+        ignBtn.style.display = "flex";
+        ignBtn.style.alignItems = "center";
+        ignBtn.style.gap = "10px";
+        ignBtn.style.textAlign = "left";
+        ignBtn.style.border = "1px solid #e5e7eb";
+        ignBtn.style.borderRadius = "10px";
+        ignBtn.style.padding = "10px 12px";
+        ignBtn.style.margin = "6px 0";
+        ignBtn.style.background = "#f9fafb";
+        ignBtn.style.cursor = "pointer";
+        ignBtn.style.fontSize = "13px";
+
+        const ignSw = document.createElement("span");
+        ignSw.style.width = "12px";
+        ignSw.style.height = "12px";
+        ignSw.style.borderRadius = "999px";
+        ignSw.style.border = "1px solid rgba(0,0,0,0.15)";
+        ignSw.style.background = "#d1d5db";
+        ignBtn.appendChild(ignSw);
+
+        const ignLabel = document.createElement("span");
+        ignLabel.textContent = "Ignore List (global)";
+        ignLabel.style.fontStyle = "italic";
+        ignBtn.appendChild(ignLabel);
+
+        ignBtn.addEventListener("click", () => {
+          cleanup();
+          resolve({ __ignore: true });
+        });
+
+        listWrap.appendChild(ignBtn);
+      }
 
       const cats = (currentDict.categories || [])
         .filter(c => c && c.id && c.name && c.id !== excludeCatId);
@@ -482,7 +521,7 @@
       row.appendChild(text);
 
       row.addEventListener("click", (e) => {
-        // Alt+click = move entry to another category
+        // Alt+click = move entry to another category (or Ignore List)
         if (e.altKey) {
           e.preventDefault();
           e.stopPropagation();
@@ -490,9 +529,27 @@
           const excludeCatId =
             (catIndex == null ? null : currentDict.categories[catIndex]?.id) || null;
 
-          showMoveToCategoryDialog(excludeCatId).then((destCat) => {
+          // Allow moving to ignore list only when the source is a category
+          showMoveToCategoryDialog(excludeCatId, { allowIgnore: scope !== "ignore" }).then((destCat) => {
             if (!destCat) return;
 
+            // --- Move to Ignore List ---
+            if (destCat.__ignore) {
+              if (!currentDict.ignoreList) currentDict.ignoreList = [];
+              if (!currentDict.ignoreList.includes(raw)) {
+                insertAlphabetically(currentDict.ignoreList, raw);
+              }
+              // Remove from source category
+              const srcWords = currentDict.categories[catIndex].words;
+              const srcIdx = srcWords.indexOf(raw);
+              if (srcIdx !== -1) srcWords.splice(srcIdx, 1);
+
+              saveDictionary();
+              setOpenEditor("ignore");
+              return;
+            }
+
+            // --- Move to another category ---
             if (!destCat.words) destCat.words = [];
 
             // Avoid duplicates (by raw string)

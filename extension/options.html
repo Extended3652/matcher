@@ -63,7 +63,6 @@
     .msg.success { display: block; background: #d5f5e3; color: #1e8449; border: 1px solid #82e0aa; }
     .msg.error { display: block; background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
 
-    .ignore-section textarea { min-height: 250px; }
 
     .toolbar {
       display: flex;
@@ -348,18 +347,6 @@
     <p style="font-size: 12px; color: #777;">
       Import your existing HighlightThis backup file, or a previously exported CMS Highlighter dictionary.
     </p>
-  </div>
-
-  <!-- Ignore List -->
-  <div class="section ignore-section">
-    <h2>Ignore List <span id="ignoreCount" style="font-size:12px; color:#999;"></span></h2>
-    <p style="font-size: 12px; color: #777; margin-bottom: 8px;">
-      Words here block highlights from all categories. One per line. Wildcards (* ?) work.
-    </p>
-    <textarea id="ignoreListArea" class="word-list" spellcheck="false"></textarea>
-    <div style="margin-top: 8px;">
-      <button class="primary" id="btnSaveIgnore">Save Ignore List</button>
-    </div>
   </div>
 
   <!-- Clients -->
