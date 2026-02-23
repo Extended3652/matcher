@@ -39,6 +39,10 @@
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
 
+  // Test highlighter
+  const testInputEl  = document.getElementById("testInput");
+  const testOutputEl = document.getElementById("testOutput");
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -211,6 +215,75 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Test highlighter
+  // ---------------------------------------------------------------------------
+  function buildTestDict() {
+    if (!currentDict) return { ignoreList: [], categories: [], clients: [] };
+    const clients = Array.isArray(currentDict.clients) ? currentDict.clients : [];
+    if (!clients.some(c => c && c.mentionCategory)) return currentDict;
+
+    const catsCopy = (currentDict.categories || []).map(c => ({
+      ...c,
+      words: Array.isArray(c.words) ? c.words.slice() : []
+    }));
+    const catByName = new Map();
+    for (const c of catsCopy) { if (c.name) catByName.set(c.name, c); }
+
+    for (const client of clients) {
+      if (!client || !client.mentionCategory) continue;
+      const target = catByName.get(client.mentionCategory);
+      if (!target) continue;
+      const existing = new Set(target.words);
+      if (client.includePatternInContent !== false) {
+        const p = safeStr(client.pattern).trim();
+        if (p && !existing.has(p)) { target.words.push(p); existing.add(p); }
+      }
+      for (const alias of (Array.isArray(client.aliases) ? client.aliases : [])) {
+        const a = safeStr(alias).trim();
+        if (a && !existing.has(a)) { target.words.push(a); existing.add(a); }
+      }
+    }
+    return { ...currentDict, categories: catsCopy };
+  }
+
+  function renderTestOutput() {
+    const text = testInputEl.value;
+    testOutputEl.innerHTML = "";
+    if (!text) { testOutputEl.style.display = "none"; return; }
+
+    testOutputEl.style.display = "block";
+
+    const compiled = MatcherEngine.compileAll(buildTestDict());
+    const matches = MatcherEngine.findMatches(text, compiled);
+
+    if (matches.length === 0) {
+      testOutputEl.textContent = text;
+      return;
+    }
+
+    let last = 0;
+    for (const m of matches) {
+      if (m.start > last) {
+        testOutputEl.appendChild(document.createTextNode(text.slice(last, m.start)));
+      }
+      const span = document.createElement("span");
+      span.style.backgroundColor = m.color || "#FFFF00";
+      span.style.color = m.fColor || "#000000";
+      span.style.borderRadius = "2px";
+      span.style.padding = "0 2px";
+      span.title = m.categoryName;
+      span.textContent = text.slice(m.start, m.end);
+      testOutputEl.appendChild(span);
+      last = m.end;
+    }
+    if (last < text.length) {
+      testOutputEl.appendChild(document.createTextNode(text.slice(last)));
+    }
+  }
+
+  testInputEl.addEventListener("input", renderTestOutput);
+
+  // ---------------------------------------------------------------------------
   // Load / Save
   // ---------------------------------------------------------------------------
   function autoSelectCurrentClient() {
@@ -266,6 +339,7 @@
   function saveDictionary(msg) {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
+      renderTestOutput();
     });
   }
 

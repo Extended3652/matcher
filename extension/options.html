@@ -438,6 +438,20 @@
     </div>
   </div>
 
+  <!-- Test Highlighter -->
+  <div class="section">
+    <h2>Test Highlighter</h2>
+    <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
+      Type or paste text to preview how it would be highlighted with your current dictionary.
+      Hover a highlight to see which category matched.
+    </p>
+    <textarea id="testInput" rows="4" placeholder="Type or paste some text here…"
+      style="width:100%; padding:8px; font-family:inherit; font-size:13px; border:1px solid #ccc; border-radius:4px; resize:vertical;"></textarea>
+    <div id="testOutput"
+      style="display:none; margin-top:8px; padding:10px 12px; border:1px solid #ddd; border-radius:4px;
+             background:#fff; font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-word;"></div>
+  </div>
+
   <!-- Categories -->
   <div class="section">
     <h2>Categories</h2>
@@ -451,6 +465,7 @@
     <div id="catEditors"></div>
   </div>
 
+  <script src="matcher-core.js"></script>
   <script src="options.js"></script>
 </body>
 </html>
