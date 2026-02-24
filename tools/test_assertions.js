@@ -442,6 +442,58 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Contraction matching — edge wildcards
+// =============================================================================
+section("12. Contraction matching — edge wildcards");
+
+assertMatches(
+  "leading * matches token with apostrophe: * complain* * the taste",
+  cfg([cat("a", "Neg", "#f00", ["* complain* * the taste"])]),
+  "They didn't complain about the taste",
+  [{ cat:"Neg", word:"didn't complain about the taste" }]
+);
+
+assertMatches(
+  "leading * matches token starting with apostrophe: * work",
+  cfg([cat("a", "Neg", "#f00", ["* work"])]),
+  "It didn't work as expected",
+  [{ cat:"Neg", word:"didn't work" }]
+);
+
+assertMatches(
+  "trailing * matches token ending with apostrophe: can'*",
+  cfg([cat("a", "Neg", "#f00", ["can'*"])]),
+  "It can't be done",
+  [{ cat:"Neg", word:"can't" }]
+);
+
+// =============================================================================
+// 13. Contraction matching — middle wildcards
+// =============================================================================
+section("13. Contraction matching — middle wildcards");
+
+assertMatches(
+  "middle wildcard crosses apostrophe: d*t matches didn't",
+  cfg([cat("a", "Neg", "#f00", ["d*t"])]),
+  "It didn't work",
+  [{ cat:"Neg", word:"didn't" }]
+);
+
+assertMatches(
+  "middle wildcard crosses apostrophe: c*t matches can't",
+  cfg([cat("a", "Neg", "#f00", ["c*t"])]),
+  "I just can't do it",
+  [{ cat:"Neg", word:"can't" }]
+);
+
+assertMatches(
+  "middle wildcard: sh*t still matches shit (no apostrophe needed)",
+  cfg([cat("a", "PRF", "#f00", ["sh*t"])]),
+  "What a load of shit",
+  [{ cat:"PRF", word:"shit" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));

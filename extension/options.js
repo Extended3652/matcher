@@ -48,6 +48,7 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let clientSearchTimer = null; // debounce handle for search input
 
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
@@ -217,6 +218,7 @@
 
       renderIgnoreList();
       renderClients();
+      populateAddClientDropdowns(getCategoryStyleByName());
       renderCategories();
     });
   }
@@ -322,7 +324,6 @@
       : ("Showing " + list.length + " of " + all.length);
 
     const styleByName = getCategoryStyleByName();
-    populateAddClientDropdowns(styleByName);
 
     clientListBodyEl.innerHTML = "";
 
@@ -347,10 +348,12 @@
     list.forEach((entry) => {
       const pat = safeStr(entry.pattern);
       const key = patternKey(pat);
+      const isOpen = (openClientKey === key);
 
       const card = document.createElement("div");
       card.className = "client-card";
 
+      // --- Header (always rendered) ---
       const header = document.createElement("div");
       header.className = "client-header";
 
@@ -394,135 +397,10 @@
         }
       });
       actions.appendChild(delBtn);
-
       header.appendChild(actions);
 
-      const body = document.createElement("div");
-      body.className = "client-body";
-
-      const grid = document.createElement("div");
-      grid.className = "client-edit-grid";
-
-      const fPat = document.createElement("div");
-      fPat.className = "field";
-      const lPat = document.createElement("label");
-      lPat.textContent = "Client Name";
-      const iPat = document.createElement("input");
-      iPat.type = "text";
-      iPat.value = pat;
-      fPat.appendChild(lPat);
-      fPat.appendChild(iPat);
-      grid.appendChild(fPat);
-
-      const fReview = document.createElement("div");
-      fReview.className = "field";
-      const lReview = document.createElement("label");
-      lReview.textContent = "Header: Review (Default)";
-      const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
-      fReview.appendChild(lReview);
-      fReview.appendChild(sReview);
-      grid.appendChild(fReview);
-
-      const fImg = document.createElement("div");
-      fImg.className = "field";
-      const lImg = document.createElement("label");
-      lImg.textContent = "Header: Image override";
-      const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
-      fImg.appendChild(lImg);
-      fImg.appendChild(sImg);
-      grid.appendChild(fImg);
-
-      const fPro = document.createElement("div");
-      fPro.className = "field";
-      const lPro = document.createElement("label");
-      lPro.textContent = "Header: Profile override";
-      const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
-      fPro.appendChild(lPro);
-      fPro.appendChild(sPro);
-      grid.appendChild(fPro);
-
-      const fQ = document.createElement("div");
-      fQ.className = "field";
-      const lQ = document.createElement("label");
-      lQ.textContent = "Header: Question override";
-      const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
-      fQ.appendChild(lQ);
-      fQ.appendChild(sQ);
-      grid.appendChild(fQ);
-
-      body.appendChild(grid);
-
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
-      const mentionsWrap = document.createElement("div");
-      mentionsWrap.className = "client-mentions-wrap";
-
-      const mGrid = document.createElement("div");
-      mGrid.className = "client-edit-grid";
-
-      const fMCat = document.createElement("div");
-      fMCat.className = "field";
-      const lMCat = document.createElement("label");
-      lMCat.textContent = "Mentions: Category";
-      const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
-      fMCat.appendChild(lMCat);
-      fMCat.appendChild(sMCat);
-      mGrid.appendChild(fMCat);
-
-      const fAliases = document.createElement("div");
-      fAliases.className = "field";
-      fAliases.style.gridColumn = "1 / -1";
-      const lAliases = document.createElement("label");
-      lAliases.textContent = "Mentions: Aliases (one per line, supports * and ?)";
-      const tAliases = document.createElement("textarea");
-      tAliases.className = "word-list";
-      tAliases.spellcheck = false;
-      tAliases.style.minHeight = "90px";
-      tAliases.value = Array.isArray(entry.aliases) ? entry.aliases.join("\n") : "";
-      fAliases.appendChild(lAliases);
-      fAliases.appendChild(tAliases);
-      mGrid.appendChild(fAliases);
-
-      const fInc = document.createElement("div");
-      fInc.className = "field";
-      fInc.style.gridColumn = "1 / -1";
-      const lInc = document.createElement("label");
-      lInc.style.display = "flex";
-      lInc.style.alignItems = "center";
-      lInc.style.gap = "10px";
-      const cbInc = document.createElement("input");
-      cbInc.type = "checkbox";
-      cbInc.checked = (entry.includePatternInContent !== false);
-      lInc.appendChild(cbInc);
-      lInc.appendChild(document.createTextNode("Also treat the main Client Name as a mention in content (in addition to aliases)"));
-      fInc.appendChild(lInc);
-
-      const incHelp = document.createElement("div");
-      incHelp.className = "muted";
-      incHelp.style.marginTop = "4px";
-      incHelp.textContent = "If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
-      fInc.appendChild(incHelp);
-
-      mGrid.appendChild(fInc);
-
-      const fNote = document.createElement("div");
-      fNote.className = "field";
-      fNote.style.gridColumn = "1 / -1";
-      const lNote = document.createElement("label");
-      lNote.textContent = "Note";
-      const iNote = document.createElement("input");
-      iNote.type = "text";
-      iNote.placeholder = "Optional note (not used for matching)";
-      iNote.value = entry.note ? String(entry.note) : "";
-      fNote.appendChild(lNote);
-      fNote.appendChild(iNote);
-      mGrid.appendChild(fNote);
-
-      mentionsWrap.appendChild(mGrid);
-      body.appendChild(mentionsWrap);
-
-      function refreshHeaderVisuals() {
-        summary.textContent = formatSummary(entry);
-
+      // Initialize swatch for every card (header-level, always shown)
+      {
         const catName = pickHeaderSwatchCategory(entry);
         if (!catName) {
           swatch.style.backgroundColor = NO_HL_BG;
@@ -539,116 +417,256 @@
         }
       }
 
-      refreshHeaderVisuals();
+      // --- Body (only built for the one open card) ---
+      if (isOpen) {
+        arrow.classList.add("open");
 
-      function commitClientListRefresh() {
-        ensureClientsSorted();
-        saveDictionary();
-        renderClients();
-      }
+        const body = document.createElement("div");
+        body.className = "client-body open";
 
-      iPat.addEventListener("change", () => {
-        const newPat = normalizePattern(iPat.value);
-        if (!newPat) {
-          showMsg("Client Name cannot be blank", "error");
-          iPat.value = entry.pattern || "";
-          return;
-        }
+        const grid = document.createElement("div");
+        grid.className = "client-edit-grid";
 
-        const oldKey = patternKey(entry.pattern);
-        const newKey = patternKey(newPat);
+        const fPat = document.createElement("div");
+        fPat.className = "field";
+        const lPat = document.createElement("label");
+        lPat.textContent = "Client Name";
+        const iPat = document.createElement("input");
+        iPat.type = "text";
+        iPat.value = pat;
+        fPat.appendChild(lPat);
+        fPat.appendChild(iPat);
+        grid.appendChild(fPat);
 
-        if (newKey !== oldKey) {
-          const exists = (currentDict.clients || []).some(c => patternKey(c.pattern) === newKey);
-          if (exists) {
-            showMsg('Client "' + newPat + '" already exists', "error");
-            iPat.value = entry.pattern || "";
-            return;
+        const fReview = document.createElement("div");
+        fReview.className = "field";
+        const lReview = document.createElement("label");
+        lReview.textContent = "Header: Review (Default)";
+        const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
+        fReview.appendChild(lReview);
+        fReview.appendChild(sReview);
+        grid.appendChild(fReview);
+
+        const fImg = document.createElement("div");
+        fImg.className = "field";
+        const lImg = document.createElement("label");
+        lImg.textContent = "Header: Image override";
+        const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
+        fImg.appendChild(lImg);
+        fImg.appendChild(sImg);
+        grid.appendChild(fImg);
+
+        const fPro = document.createElement("div");
+        fPro.className = "field";
+        const lPro = document.createElement("label");
+        lPro.textContent = "Header: Profile override";
+        const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
+        fPro.appendChild(lPro);
+        fPro.appendChild(sPro);
+        grid.appendChild(fPro);
+
+        const fQ = document.createElement("div");
+        fQ.className = "field";
+        const lQ = document.createElement("label");
+        lQ.textContent = "Header: Question override";
+        const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
+        fQ.appendChild(lQ);
+        fQ.appendChild(sQ);
+        grid.appendChild(fQ);
+
+        body.appendChild(grid);
+
+        // Mentions editor block
+        const mentionsWrap = document.createElement("div");
+        mentionsWrap.className = "client-mentions-wrap";
+
+        const mGrid = document.createElement("div");
+        mGrid.className = "client-edit-grid";
+
+        const fMCat = document.createElement("div");
+        fMCat.className = "field";
+        const lMCat = document.createElement("label");
+        lMCat.textContent = "Mentions: Category";
+        const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
+        fMCat.appendChild(lMCat);
+        fMCat.appendChild(sMCat);
+        mGrid.appendChild(fMCat);
+
+        const fAliases = document.createElement("div");
+        fAliases.className = "field";
+        fAliases.style.gridColumn = "1 / -1";
+        const lAliases = document.createElement("label");
+        lAliases.textContent = "Mentions: Aliases (one per line, supports * and ?)";
+        const tAliases = document.createElement("textarea");
+        tAliases.className = "word-list";
+        tAliases.spellcheck = false;
+        tAliases.style.minHeight = "90px";
+        tAliases.value = Array.isArray(entry.aliases) ? entry.aliases.join("\n") : "";
+        fAliases.appendChild(lAliases);
+        fAliases.appendChild(tAliases);
+        mGrid.appendChild(fAliases);
+
+        const fInc = document.createElement("div");
+        fInc.className = "field";
+        fInc.style.gridColumn = "1 / -1";
+        const lInc = document.createElement("label");
+        lInc.style.display = "flex";
+        lInc.style.alignItems = "center";
+        lInc.style.gap = "10px";
+        const cbInc = document.createElement("input");
+        cbInc.type = "checkbox";
+        cbInc.checked = (entry.includePatternInContent !== false);
+        lInc.appendChild(cbInc);
+        lInc.appendChild(document.createTextNode("Also treat the main Client Name as a mention in content (in addition to aliases)"));
+        fInc.appendChild(lInc);
+
+        const incHelp = document.createElement("div");
+        incHelp.className = "muted";
+        incHelp.style.marginTop = "4px";
+        incHelp.textContent = "If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
+        fInc.appendChild(incHelp);
+
+        mGrid.appendChild(fInc);
+
+        const fNote = document.createElement("div");
+        fNote.className = "field";
+        fNote.style.gridColumn = "1 / -1";
+        const lNote = document.createElement("label");
+        lNote.textContent = "Note";
+        const iNote = document.createElement("input");
+        iNote.type = "text";
+        iNote.placeholder = "Optional note (not used for matching)";
+        iNote.value = entry.note ? String(entry.note) : "";
+        fNote.appendChild(lNote);
+        fNote.appendChild(iNote);
+        mGrid.appendChild(fNote);
+
+        mentionsWrap.appendChild(mGrid);
+        body.appendChild(mentionsWrap);
+
+        function refreshHeaderVisuals() {
+          summary.textContent = formatSummary(entry);
+
+          const catName = pickHeaderSwatchCategory(entry);
+          if (!catName) {
+            swatch.style.backgroundColor = NO_HL_BG;
+            swatch.style.borderColor = "#bdbdbd";
+          } else {
+            const st = styleByName.get(catName);
+            if (st) {
+              swatch.style.backgroundColor = st.color;
+              swatch.style.borderColor = "rgba(0,0,0,0.2)";
+            } else {
+              swatch.style.backgroundColor = NO_HL_BG;
+              swatch.style.borderColor = "#bdbdbd";
+            }
           }
         }
 
-        entry.pattern = newPat;
-        patSpan.textContent = newPat;
-        openClientKey = patternKey(newPat);
-        commitClientListRefresh();
-      });
+        function commitClientListRefresh() {
+          ensureClientsSorted();
+          saveDictionary();
+          renderClients();
+        }
 
-      sReview.addEventListener("change", () => {
-        entry.defaultCategory = sReview.value ? sReview.value : null;
-        refreshHeaderVisuals();
-        saveDictionary();
-      });
+        iPat.addEventListener("change", () => {
+          const newPat = normalizePattern(iPat.value);
+          if (!newPat) {
+            showMsg("Client Name cannot be blank", "error");
+            iPat.value = entry.pattern || "";
+            return;
+          }
 
-      sImg.addEventListener("change", () => {
-        if (!entry.overrides) entry.overrides = {};
-        if (sImg.value) entry.overrides.Image = sImg.value;
-        else delete entry.overrides.Image;
-        refreshHeaderVisuals();
-        saveDictionary();
-      });
+          const oldKey = patternKey(entry.pattern);
+          const newKey = patternKey(newPat);
 
-      sPro.addEventListener("change", () => {
-        if (!entry.overrides) entry.overrides = {};
-        if (sPro.value) entry.overrides.Profile = sPro.value;
-        else delete entry.overrides.Profile;
-        refreshHeaderVisuals();
-        saveDictionary();
-      });
+          if (newKey !== oldKey) {
+            const exists = (currentDict.clients || []).some(c => patternKey(c.pattern) === newKey);
+            if (exists) {
+              showMsg('Client "' + newPat + '" already exists', "error");
+              iPat.value = entry.pattern || "";
+              return;
+            }
+          }
 
-      sQ.addEventListener("change", () => {
-        if (!entry.overrides) entry.overrides = {};
-        if (sQ.value) entry.overrides.Question = sQ.value;
-        else delete entry.overrides.Question;
-        refreshHeaderVisuals();
-        saveDictionary();
-      });
+          entry.pattern = newPat;
+          patSpan.textContent = newPat;
+          openClientKey = patternKey(newPat);
+          commitClientListRefresh();
+        });
 
-      sMCat.addEventListener("change", () => {
-        entry.mentionCategory = sMCat.value ? sMCat.value : null;
-        saveDictionary();
-        summary.textContent = formatSummary(entry);
-      });
+        sReview.addEventListener("change", () => {
+          entry.defaultCategory = sReview.value ? sReview.value : null;
+          refreshHeaderVisuals();
+          saveDictionary();
+        });
 
-      tAliases.addEventListener("change", () => {
-        entry.aliases = normalizeAliasesFromTextarea(tAliases.value);
-        saveDictionary();
-        summary.textContent = formatSummary(entry);
-      });
+        sImg.addEventListener("change", () => {
+          if (!entry.overrides) entry.overrides = {};
+          if (sImg.value) entry.overrides.Image = sImg.value;
+          else delete entry.overrides.Image;
+          refreshHeaderVisuals();
+          saveDictionary();
+        });
 
-      cbInc.addEventListener("change", () => {
-        entry.includePatternInContent = !!cbInc.checked;
-        saveDictionary();
-        summary.textContent = formatSummary(entry);
-      });
+        sPro.addEventListener("change", () => {
+          if (!entry.overrides) entry.overrides = {};
+          if (sPro.value) entry.overrides.Profile = sPro.value;
+          else delete entry.overrides.Profile;
+          refreshHeaderVisuals();
+          saveDictionary();
+        });
 
-      iNote.addEventListener("change", () => {
-        entry.note = (iNote.value || "").trim();
-        saveDictionary();
-        summary.textContent = formatSummary(entry);
-      });
+        sQ.addEventListener("change", () => {
+          if (!entry.overrides) entry.overrides = {};
+          if (sQ.value) entry.overrides.Question = sQ.value;
+          else delete entry.overrides.Question;
+          refreshHeaderVisuals();
+          saveDictionary();
+        });
+
+        sMCat.addEventListener("change", () => {
+          entry.mentionCategory = sMCat.value ? sMCat.value : null;
+          saveDictionary();
+          summary.textContent = formatSummary(entry);
+        });
+
+        tAliases.addEventListener("change", () => {
+          entry.aliases = normalizeAliasesFromTextarea(tAliases.value);
+          saveDictionary();
+          summary.textContent = formatSummary(entry);
+        });
+
+        cbInc.addEventListener("change", () => {
+          entry.includePatternInContent = !!cbInc.checked;
+          saveDictionary();
+          summary.textContent = formatSummary(entry);
+        });
+
+        iNote.addEventListener("change", () => {
+          entry.note = (iNote.value || "").trim();
+          saveDictionary();
+          summary.textContent = formatSummary(entry);
+        });
+
+        card.appendChild(header);
+        card.appendChild(body);
+      } else {
+        card.appendChild(header);
+      }
 
       header.addEventListener("click", () => {
-        const isOpen = (openClientKey === key);
         openClientKey = isOpen ? null : key;
         renderClients();
       });
 
-      if (openClientKey === key) {
-        body.classList.add("open");
-        arrow.classList.add("open");
-      } else {
-        body.classList.remove("open");
-        arrow.classList.remove("open");
-      }
-
-      card.appendChild(header);
-      card.appendChild(body);
       clientListBodyEl.appendChild(card);
     });
   }
 
   clientSearchEl.addEventListener("input", () => {
-    renderClients();
+    clearTimeout(clientSearchTimer);
+    clientSearchTimer = setTimeout(() => renderClients(), 80);
   });
 
   btnAddClient.addEventListener("click", () => {
@@ -785,6 +803,7 @@
         cat.color = bgInput.value;
         saveDictionary();
         renderClients();
+        populateAddClientDropdowns(getCategoryStyleByName());
       });
 
       fgInput.addEventListener("input", () => {
@@ -794,6 +813,7 @@
         cat.fColor = fgInput.value;
         saveDictionary();
         renderClients();
+        populateAddClientDropdowns(getCategoryStyleByName());
       });
 
       const nameRow = document.createElement("div");
@@ -806,7 +826,8 @@
         cat.name = nameInput.value;
         nameSpan.textContent = nameInput.value;
         saveDictionary();
-        renderClients(); // refresh dropdowns and swatches
+        renderClients();
+        populateAddClientDropdowns(getCategoryStyleByName());
       });
       nameRow.appendChild(nameInput);
       body.appendChild(nameRow);
@@ -891,6 +912,7 @@
           saveDictionary('Deleted "' + nm + '"');
           renderCategories();
           renderClients();
+          populateAddClientDropdowns(getCategoryStyleByName());
         }
       });
       saveRow.appendChild(deleteBtn);
@@ -932,6 +954,7 @@
     saveDictionary('Added category "' + name + '"');
     renderCategories();
     renderClients();
+    populateAddClientDropdowns(getCategoryStyleByName());
   });
 
   // ---------------------------------------------------------------------------
@@ -1000,6 +1023,7 @@
     saveDictionary("Imported " + data.categories.length + " categories, " + data.clients.length + " clients");
     renderIgnoreList();
     renderClients();
+    populateAddClientDropdowns(getCategoryStyleByName());
     renderCategories();
   }
 
@@ -1044,6 +1068,7 @@
     saveDictionary("Imported HighlightThis backup: " + dict.categories.length + " categories, " + totalWords + " words");
     renderIgnoreList();
     renderClients();
+    populateAddClientDropdowns(getCategoryStyleByName());
     renderCategories();
   }
 

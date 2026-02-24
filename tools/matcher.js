@@ -107,11 +107,18 @@ function globToRegexFragment(pattern) {
         // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
         // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
         if (prev === " " && next === " ") {
+          // Space-surrounded: matches exactly one token
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
-          result += "[^\\s\\p{P}]*";
+          // Edge wildcard adjacent to a space ("* word" or "word *") acts as a
+          // word-boundary wildcard and must allow apostrophes (contractions).
+          // Edge wildcard attached to text ("*etailer", "amazon*") stops at
+          // punctuation so it doesn't bleed across hyphens/dots.
+          const adjacentToSpace = (isFirst && next === " ") || (isLast && prev === " ");
+          result += adjacentToSpace ? "[^\\s]*" : "[^\\s\\p{P}]*";
         } else {
-          result += "[^\\s\\p{P}]*?";
+          // Middle wildcard: stay in-token but allow contractions (e.g. d*t → didn't)
+          result += "[^\\s]*?";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
