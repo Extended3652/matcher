@@ -625,6 +625,20 @@ assertMatches(
   [{ cat:"Ret", word:"retailer" }]
 );
 
+assertMatches(
+  "middle * crosses apostrophe in contraction: d*t work → didn't work",
+  cfg([cat("a", "Issue", "#f00", ["d*t work"])]),
+  "It didn't work as expected",
+  [{ cat:"Issue", word:"didn't work" }]
+);
+
+assertMatches(
+  "middle * does not cross whitespace: d*t work does not match 'da t work'",
+  cfg([cat("a", "Issue", "#f00", ["d*t work"])]),
+  "da t work",
+  []
+);
+
 // =============================================================================
 // Summary
 // =============================================================================

@@ -121,7 +121,9 @@
           } else if (isFirst || isLast) {
             result += "[^\\s\\p{P}]*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            // Middle wildcard (e.g. d*t in "didn't"): allow any non-space character,
+            // including apostrophes in contractions.
+            result += "[^\\s]*?";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
