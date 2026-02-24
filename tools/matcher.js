@@ -146,6 +146,26 @@ function compileWordToRegexFragment(parsed) {
 }
 
 // ---------------------------------------------------------------------------
+// STEP 3b: Check whether a non-wildcard pattern is fully covered by any
+// wildcard in the same bucket. If so, the literal is redundant — the
+// wildcard already matches every string it would match.
+//
+// Example: "treats my acne" is redundant when "treat* * acne" is present.
+// ---------------------------------------------------------------------------
+function isPatternRedundant(parsed, wildcardItems) {
+  const flags = parsed.caseSensitive ? "u" : "iu";
+  for (const wItem of wildcardItems) {
+    const fragment = globToRegexFragment(wItem.parsed.pattern);
+    try {
+      if (new RegExp("^(?:" + fragment + ")$", flags).test(parsed.pattern)) {
+        return true;
+      }
+    } catch (e) { /* malformed wildcard regex — skip */ }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // STEP 4: Compile one category into RegExp(s).
 // Words are split into case-sensitive and case-insensitive groups,
 // each getting their own regex, so flags can differ.
@@ -170,16 +190,24 @@ function compileCategory(category) {
   for (const [key, items] of Object.entries(groups)) {
     if (items.length === 0) continue;
 
+    // Drop any literal pattern that a wildcard in the same list already covers.
+    // Wildcard takes precedence: it was added to be broad, so the specific
+    // literal is just noise that would cause unnecessary conflicts.
+    const wildcards = items.filter(it => it.parsed.hasWildcard);
+    const finalItems = wildcards.length === 0 ? items : items.filter(it =>
+      it.parsed.hasWildcard || !isPatternRedundant(it.parsed, wildcards)
+    );
+
     // Longer patterns first for longest-match preference at same start
-    items.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
+    finalItems.sort((a, b) => b.parsed.pattern.length - a.parsed.pattern.length);
 
     // Chunk large alternations to keep capture-group scanning fast
     const MAX_ALTS_PER_REGEX = 120;
 
     const flags = key === "sensitive" ? "gu" : "giu";
 
-    for (let start = 0; start < items.length; start += MAX_ALTS_PER_REGEX) {
-      const chunk = items.slice(start, start + MAX_ALTS_PER_REGEX);
+    for (let start = 0; start < finalItems.length; start += MAX_ALTS_PER_REGEX) {
+      const chunk = finalItems.slice(start, start + MAX_ALTS_PER_REGEX);
 
       // Wrap each in a CAPTURE group so we can identify which matched
       const combined = chunk.map(f => "(" + f.fragment + ")").join("|");

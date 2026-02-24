@@ -442,6 +442,52 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Compile-time deduplication (wildcard covers literal in same word list)
+// =============================================================================
+section("12. Compile-time deduplication");
+
+assertMatches(
+  "'treat* * acne' covers 'treats my acne' — literal deduplicated, wildcard matches",
+  cfg([cat("a", "Skin", "#f90", ["treat* * acne", "treats my acne"])]),
+  "This product treats my acne",
+  [{ cat: "Skin", word: "treats my acne" }]
+);
+
+assertMatches(
+  "'treat* * acne' covers 'treating severe acne' — literal deduplicated",
+  cfg([cat("a", "Skin", "#f90", ["treat* * acne", "treating severe acne"])]),
+  "It helped treating severe acne fast",
+  [{ cat: "Skin", word: "treating severe acne" }]
+);
+
+assertMatches(
+  "'clears acne' is NOT covered by 'treat* * acne' — kept, matches independently",
+  cfg([cat("a", "Skin", "#f90", ["treat* * acne", "clears acne"])]),
+  "This product clears acne",
+  [{ cat: "Skin", word: "clears acne" }]
+);
+
+assertMatches(
+  "'amazon' is redundant when 'amazon*' is in the same list",
+  cfg([cat("a", "Ret", "#0f0", ["amazon*", "amazon"])]),
+  "I love amazon products",
+  // amazon* matches "amazon" (zero trailing chars), amazon is deduplicated
+  [{ cat: "Ret", word: "amazon" }]
+);
+
+assertMatches(
+  "deduplication is per-category: literal in Cat B is NOT removed by wildcard in Cat A",
+  cfg([
+    cat("wc", "CatA", "#00f", ["treat* * acne"]),
+    cat("pl", "CatB", "#f00", ["treats my acne"]),
+  ]),
+  "This product treats my acne",
+  // wildcard is in a different category — no compile-time deduplication.
+  // Both match the same span; runtime rule: non-wildcard beats wildcard → CatB wins.
+  [{ cat: "CatB", word: "treats my acne" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
