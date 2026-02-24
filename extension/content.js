@@ -360,9 +360,19 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        // Deduplicate: if the same node appears multiple times (rapid SPA mutations),
+        // process it once. Element nodes subsume their children so also skip any node
+        // whose ancestor is already in the set.
+        const seen = new Set();
+        const deduped = [];
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
+          if (seen.has(item.node)) continue;
+          seen.add(item.node);
+          deduped.push(item);
+        }
 
+        for (const item of deduped) {
           if (item.type === "element") {
             if (item.node === document.body || item.node === document.documentElement) {
               highlightAll(document.body);
@@ -491,7 +501,8 @@
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
-          clients: clientRules.length
+          clients: clientRules.length,
+          clientName: getCmsClientName(),
         });
         break;
 

@@ -17,13 +17,19 @@
 (function() {
   "use strict";
 
-  const masterToggle = document.getElementById("masterToggle");
-  const statsEl      = document.getElementById("stats");
-  const catListEl    = document.getElementById("catList");
-  const btnOptions   = document.getElementById("btnOptions");
-  const popupSearch  = document.getElementById("popupSearch");
+  const masterToggle    = document.getElementById("masterToggle");
+  const statsEl         = document.getElementById("stats");
+  const catListEl       = document.getElementById("catList");
+  const btnOptions      = document.getElementById("btnOptions");
+  const popupSearch     = document.getElementById("popupSearch");
+  const clientBannerEl  = document.getElementById("clientBanner");
+  const clientBannerMsg = document.getElementById("clientBannerMsg");
+  const bannerCatSelect = document.getElementById("bannerCatSelect");
+  const bannerAddBtn    = document.getElementById("bannerAddBtn");
 
   let currentDict = null;
+  let currentClientName = ""; // client name on the active CMS tab
+  let popupSearchTimer = null; // debounce for search input
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -77,6 +83,96 @@
   function confirmRemove(label, value) {
     return window.confirm(`Remove from ${label}?\n\n${value}`);
   }
+
+  // ---------------------------------------------------------------------------
+  // Client-banner helpers
+  // ---------------------------------------------------------------------------
+  // Replicates content.js's globToRegex to check client list without a round-trip.
+  function globToRegexForClient(pattern) {
+    const p = String(pattern || "").trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
+  }
+
+  function checkClientKnown(name) {
+    if (!name) return true;
+    const clients = (currentDict && currentDict.clients) || [];
+    return clients.some(c => {
+      const rx = globToRegexForClient(c && c.pattern);
+      return rx && rx.test(name);
+    });
+  }
+
+  function updateBannerSelectStyle() {
+    const val = bannerCatSelect.value;
+    const cats = (currentDict && currentDict.categories) || [];
+    const cat = cats.find(c => c.name === val);
+    if (cat && cat.color) {
+      bannerCatSelect.style.backgroundColor = cat.color;
+      bannerCatSelect.style.color = cat.fColor || "#000";
+      bannerCatSelect.style.borderColor = "rgba(0,0,0,0.25)";
+    } else {
+      bannerCatSelect.style.backgroundColor = "";
+      bannerCatSelect.style.color = "";
+      bannerCatSelect.style.borderColor = "";
+    }
+  }
+
+  function renderClientBanner() {
+    if (!currentClientName || checkClientKnown(currentClientName)) {
+      clientBannerEl.style.display = "none";
+      return;
+    }
+
+    clientBannerEl.style.display = "";
+    clientBannerMsg.textContent = "\u26a0 " + currentClientName + " isn\u2019t in your client list";
+
+    const cats = (currentDict && currentDict.categories) || [];
+    bannerCatSelect.innerHTML = "";
+
+    const noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = "(no highlight)";
+    bannerCatSelect.appendChild(noneOpt);
+
+    cats.forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat.name || "";
+      opt.textContent = cat.name || "";
+      if (cat.color) {
+        opt.style.backgroundColor = cat.color;
+        opt.style.color = cat.fColor || "#000";
+      }
+      bannerCatSelect.appendChild(opt);
+    });
+
+    // Auto-select first real category so there's always a default
+    if (cats.length > 0) bannerCatSelect.value = cats[0].name || "";
+    updateBannerSelectStyle();
+  }
+
+  bannerCatSelect.addEventListener("change", updateBannerSelectStyle);
+
+  bannerAddBtn.addEventListener("click", () => {
+    if (!currentClientName) return;
+    if (!currentDict.clients) currentDict.clients = [];
+    if (checkClientKnown(currentClientName)) { renderClientBanner(); return; }
+
+    currentDict.clients.push({
+      pattern:                  currentClientName,
+      defaultCategory:          bannerCatSelect.value || null,
+      overrides:                {},
+      mentionCategory:          null,
+      aliases:                  [],
+      includePatternInContent:  true,
+      note:                     "",
+    });
+
+    saveDictionary();       // saves + calls updateStats
+    renderClientBanner();   // hides immediately (client now known)
+  });
 
   function sameEditing(scope, catIndex, entryIndex) {
     if (!editing) return false;
@@ -251,9 +347,10 @@
       const enabled = result.enabled !== false;
       masterToggle.checked = enabled;
 
-      currentDict = result.dictionary || { ignoreList: [], categories: [] };
+      currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
       if (!currentDict.ignoreList) currentDict.ignoreList = [];
       if (!currentDict.categories) currentDict.categories = [];
+      if (!currentDict.clients) currentDict.clients = [];
 
       renderAll();
       updateStats();
@@ -305,6 +402,11 @@
         statsEl.textContent =
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
+
+        if (response.clientName !== undefined) {
+          currentClientName = response.clientName || "";
+          renderClientBanner();
+        }
       });
     });
   }
@@ -313,7 +415,8 @@
   // Search filters (top)
   // ---------------------------------------------------------------------------
   popupSearch.addEventListener("input", () => {
-    renderAll();
+    clearTimeout(popupSearchTimer);
+    popupSearchTimer = setTimeout(() => renderAll(), 60);
   });
 
   function matchesGlobalSearchForIgnore(q) {
