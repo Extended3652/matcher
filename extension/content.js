@@ -14,10 +14,6 @@
   // Guardrails
   const MAX_SPAN_LEN = 120;
 
-  // Tags whose subtrees should never be walked for text highlights.
-  // Defined once as a Set so TreeWalker acceptNode lookups are O(1).
-  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
-
   let globalEnabled = true;
 
   // Compiled matcher
@@ -179,7 +175,7 @@
 
           // Skip script/style/textarea/input/select/noscript
           const tag = node.parentElement.tagName || "";
-          if (SKIP_TAGS.has(tag)) {
+          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -189,8 +185,7 @@
           }
 
           // Only process nodes with visible text
-          const tc = node.textContent;
-          if (!tc || tc.trim().length === 0) {
+          if (!node.textContent || node.textContent.trim().length === 0) {
             return NodeFilter.FILTER_REJECT;
           }
 
