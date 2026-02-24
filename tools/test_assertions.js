@@ -594,6 +594,38 @@ assertMatches(
 // Returned in position order: walmart, BestBuy, Walmart.
 
 // =============================================================================
+// 16. Leading/trailing * adjacent to space — contraction bug
+// =============================================================================
+// A pattern like "* complain* * the taste" should match
+// "didn't complain about the taste" starting at "didn't", not at "t"
+// (the char after the apostrophe).  The old code used [^\s\p{P}]* for a
+// leading * which stops at apostrophes; the fix uses [^\s]* when the *
+// is at the edge of the pattern and directly adjacent to a space.
+// =============================================================================
+section("16. Leading/trailing * adjacent to space (contraction fix)");
+
+assertMatches(
+  "leading * matches word with apostrophe: '* complain* * the taste'",
+  cfg([cat("a", "Complaint", "#f00", ["* complain* * the taste"])]),
+  "The customer didn't complain about the taste",
+  [{ cat:"Complaint", word:"didn't complain about the taste" }]
+);
+
+assertMatches(
+  "leading * still stops at whitespace (doesn't cross word boundary)",
+  cfg([cat("a", "Complaint", "#f00", ["* complain"])]),
+  "never complain",
+  [{ cat:"Complaint", word:"never complain" }]
+);
+
+assertMatches(
+  "existing *etailer behavior unchanged (next is not a space)",
+  cfg([cat("a", "Ret", "#0f0", ["*etailer"])]),
+  "That e-retailer is big",
+  [{ cat:"Ret", word:"retailer" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));

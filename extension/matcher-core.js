@@ -112,6 +112,12 @@
           // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
+          } else if ((isFirst && next === " ") || (isLast && prev === " ")) {
+            // "*" is at the edge of the pattern and adjacent to a space, so it acts as a
+            // whole-word wildcard (e.g. "* complain…" or "…complain *"). Use [^\s]* so that
+            // apostrophes in contractions (e.g. "didn't") are included in the match instead
+            // of causing the engine to skip to a later start position.
+            result += "[^\\s]*";
           } else if (isFirst || isLast) {
             result += "[^\\s\\p{P}]*";
           } else {
