@@ -347,9 +347,8 @@
             }
           }, 50);
         } else {
-          // No existing entry — pre-fill the Add Client form and search
+          // No existing entry — pre-fill the Add Client form
           newClientPattern.value = clientName;
-          clientSearchEl.value = clientName;
           renderClients();
         }
       });
