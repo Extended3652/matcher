@@ -555,6 +555,45 @@ assertMatches(
 // so 'e-retailer' would yield a match on just the 'retailer' sub-token.
 
 // =============================================================================
+// 15. CS: prefix in category words
+// =============================================================================
+// A CS: word in a category is case-sensitive: it only matches text with the
+// exact same casing as the pattern. Plain words (no CS:) are case-insensitive.
+// CS:// combines case-sensitivity with exact (whole-word) matching.
+// Multiple words in a category can mix plain and CS: rules independently.
+// =============================================================================
+section("15. CS: in category words");
+
+assertMatches(
+  "CS: category word matches exact case only",
+  cfg([cat("a", "Brand", "#f00", ["CS:Walmart"])]),
+  "walmart and Walmart here",
+  [{ cat:"Brand", word:"Walmart" }]
+);
+// "walmart" (lowercase) — CS: regex is case-sensitive → no match.
+// "Walmart" — exact case → highlighted.
+
+assertMatches(
+  "CS:// category word: exact case + whole-word boundary",
+  cfg([cat("a", "Brand", "#f00", ["CS://HP"])]),
+  "hp HP HPE",
+  [{ cat:"Brand", word:"HP" }]
+);
+// "hp"  — wrong case → no match.
+// "HP"  — correct case, word boundaries on both sides → match.
+// "HPE" — "HP" is a substring; no boundary after 'P' (followed by 'E') → no match.
+
+assertMatches(
+  "mixed plain and CS: words in one category each apply their own case rule",
+  cfg([cat("a", "Retail", "#f00", ["walmart", "CS:BestBuy"])]),
+  "walmart bestbuy BestBuy Walmart",
+  [{ cat:"Retail", word:"walmart" }, { cat:"Retail", word:"BestBuy" }, { cat:"Retail", word:"Walmart" }]
+);
+// "walmart" plain (case-insensitive) → matches "walmart"[0] and "Walmart"[24].
+// "CS:BestBuy" case-sensitive       → matches "BestBuy"[16] but not "bestbuy"[8].
+// Returned in position order: walmart, BestBuy, Walmart.
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
