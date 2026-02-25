@@ -504,10 +504,8 @@ def curses_review_loop(
                         ch2 = None
                         break
                     if ch2 in (ord("y"), ord("Y")):
-                        # Apply in-memory edits
-                        removed_from_ignore = 0
-                        if ignore_available and ignore_container is not None and ignore_key is not None:
-                            removed_from_ignore = remove_from_ignore_norm(ignore_container, ignore_key, word)
+                        # Apply in-memory edits — handle each destination separately
+                        # so we only touch the ignore list when the destination requires it.
 
                         if dest["dest"] == "cat":
                             keep_ci = dest["ci"]
@@ -515,6 +513,10 @@ def curses_review_loop(
                             removed_from_categories = 0
                             for ci in remove_from:
                                 removed_from_categories += remove_from_category_norm(categories, ci, word)
+                            # Remove from ignore if present (keep in category takes precedence)
+                            removed_from_ignore = 0
+                            if ignore_available and ignore_container is not None and ignore_key is not None:
+                                removed_from_ignore = remove_from_ignore_norm(ignore_container, ignore_key, word)
 
                             obj = {
                                 "type": "inter",
@@ -542,7 +544,6 @@ def curses_review_loop(
                                 "word": word,
                                 "action": "set_ignore",
                                 "removed_from_categories": removed_from_categories,
-                                "removed_from_ignore": removed_from_ignore,
                                 "added_to_ignore": bool(added),
                             }
                             append_jsonl(log_path, obj)
@@ -552,8 +553,11 @@ def curses_review_loop(
                             ch2 = None
                             break
 
-                        # drop
+                        # drop: remove from all categories and from ignore
                         removed_from_categories = remove_from_all_categories(categories, present_in, word)
+                        removed_from_ignore = 0
+                        if ignore_available and ignore_container is not None and ignore_key is not None:
+                            removed_from_ignore = remove_from_ignore_norm(ignore_container, ignore_key, word)
                         obj = {
                             "type": "inter",
                             "word": word,

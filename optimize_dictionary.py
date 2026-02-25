@@ -197,6 +197,37 @@ def cat_label(categories: List[Dict[str, Any]], idx: int) -> str:
     return f"{idx+1}) {name}"
 
 
+def decision_key(obj: Dict) -> Optional[str]:
+    t = obj.get("type")
+    if t == "inter":
+        return f"inter::{obj.get('word')}"
+    if t == "ignore_hit":
+        return f"ignore_hit::{obj.get('word')}"
+    return None
+
+
+def load_done_keys(log_path: Path) -> Set[str]:
+    done: Set[str] = set()
+    if not log_path.exists():
+        return done
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                k = decision_key(obj)
+                if k:
+                    done.add(k)
+    except OSError:
+        pass
+    return done
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Interactive conflict reviewer for CMS Highlighter backup.")
     ap.add_argument("--in", dest="in_path", required=True, help="Input JSON backup")
@@ -205,6 +236,7 @@ def main() -> None:
     ap.add_argument("--log", dest="log_path", default=None, help="Always write decision log here (jsonl)")
     ap.add_argument("--apply", action="store_true", help="Apply changes to --out (or overwrite --in if --out omitted)")
     ap.add_argument("--yes", action="store_true", help="Skip approval prompt (still requires --apply)")
+    ap.add_argument("--resume", action="store_true", help="Skip items already recorded in the decisions log")
 
     ap.add_argument("--skip-inter", action="store_true", help="Skip inter-category duplicates review")
     ap.add_argument("--skip-ignore", action="store_true", help="Skip ignore-vs-category review")
@@ -236,6 +268,10 @@ def main() -> None:
     log_path = Path(args.log_path).expanduser() if args.log_path else in_path.with_suffix(in_path.suffix + ".decisions.jsonl")
     out_path = Path(args.out_path).expanduser() if args.out_path else in_path
 
+    done_keys: Set[str] = load_done_keys(log_path) if args.resume else set()
+    if args.resume and done_keys:
+        print(f"Resuming: {len(done_keys)} items already decided (skipping).")
+
     # Precompute conflicts
     inter_dupes = intercategory_duplicates(new_categories)
     ignore_hits: List[Tuple[str, List[int]]] = []
@@ -266,6 +302,9 @@ def main() -> None:
         print(f"Inter-category exact duplicates: {len(inter_dupes)}")
         print("")
         for idx, (word, cat_indexes) in enumerate(inter_dupes, start=1):
+            if f"inter::{word}" in done_keys:
+                continue
+
             cat_indexes = [ci for ci in cat_indexes if 0 <= ci < len(new_categories)]
             if len(cat_indexes) < 2:
                 continue
@@ -361,6 +400,9 @@ def main() -> None:
             print(f"Ignore entries also present in categories: {len(ignore_hits)}")
             print("")
             for idx, (word, cat_indexes) in enumerate(ignore_hits, start=1):
+                if f"ignore_hit::{word}" in done_keys:
+                    continue
+
                 cat_indexes = [ci for ci in cat_indexes if 0 <= ci < len(new_categories)]
                 print(f"[{idx}/{len(ignore_hits)}] Ignore entry: {word}")
                 print("Also appears in categories:")
