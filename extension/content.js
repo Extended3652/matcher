@@ -14,10 +14,17 @@
   // Guardrails
   const MAX_SPAN_LEN = 120;
 
+  // Tags whose text content should never be highlighted
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
+
+  // Nodes processed per async chunk during the initial page highlight pass
+  const CHUNK_SIZE = 200;
+
   let globalEnabled = true;
 
   // Compiled matcher
   let compiledMatcher = null;
+  let highlightGeneration = 0; // incremented on each new highlight pass; cancels orphaned async chunks
 
   // Client highlight config
   let clientRules = [];
@@ -126,12 +133,23 @@
   }
 
   function applyClientHighlight() {
-    clearClientHighlight();
+    // Single DOM lookup — covers both the clear step and the apply step below.
+    const el = getCmsClientNameEl();
+
+    // Clear any existing highlight first
+    if (el && el.hasAttribute("data-client-hl")) {
+      el.style.backgroundColor = "";
+      el.style.color = "";
+      el.style.borderRadius = "";
+      el.style.padding = "";
+      el.removeAttribute("data-client-hl");
+    }
 
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
+    if (!el) return;
 
-    const clientName = getCmsClientName();
+    const clientName = String(el.textContent || "").trim();
     if (!clientName) return;
 
     const rule = findClientRule(clientName);
@@ -145,9 +163,6 @@
 
     const style = categoryStyleByName.get(catName);
     if (!style) return;
-
-    const el = getCmsClientNameEl();
-    if (!el) return;
 
     el.style.backgroundColor = style.color;
     el.style.color = style.fColor;
@@ -175,7 +190,7 @@
 
           // Skip script/style/textarea/input/select/noscript
           const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
+          if (SKIP_TAGS.has(tag)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -273,7 +288,7 @@
     if (!textNode || !textNode.parentNode) return;
 
     const text = textNode.textContent;
-    if (!text || text.trim().length === 0) return;
+    if (!text) return; // acceptNode already filtered whitespace-only nodes
 
     const matches = sanitizeMatches(findMatchesForText(text), text.length);
     if (matches.length === 0) return;
@@ -288,16 +303,43 @@
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
+    if (textNodes.length === 0) return;
 
-    for (const node of textNodes) {
-      highlightTextNode(node);
+    // Small sets (e.g. from MutationObserver on a newly added subtree): process
+    // synchronously — the overhead of async scheduling outweighs the benefit.
+    if (textNodes.length <= CHUNK_SIZE) {
+      for (const node of textNodes) {
+        highlightTextNode(node);
+      }
+      return;
     }
+
+    // Large initial page load: process in chunks so the browser can paint and
+    // respond to input between chunks instead of blocking the main thread.
+    const gen = ++highlightGeneration;
+
+    function processChunk(i) {
+      if (gen !== highlightGeneration) return; // newer pass started; abandon this one
+      if (!globalEnabled || !compiledMatcher) return;
+
+      const end = Math.min(i + CHUNK_SIZE, textNodes.length);
+      for (let j = i; j < end; j++) {
+        highlightTextNode(textNodes[j]);
+      }
+
+      if (end < textNodes.length) {
+        setTimeout(() => processChunk(end), 0);
+      }
+    }
+
+    processChunk(0);
   }
 
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    highlightGeneration++; // cancel any in-progress async highlight chunks
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
     spans.forEach(span => {
