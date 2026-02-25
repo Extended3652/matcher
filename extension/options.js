@@ -11,10 +11,7 @@
   // Elements
   // ---------------------------------------------------------------------------
   const msgEl         = document.getElementById("msg");
-  const ignoreArea    = document.getElementById("ignoreListArea");
-  const ignoreCount   = document.getElementById("ignoreCount");
   const catEditorsEl  = document.getElementById("catEditors");
-  const btnSaveIgnore = document.getElementById("btnSaveIgnore");
   const btnExport     = document.getElementById("btnExport");
   const btnImportHT   = document.getElementById("btnImportHT");
   const btnImportJSON = document.getElementById("btnImportJSON");
@@ -22,6 +19,8 @@
   const btnAddCat     = document.getElementById("btnAddCat");
   const newCatName    = document.getElementById("newCatName");
   const newCatColor   = document.getElementById("newCatColor");
+  const catSearchEl   = document.getElementById("catSearch");
+  const catSearchStatus = document.getElementById("catSearchStatus");
 
   // Clients UI
   const clientCountEl    = document.getElementById("clientCount");
@@ -36,11 +35,47 @@
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
 
-  // Newer "Mentions" fields (must exist in options.html)
+  // Newer "Mentions" fields
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
+
+  // Clear / Save / Detected client
+  const btnClearClient = document.getElementById("btnClearClient");
+  const btnSaveClients = document.getElementById("btnSaveClients");
+  const detectedBanner = document.getElementById("detectedClientBanner");
+  const detectedNameEl = document.getElementById("detectedClientName");
+  const btnUseDetected = document.getElementById("btnUseDetectedClient");
+
+  // Section toggle elements
+  const toggleAddClient = document.getElementById("toggleAddClient");
+  const clientAddFormBody = document.getElementById("clientAddFormBody");
+  const addClientArrow = document.getElementById("addClientArrow");
+
+  // ---------------------------------------------------------------------------
+  // Collapsible section toggles
+  // ---------------------------------------------------------------------------
+  document.querySelectorAll(".section-toggle[data-section]").forEach(toggle => {
+    toggle.addEventListener("click", () => {
+      const sectionId = toggle.dataset.section;
+      const body = document.getElementById(sectionId);
+      const arrow = toggle.querySelector(".section-arrow");
+      if (!body || !arrow) return;
+      const isOpen = body.classList.contains("open");
+      body.classList.toggle("open", !isOpen);
+      arrow.classList.toggle("open", !isOpen);
+    });
+  });
+
+  // Client add-form toggle
+  if (toggleAddClient && clientAddFormBody) {
+    toggleAddClient.addEventListener("click", () => {
+      const isOpen = clientAddFormBody.style.display !== "none";
+      clientAddFormBody.style.display = isOpen ? "none" : "block";
+      if (addClientArrow) addClientArrow.classList.toggle("open", !isOpen);
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // State
@@ -48,7 +83,7 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
-  let clientSearchTimer = null; // debounce handle for search input
+  let savingInProgress = false; // flag to ignore self-triggered storage changes
 
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
@@ -78,7 +113,6 @@
     return safeStr(raw).replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
   }
 
-  // Binary search: O(log n) comparisons instead of O(n).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);
     let lo = 0, hi = arr.length;
@@ -92,6 +126,14 @@
 
   function normalizePattern(p) {
     return safeStr(p).trim();
+  }
+
+  function globToRegex(pattern) {
+    const p = safeStr(pattern).trim();
+    if (!p) return null;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (e) { return null; }
   }
 
   function patternKey(p) {
@@ -108,41 +150,38 @@
     if (!currentDict || !Array.isArray(currentDict.categories)) return map;
     for (const c of currentDict.categories) {
       if (!c || !c.name) continue;
-      map.set(c.name, { color: c.color || "#FFFF00", fColor: c.fColor || "#000000" });
+      map.set(c.name, { color: c.color || "#FFFF00", fColor: c.fColor || "#FFFFFF" });
     }
     return map;
   }
 
-  function makeCategorySelect(opts, stMapArg) {
+  function applySelectVisualForCategory(sel) {
+    const v = sel.value;
+    if (!v) {
+      sel.style.backgroundColor = "";
+      sel.style.color = "";
+      sel.style.borderColor = "";
+      return;
+    }
+    const st = getCategoryStyleByName().get(v);
+    if (!st) {
+      sel.style.backgroundColor = "";
+      sel.style.color = "";
+      sel.style.borderColor = "";
+      return;
+    }
+    sel.style.backgroundColor = st.color || "";
+    sel.style.color = st.fColor || "";
+    sel.style.borderColor = "rgba(0,0,0,0.25)";
+  }
+
+  function makeCategorySelect(opts) {
     // opts:
     // - mode: "review" or "override"
     // - value: current value (string or null)
     // review: includes "(no highlight)" + categories
     // override: includes "-" (inherit) + categories
-    // stMapArg: optional pre-built style map to avoid redundant Map construction
     const sel = document.createElement("select");
-    const stMap = stMapArg || getCategoryStyleByName();
-
-    function resetSelectVisual() {
-      sel.style.backgroundColor = "";
-      sel.style.color = "";
-      sel.style.borderColor = "";
-    }
-
-    function applySelectVisualForValue(v) {
-      if (!v) {
-        resetSelectVisual();
-        return;
-      }
-      const st = stMap.get(v);
-      if (!st) {
-        resetSelectVisual();
-        return;
-      }
-      sel.style.backgroundColor = st.color || "";
-      sel.style.color = st.fColor || "";
-      sel.style.borderColor = "rgba(0,0,0,0.25)";
-    }
 
     function makeOption(value, label, st) {
       const opt = document.createElement("option");
@@ -164,13 +203,14 @@
       sel.appendChild(makeOption("", "(no highlight)", null));
     }
 
+    const stMap = getCategoryStyleByName();
     for (const name of getCategoryNames()) {
       sel.appendChild(makeOption(name, name, stMap.get(name) || null));
     }
 
     sel.value = opts.value || "";
-    applySelectVisualForValue(sel.value);
-    sel.addEventListener("change", () => applySelectVisualForValue(sel.value));
+    applySelectVisualForCategory(sel);
+    sel.addEventListener("change", () => applySelectVisualForCategory(sel));
 
     return sel;
   }
@@ -216,39 +256,24 @@
       if (!Array.isArray(currentDict.categories)) currentDict.categories = [];
       if (!Array.isArray(currentDict.clients)) currentDict.clients = [];
 
-      renderIgnoreList();
+      populateAddClientDropdowns();
       renderClients();
-      populateAddClientDropdowns(getCategoryStyleByName());
       renderCategories();
     });
   }
 
   function saveDictionary(msg) {
+    savingInProgress = true;
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      savingInProgress = false;
       if (msg) showMsg(msg, "success");
     });
   }
 
   // ---------------------------------------------------------------------------
-  // Ignore List
-  // ---------------------------------------------------------------------------
-  function renderIgnoreList() {
-    const words = currentDict.ignoreList || [];
-    ignoreArea.value = words.join("\n");
-    ignoreCount.textContent = "(" + words.length + " words)";
-  }
-
-  btnSaveIgnore.addEventListener("click", () => {
-    const lines = ignoreArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    currentDict.ignoreList = lines;
-    saveDictionary("Ignore list saved (" + lines.length + " words)");
-    ignoreCount.textContent = "(" + lines.length + " words)";
-  });
-
-  // ---------------------------------------------------------------------------
   // Clients
   // ---------------------------------------------------------------------------
-  function populateAddClientDropdowns(stMap) {
+  function populateAddClientDropdowns() {
     // We build temp <select>s so we inherit the same options + styling logic
     // then move options into the real DOM selects.
     newClientReview.innerHTML = "";
@@ -256,10 +281,10 @@
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
 
-    const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
-    const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const reviewSel = makeCategorySelect({ mode: "review", value: "" });
+    const imgSel = makeCategorySelect({ mode: "override", value: "" });
+    const proSel = makeCategorySelect({ mode: "override", value: "" });
+    const qSel = makeCategorySelect({ mode: "override", value: "" });
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
     while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
@@ -274,10 +299,15 @@
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
       newClientMentionCategory.innerHTML = "";
-      const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+      const mentionSel = makeCategorySelect({ mode: "override", value: "" });
       while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
       newClientMentionCategory.value = "";
     }
+
+    // Apply visual styling to real form selects (temp selects' handlers don't transfer)
+    [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
+      .filter(Boolean)
+      .forEach(sel => applySelectVisualForCategory(sel));
   }
 
   function getClientFilter() {
@@ -323,8 +353,6 @@
       ? ("Showing " + list.length)
       : ("Showing " + list.length + " of " + all.length);
 
-    const styleByName = getCategoryStyleByName();
-
     clientListBodyEl.innerHTML = "";
 
     if (all.length === 0) {
@@ -345,15 +373,15 @@
       return;
     }
 
+    const styleByName = getCategoryStyleByName();
+
     list.forEach((entry) => {
       const pat = safeStr(entry.pattern);
       const key = patternKey(pat);
-      const isOpen = (openClientKey === key);
 
       const card = document.createElement("div");
       card.className = "client-card";
 
-      // --- Header (always rendered) ---
       const header = document.createElement("div");
       header.className = "client-header";
 
@@ -397,33 +425,34 @@
         }
       });
       actions.appendChild(delBtn);
+
       header.appendChild(actions);
 
-      // Initialize swatch for every card (header-level, always shown)
-      {
-        const catName = pickHeaderSwatchCategory(entry);
-        if (!catName) {
+      // Apply swatch color (done for all cards, open or closed)
+      const swatchCatName = pickHeaderSwatchCategory(entry);
+      if (!swatchCatName) {
+        swatch.style.backgroundColor = NO_HL_BG;
+        swatch.style.borderColor = "#bdbdbd";
+      } else {
+        const st = styleByName.get(swatchCatName);
+        if (st) {
+          swatch.style.backgroundColor = st.color;
+          swatch.style.borderColor = "rgba(0,0,0,0.2)";
+        } else {
           swatch.style.backgroundColor = NO_HL_BG;
           swatch.style.borderColor = "#bdbdbd";
-        } else {
-          const st = styleByName.get(catName);
-          if (st) {
-            swatch.style.backgroundColor = st.color;
-            swatch.style.borderColor = "rgba(0,0,0,0.2)";
-          } else {
-            swatch.style.backgroundColor = NO_HL_BG;
-            swatch.style.borderColor = "#bdbdbd";
-          }
         }
       }
 
-      // --- Body (only built for the one open card) ---
+      const isOpen = (openClientKey === key);
+
+      const body = document.createElement("div");
+      body.className = "client-body" + (isOpen ? " open" : "");
+      if (isOpen) arrow.classList.add("open");
+
+      // Lazy body: only build the full edit form for the one open card.
+      // All closed cards get an empty body div — no selects, textareas, or listeners.
       if (isOpen) {
-        arrow.classList.add("open");
-
-        const body = document.createElement("div");
-        body.className = "client-body open";
-
         const grid = document.createElement("div");
         grid.className = "client-edit-grid";
 
@@ -441,17 +470,25 @@
         const fReview = document.createElement("div");
         fReview.className = "field";
         const lReview = document.createElement("label");
-        lReview.textContent = "Header: Review (Default)";
-        const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
+        lReview.textContent = "Default";
+        const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" });
         fReview.appendChild(lReview);
         fReview.appendChild(sReview);
         grid.appendChild(fReview);
 
+        const overrideSep = document.createElement("div");
+        overrideSep.style.gridColumn = "1 / -1";
+        overrideSep.style.borderTop = "1px solid #e5e5e5";
+        overrideSep.style.paddingTop = "6px";
+        overrideSep.style.marginTop = "2px";
+        overrideSep.innerHTML = '<span style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Overrides</span>';
+        grid.appendChild(overrideSep);
+
         const fImg = document.createElement("div");
         fImg.className = "field";
         const lImg = document.createElement("label");
-        lImg.textContent = "Header: Image override";
-        const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
+        lImg.textContent = "Image";
+        const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" });
         fImg.appendChild(lImg);
         fImg.appendChild(sImg);
         grid.appendChild(fImg);
@@ -459,8 +496,8 @@
         const fPro = document.createElement("div");
         fPro.className = "field";
         const lPro = document.createElement("label");
-        lPro.textContent = "Header: Profile override";
-        const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
+        lPro.textContent = "Profile";
+        const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" });
         fPro.appendChild(lPro);
         fPro.appendChild(sPro);
         grid.appendChild(fPro);
@@ -468,8 +505,8 @@
         const fQ = document.createElement("div");
         fQ.className = "field";
         const lQ = document.createElement("label");
-        lQ.textContent = "Header: Question override";
-        const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
+        lQ.textContent = "Question";
+        const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" });
         fQ.appendChild(lQ);
         fQ.appendChild(sQ);
         grid.appendChild(fQ);
@@ -478,7 +515,14 @@
 
         // Mentions editor block
         const mentionsWrap = document.createElement("div");
-        mentionsWrap.className = "client-mentions-wrap";
+        mentionsWrap.style.borderTop = "1px solid #e5e5e5";
+        mentionsWrap.style.paddingTop = "8px";
+        mentionsWrap.style.marginTop = "8px";
+
+        const mentionHeader = document.createElement("div");
+        mentionHeader.innerHTML = '<span style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Mentions</span>';
+        mentionHeader.style.marginBottom = "8px";
+        mentionsWrap.appendChild(mentionHeader);
 
         const mGrid = document.createElement("div");
         mGrid.className = "client-edit-grid";
@@ -487,7 +531,7 @@
         fMCat.className = "field";
         const lMCat = document.createElement("label");
         lMCat.textContent = "Mentions: Category";
-        const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
+        const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" });
         fMCat.appendChild(lMCat);
         fMCat.appendChild(sMCat);
         mGrid.appendChild(fMCat);
@@ -598,7 +642,7 @@
         sReview.addEventListener("change", () => {
           entry.defaultCategory = sReview.value ? sReview.value : null;
           refreshHeaderVisuals();
-          saveDictionary();
+          saveDictionary("Client updated: Default → " + (sReview.value || "(no highlight)"));
         });
 
         sImg.addEventListener("change", () => {
@@ -606,7 +650,7 @@
           if (sImg.value) entry.overrides.Image = sImg.value;
           else delete entry.overrides.Image;
           refreshHeaderVisuals();
-          saveDictionary();
+          saveDictionary("Client updated: Image → " + (sImg.value || "-"));
         });
 
         sPro.addEventListener("change", () => {
@@ -614,7 +658,7 @@
           if (sPro.value) entry.overrides.Profile = sPro.value;
           else delete entry.overrides.Profile;
           refreshHeaderVisuals();
-          saveDictionary();
+          saveDictionary("Client updated: Profile → " + (sPro.value || "-"));
         });
 
         sQ.addEventListener("change", () => {
@@ -622,7 +666,7 @@
           if (sQ.value) entry.overrides.Question = sQ.value;
           else delete entry.overrides.Question;
           refreshHeaderVisuals();
-          saveDictionary();
+          saveDictionary("Client updated: Question → " + (sQ.value || "-"));
         });
 
         sMCat.addEventListener("change", () => {
@@ -648,25 +692,23 @@
           saveDictionary();
           summary.textContent = formatSummary(entry);
         });
-
-        card.appendChild(header);
-        card.appendChild(body);
-      } else {
-        card.appendChild(header);
-      }
+      } // end isOpen (lazy body)
 
       header.addEventListener("click", () => {
-        openClientKey = isOpen ? null : key;
+        openClientKey = (openClientKey === key) ? null : key;
         renderClients();
       });
 
+      card.appendChild(header);
+      card.appendChild(body);
       clientListBodyEl.appendChild(card);
     });
   }
 
+  let clientSearchDebounce = null;
   clientSearchEl.addEventListener("input", () => {
-    clearTimeout(clientSearchTimer);
-    clientSearchTimer = setTimeout(() => renderClients(), 80);
+    clearTimeout(clientSearchDebounce);
+    clientSearchDebounce = setTimeout(renderClients, 80);
   });
 
   btnAddClient.addEventListener("click", () => {
@@ -720,10 +762,306 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Categories
+  // Dictionary Audit
   // ---------------------------------------------------------------------------
+  function auditDictionary() {
+    const issues = [];
+    if (!currentDict) return issues;
+
+    const cats = currentDict.categories || [];
+    const ignoreWords = (currentDict.ignoreList || []).map(w => w.trim()).filter(w => w.length > 0);
+
+    // 1. Exact duplicates within each category
+    for (const cat of cats) {
+      const seen = new Map();
+      for (const word of (cat.words || [])) {
+        const trimmed = word.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) {
+          issues.push({ type: "duplicate", cat: cat.name, word: trimmed,
+            msg: '"' + trimmed + '" appears multiple times in "' + cat.name + '"' });
+        } else {
+          seen.set(key, trimmed);
+        }
+      }
+    }
+
+    // 2. Exact duplicates within ignore list
+    {
+      const seen = new Map();
+      for (const word of ignoreWords) {
+        const key = word.toLowerCase();
+        if (seen.has(key)) {
+          issues.push({ type: "duplicate", cat: "Ignore List", word: word,
+            msg: '"' + word + '" appears multiple times in Ignore List' });
+        } else {
+          seen.set(key, word);
+        }
+      }
+    }
+
+    // 3. Substring makes exact (//word) redundant in same category
+    for (const cat of cats) {
+      const words = (cat.words || []).map(w => w.trim()).filter(w => w.length > 0);
+      const substringSet = new Set();
+
+      for (const w of words) {
+        let stripped = w;
+        if (stripped.startsWith("CS:")) stripped = stripped.slice(3);
+        if (!stripped.startsWith("//")) {
+          substringSet.add(stripped.toLowerCase());
+        }
+      }
+
+      for (const w of words) {
+        let stripped = w;
+        if (stripped.startsWith("CS:")) stripped = stripped.slice(3);
+        if (stripped.startsWith("//")) {
+          const base = stripped.slice(2).toLowerCase();
+          if (substringSet.has(base)) {
+            issues.push({ type: "redundant", cat: cat.name, word: w,
+              msg: '"' + w + '" is redundant \u2014 "' + base + '" (substring) already covers it in "' + cat.name + '"' });
+          }
+        }
+      }
+    }
+
+    // 4. Cross-category shadows (same entry, lower priority never fires)
+    const globalSeen = new Map();
+    for (const cat of cats) {
+      if (cat.enabled === false) continue;
+      for (const word of (cat.words || [])) {
+        const key = word.trim().toLowerCase();
+        if (!key) continue;
+        if (globalSeen.has(key)) {
+          const firstCat = globalSeen.get(key);
+          if (firstCat !== cat.name) {
+            issues.push({ type: "shadow", cat: cat.name, word: word.trim(),
+              msg: '"' + word.trim() + '" in "' + cat.name + '" is shadowed by "' + firstCat + '" (higher priority)' });
+          }
+        } else {
+          globalSeen.set(key, cat.name);
+        }
+      }
+    }
+
+    // 5. Ignore vs category conflicts (identical entry in both = dead category entry)
+    if (ignoreWords.length > 0) {
+      const ignoreSet = new Set(ignoreWords.map(w => w.toLowerCase()));
+      for (const cat of cats) {
+        for (const word of (cat.words || [])) {
+          const trimmed = word.trim();
+          if (!trimmed) continue;
+          if (ignoreSet.has(trimmed.toLowerCase())) {
+            issues.push({ type: "conflict", cat: cat.name, word: trimmed,
+              msg: '"' + trimmed + '" in "' + cat.name + '" conflicts with identical Ignore List entry \u2014 will never highlight' });
+          }
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  function renderAudit() {
+    const banner = document.getElementById("auditBanner");
+    const summaryEl = document.getElementById("auditSummary");
+    const details = document.getElementById("auditDetails");
+    const arrow = document.getElementById("auditArrow");
+    if (!banner || !summaryEl || !details) return;
+
+    const issues = auditDictionary();
+
+    if (issues.length === 0) {
+      banner.style.display = "none";
+      return;
+    }
+
+    banner.style.display = "block";
+    summaryEl.textContent = "\u26A0 " + issues.length + " dictionary issue" + (issues.length > 1 ? "s" : "") + " found";
+
+    details.innerHTML = "";
+    const typeColors = { duplicate: "#e65100", redundant: "#f57f17", shadow: "#e65100", conflict: "#c62828" };
+    const typeLabels = { duplicate: "DUPLICATE", redundant: "REDUNDANT", shadow: "SHADOWED", conflict: "CONFLICT" };
+
+    for (const issue of issues) {
+      const div = document.createElement("div");
+      div.style.padding = "4px 0";
+      div.style.borderBottom = "1px solid #ffe082";
+      div.style.fontSize = "12px";
+
+      const badge = document.createElement("span");
+      badge.style.cssText = "display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:700; margin-right:6px; color:#fff; background:" + (typeColors[issue.type] || "#888");
+      badge.textContent = typeLabels[issue.type] || issue.type.toUpperCase();
+
+      div.appendChild(badge);
+      div.appendChild(document.createTextNode(issue.msg));
+      details.appendChild(div);
+    }
+
+    const header = document.getElementById("auditHeader");
+    if (header) {
+      header.onclick = () => {
+        const isOpen = details.style.display !== "none";
+        details.style.display = isOpen ? "none" : "block";
+        if (arrow) arrow.classList.toggle("open", !isOpen);
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Categories (Ignore List shown as top entry)
+  // ---------------------------------------------------------------------------
+  let ignoreEditorOpen = false;
+
+  function renderIgnoreAsCategory() {
+    const words = currentDict.ignoreList || [];
+    const editor = document.createElement("div");
+    editor.className = "cat-editor ignore-editor";
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "cat-header";
+
+    const arrow = document.createElement("span");
+    arrow.className = "cat-arrow" + (ignoreEditorOpen ? " open" : "");
+    arrow.textContent = "\u25b6";
+    header.appendChild(arrow);
+
+    const colorPrev = document.createElement("span");
+    colorPrev.style.display = "inline-block";
+    colorPrev.style.width = "14px";
+    colorPrev.style.height = "14px";
+    colorPrev.style.borderRadius = "3px";
+    colorPrev.style.backgroundColor = "#e0e0e0";
+    colorPrev.style.border = "1px solid rgba(0,0,0,0.15)";
+    header.appendChild(colorPrev);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "cat-header-name";
+    nameSpan.textContent = "Ignore List";
+    header.appendChild(nameSpan);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "cat-header-count";
+    countSpan.textContent = words.length + " words";
+    header.appendChild(countSpan);
+
+    const priorityPill = document.createElement("span");
+    priorityPill.style.fontSize = "10px";
+    priorityPill.style.color = "#999";
+    priorityPill.style.padding = "2px 6px";
+    priorityPill.style.border = "1px solid #ddd";
+    priorityPill.style.borderRadius = "999px";
+    priorityPill.style.background = "#f5f5f5";
+    priorityPill.textContent = "TOP PRIORITY";
+    header.appendChild(priorityPill);
+
+    editor.appendChild(header);
+
+    // Body
+    const body = document.createElement("div");
+    body.className = "cat-body" + (ignoreEditorOpen ? " open" : "");
+
+    const helpText = document.createElement("p");
+    helpText.style.fontSize = "11px";
+    helpText.style.color = "#999";
+    helpText.style.marginBottom = "6px";
+    helpText.textContent =
+      "Words here block highlights from ALL categories. One per line. " +
+      "Wildcards (* ?) work. Use // for exact whole-word match (e.g. //post won't block postpartum).";
+    body.appendChild(helpText);
+
+    const wordArea = document.createElement("textarea");
+    wordArea.className = "word-list";
+    wordArea.spellcheck = false;
+    wordArea.style.minHeight = "200px";
+    wordArea.value = words.join("\n");
+    body.appendChild(wordArea);
+
+    const addRow = document.createElement("div");
+    addRow.className = "add-word-row";
+
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Quick add to ignore list (Enter to add)";
+
+    const addExactCb = document.createElement("input");
+    addExactCb.type = "checkbox";
+    addExactCb.id = "exact-ignore";
+
+    const addExactLabel = document.createElement("label");
+    addExactLabel.htmlFor = "exact-ignore";
+    addExactLabel.textContent = " Exact";
+    addExactLabel.style.fontSize = "12px";
+
+    addInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && addInput.value.trim()) {
+        let word = addInput.value.trim();
+        if (addExactCb.checked && !word.startsWith("//")) {
+          word = "//" + word;
+        }
+        // Sync textarea edits into the array first (in case user typed directly)
+        currentDict.ignoreList = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        if (currentDict.ignoreList.includes(word)) {
+          showMsg('"' + word + '" already in Ignore List', "error");
+          return;
+        }
+        insertAlphabetically(currentDict.ignoreList, word);
+        wordArea.value = currentDict.ignoreList.join("\n");
+        countSpan.textContent = currentDict.ignoreList.length + " words";
+        addInput.value = "";
+        saveDictionary('Added "' + word + '" to Ignore List');
+      }
+    });
+
+    addRow.appendChild(addInput);
+    addRow.appendChild(addExactCb);
+    addRow.appendChild(addExactLabel);
+    body.appendChild(addRow);
+
+    const saveRow = document.createElement("div");
+    saveRow.style.marginTop = "10px";
+    saveRow.style.display = "flex";
+    saveRow.style.gap = "8px";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "primary";
+    saveBtn.textContent = "Save Ignore List";
+    saveBtn.addEventListener("click", () => {
+      const lines = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      lines.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+      currentDict.ignoreList = lines;
+      wordArea.value = lines.join("\n");
+      countSpan.textContent = lines.length + " words";
+      saveDictionary("Ignore list saved (" + lines.length + " words)");
+    });
+    saveRow.appendChild(saveBtn);
+
+    body.appendChild(saveRow);
+    editor.appendChild(body);
+
+    header.addEventListener("click", () => {
+      // Close any open category section first
+      if (!ignoreEditorOpen) {
+        document.querySelectorAll(".cat-editor:not(.ignore-editor) .cat-body").forEach(b => b.classList.remove("open"));
+        document.querySelectorAll(".cat-editor:not(.ignore-editor) .cat-arrow").forEach(a => a.classList.remove("open"));
+      }
+      ignoreEditorOpen = !ignoreEditorOpen;
+      body.classList.toggle("open", ignoreEditorOpen);
+      arrow.classList.toggle("open", ignoreEditorOpen);
+    });
+
+    catEditorsEl.appendChild(editor);
+  }
+
   function renderCategories() {
     catEditorsEl.innerHTML = "";
+
+    // --- Ignore List rendered as the top "category" ---
+    renderIgnoreAsCategory();
+
     if (!currentDict.categories) return;
 
     currentDict.categories.forEach((cat, index) => {
@@ -793,27 +1131,19 @@
       const fgInput = colorRow.querySelector(".fg-color");
       const preview = colorRow.querySelector(".preview");
 
-      // Update local preview while dragging - no save/re-render on every pixel
       bgInput.addEventListener("input", () => {
+        cat.color = bgInput.value;
         colorPrev.style.backgroundColor = bgInput.value;
         preview.style.background = bgInput.value;
-      });
-      // Persist and refresh client swatches only when picker is released
-      bgInput.addEventListener("change", () => {
-        cat.color = bgInput.value;
         saveDictionary();
-        renderClients();
-        populateAddClientDropdowns(getCategoryStyleByName());
+        renderClients(); // update client swatches + dropdown styling
       });
 
       fgInput.addEventListener("input", () => {
-        preview.style.color = fgInput.value;
-      });
-      fgInput.addEventListener("change", () => {
         cat.fColor = fgInput.value;
+        preview.style.color = fgInput.value;
         saveDictionary();
         renderClients();
-        populateAddClientDropdowns(getCategoryStyleByName());
       });
 
       const nameRow = document.createElement("div");
@@ -823,11 +1153,30 @@
       nameInput.type = "text";
       nameInput.value = cat.name || "";
       nameInput.addEventListener("change", () => {
-        cat.name = nameInput.value;
-        nameSpan.textContent = nameInput.value;
+        const oldName = cat.name;
+        const newName = nameInput.value.trim();
+        if (!newName) {
+          nameInput.value = oldName;
+          return;
+        }
+        cat.name = newName;
+        nameSpan.textContent = newName;
+
+        // Update client rules that reference the old category name
+        if (oldName && oldName !== newName && Array.isArray(currentDict.clients)) {
+          for (const client of currentDict.clients) {
+            if (client.defaultCategory === oldName) client.defaultCategory = newName;
+            if (client.overrides) {
+              if (client.overrides.Image === oldName) client.overrides.Image = newName;
+              if (client.overrides.Profile === oldName) client.overrides.Profile = newName;
+              if (client.overrides.Question === oldName) client.overrides.Question = newName;
+            }
+            if (client.mentionCategory === oldName) client.mentionCategory = newName;
+          }
+        }
+
         saveDictionary();
-        renderClients();
-        populateAddClientDropdowns(getCategoryStyleByName());
+        renderClients(); // refresh dropdowns and swatches
       });
       nameRow.appendChild(nameInput);
       body.appendChild(nameRow);
@@ -871,7 +1220,12 @@
           if (addExactCb.checked && !word.startsWith("//")) {
             word = "//" + word;
           }
-          if (!Array.isArray(cat.words)) cat.words = [];
+          // Sync textarea edits into the array first (in case user typed directly)
+          cat.words = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+          if (cat.words.includes(word)) {
+            showMsg('"' + word + '" already in ' + (cat.name || "category"), "error");
+            return;
+          }
           insertAlphabetically(cat.words, word);
           wordArea.value = cat.words.join("\n");
           countSpan.textContent = cat.words.length + " words";
@@ -895,7 +1249,9 @@
       saveBtn.textContent = "Save Words";
       saveBtn.addEventListener("click", () => {
         const lines = wordArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        lines.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
         cat.words = lines;
+        wordArea.value = lines.join("\n");
         countSpan.textContent = lines.length + " words";
         saveDictionary((cat.name || "Category") + ": saved " + lines.length + " words");
       });
@@ -909,10 +1265,23 @@
         const n = (cat.words && cat.words.length) ? cat.words.length : 0;
         if (confirm('Delete "' + nm + '" and all its ' + n + " words?")) {
           currentDict.categories.splice(index, 1);
+
+          // Clean up client references to this deleted category
+          if (nm && Array.isArray(currentDict.clients)) {
+            for (const client of currentDict.clients) {
+              if (client.defaultCategory === nm) client.defaultCategory = null;
+              if (client.overrides) {
+                if (client.overrides.Image === nm) delete client.overrides.Image;
+                if (client.overrides.Profile === nm) delete client.overrides.Profile;
+                if (client.overrides.Question === nm) delete client.overrides.Question;
+              }
+              if (client.mentionCategory === nm) client.mentionCategory = null;
+            }
+          }
+
           saveDictionary('Deleted "' + nm + '"');
           renderCategories();
           renderClients();
-          populateAddClientDropdowns(getCategoryStyleByName());
         }
       });
       saveRow.appendChild(deleteBtn);
@@ -924,6 +1293,7 @@
         const isOpen = body.classList.contains("open");
         document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
         document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+        ignoreEditorOpen = false; // sync state when closing all sections
         if (!isOpen) {
           body.classList.add("open");
           arrow.classList.add("open");
@@ -932,6 +1302,57 @@
 
       catEditorsEl.appendChild(editor);
     });
+
+    // Run audit after rendering categories
+    renderAudit();
+
+    // Apply category search filter if active
+    applyCatSearchFilter();
+
+    // Refresh "Add Client" form dropdowns to reflect updated category names/colors
+    populateAddClientDropdowns();
+  }
+
+  function applyCatSearchFilter() {
+    const query = catSearchEl ? catSearchEl.value.trim().toLowerCase() : "";
+    const editors = catEditorsEl.querySelectorAll(".cat-editor");
+    let shown = 0;
+    let total = editors.length;
+
+    editors.forEach(editor => {
+      if (!query) {
+        editor.style.display = "";
+        // Remove any highlight marks
+        editor.querySelectorAll("mark.cat-search-hl").forEach(m => {
+          m.replaceWith(m.textContent);
+        });
+        shown++;
+        return;
+      }
+
+      // Check if any word in this editor matches the search
+      const textarea = editor.querySelector(".word-list");
+      const catName = editor.querySelector(".cat-header-name");
+      const nameText = catName ? catName.textContent.toLowerCase() : "";
+      let match = nameText.includes(query);
+
+      if (!match && textarea) {
+        const lines = textarea.value.split("\n");
+        match = lines.some(line => line.toLowerCase().includes(query));
+      }
+
+      editor.style.display = match ? "" : "none";
+      if (match) shown++;
+    });
+
+    if (catSearchStatus) {
+      if (query) {
+        catSearchStatus.style.display = "block";
+        catSearchStatus.textContent = "Showing " + shown + " of " + total + " categories";
+      } else {
+        catSearchStatus.style.display = "none";
+      }
+    }
   }
 
   btnAddCat.addEventListener("click", () => {
@@ -954,7 +1375,6 @@
     saveDictionary('Added category "' + name + '"');
     renderCategories();
     renderClients();
-    populateAddClientDropdowns(getCategoryStyleByName());
   });
 
   // ---------------------------------------------------------------------------
@@ -1021,9 +1441,7 @@
     currentDict = data;
     openClientKey = null;
     saveDictionary("Imported " + data.categories.length + " categories, " + data.clients.length + " clients");
-    renderIgnoreList();
     renderClients();
-    populateAddClientDropdowns(getCategoryStyleByName());
     renderCategories();
   }
 
@@ -1066,15 +1484,253 @@
     currentDict = dict;
     openClientKey = null;
     saveDictionary("Imported HighlightThis backup: " + dict.categories.length + " categories, " + totalWords + " words");
-    renderIgnoreList();
     renderClients();
-    populateAddClientDropdowns(getCategoryStyleByName());
     renderCategories();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Clear / Save client form
+  // ---------------------------------------------------------------------------
+  function clearClientForm() {
+    if (newClientPattern) newClientPattern.value = "";
+    if (newClientReview) newClientReview.value = "";
+    if (newClientImage) newClientImage.value = "";
+    if (newClientProfile) newClientProfile.value = "";
+    if (newClientQuestion) newClientQuestion.value = "";
+    if (newClientMentionCategory) newClientMentionCategory.value = "";
+    if (newClientAliases) newClientAliases.value = "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+    if (newClientNote) newClientNote.value = "";
+
+    [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
+      .filter(Boolean)
+      .forEach(sel => applySelectVisualForCategory(sel));
+  }
+
+  if (btnClearClient) {
+    btnClearClient.addEventListener("click", clearClientForm);
+  }
+
+  if (btnSaveClients) {
+    btnSaveClients.addEventListener("click", () => {
+      saveDictionary("Clients saved (" + (currentDict.clients || []).length + " entries)");
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Detect current CMS client from open tabs
+  // ---------------------------------------------------------------------------
+  let detectedClient = null;
+  let detectGeneration = 0; // guards against stale responses from prior detection rounds
+
+  function detectCurrentClient() {
+    if (!chrome.tabs) return;
+
+    const gen = ++detectGeneration;
+
+    // Try the most-recently-active CMS tab first, then fall back to all tabs
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (activeTabs) => {
+      if (gen !== detectGeneration) return;
+
+      function tryTabs(tabs) {
+        let resolved = false;
+        for (const tab of tabs) {
+          try {
+            chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (response) => {
+              if (chrome.runtime.lastError) return;
+              if (resolved) return;
+              if (gen !== detectGeneration) return;
+              if (response && response.clientName) {
+                resolved = true;
+                detectedClient = response.clientName;
+                onClientDetected(response.clientName);
+              }
+            });
+          } catch (e) {
+            console.debug("CMS Highlighter: tab", tab.id, "not reachable:", e.message);
+          }
+        }
+        return resolved;
+      }
+
+      // First try active tab(s)
+      if (activeTabs && activeTabs.length > 0) {
+        tryTabs(activeTabs);
+        // Give active tab 200ms to respond before querying all tabs
+        setTimeout(() => {
+          if (gen !== detectGeneration) return;
+          if (detectedClient) return; // active tab already responded
+          chrome.tabs.query({}, (allTabs) => {
+            if (gen !== detectGeneration) return;
+            if (detectedClient) return;
+            if (allTabs) tryTabs(allTabs);
+          });
+        }, 200);
+      } else {
+        chrome.tabs.query({}, (allTabs) => {
+          if (gen !== detectGeneration) return;
+          if (allTabs) tryTabs(allTabs);
+        });
+      }
+    });
+  }
+
+  function fillFormFromClient(entry) {
+    if (!entry) return;
+
+    if (newClientPattern) newClientPattern.value = entry.pattern || "";
+    if (newClientReview) {
+      newClientReview.value = entry.defaultCategory || "";
+      applySelectVisualForCategory(newClientReview);
+    }
+
+    const o = entry.overrides || {};
+    if (newClientImage) {
+      newClientImage.value = o.Image || "";
+      applySelectVisualForCategory(newClientImage);
+    }
+    if (newClientProfile) {
+      newClientProfile.value = o.Profile || "";
+      applySelectVisualForCategory(newClientProfile);
+    }
+    if (newClientQuestion) {
+      newClientQuestion.value = o.Question || "";
+      applySelectVisualForCategory(newClientQuestion);
+    }
+    if (newClientMentionCategory) {
+      newClientMentionCategory.value = entry.mentionCategory || "";
+      applySelectVisualForCategory(newClientMentionCategory);
+    }
+    if (newClientAliases) {
+      newClientAliases.value = Array.isArray(entry.aliases) ? entry.aliases.join("\n") : "";
+    }
+    if (newClientIncludePatternInContent) {
+      newClientIncludePatternInContent.checked = (entry.includePatternInContent !== false);
+    }
+    if (newClientNote) {
+      newClientNote.value = entry.note ? String(entry.note) : "";
+    }
+  }
+
+  function onClientDetected(clientName) {
+    if (detectedBanner && detectedNameEl) {
+      detectedNameEl.textContent = clientName;
+      detectedBanner.style.display = "flex";
+    }
+
+    // Auto-expand Clients section so the detected banner is visible
+    const clientsBody = document.getElementById("sectionClients");
+    const clientsArrow = document.querySelector('[data-section="sectionClients"] .section-arrow');
+    if (clientsBody && !clientsBody.classList.contains("open")) {
+      clientsBody.classList.add("open");
+      if (clientsArrow) clientsArrow.classList.add("open");
+    }
+
+    // Auto-expand add-client form so user can see the filled fields
+    if (clientAddFormBody && clientAddFormBody.style.display === "none") {
+      clientAddFormBody.style.display = "block";
+      if (addClientArrow) addClientArrow.classList.add("open");
+    }
+
+    if (!currentDict) return;
+
+    // Find matching client rule
+    const match = (currentDict.clients || []).find(c => {
+      const rx = globToRegex(c.pattern);
+      return rx && rx.test(clientName);
+    });
+
+    if (match) {
+      // Auto-fill form with existing client data
+      fillFormFromClient(match);
+      // Auto-expand in list
+      openClientKey = patternKey(match.pattern);
+      renderClients();
+
+      // Auto-scroll to the expanded client card
+      setTimeout(() => {
+        const openCard = clientListBodyEl.querySelector(".client-body.open");
+        if (openCard) openCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+
+      // Update banner to show it already exists
+      if (btnUseDetected) btnUseDetected.textContent = "Refresh Form";
+    } else {
+      // New client — just pre-fill the pattern
+      if (newClientPattern && !newClientPattern.value) {
+        newClientPattern.value = clientName;
+      }
+      if (btnUseDetected) btnUseDetected.textContent = "Fill Form";
+    }
+  }
+
+  if (btnUseDetected) {
+    btnUseDetected.addEventListener("click", () => {
+      if (!detectedClient) return;
+
+      const match = (currentDict.clients || []).find(c => {
+        const rx = globToRegex(c.pattern);
+        return rx && rx.test(detectedClient);
+      });
+
+      if (match) {
+        fillFormFromClient(match);
+        openClientKey = patternKey(match.pattern);
+        renderClients();
+      } else if (newClientPattern) {
+        newClientPattern.value = detectedClient;
+      }
+      if (newClientPattern) newClientPattern.focus();
+    });
   }
 
   // ---------------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------------
+
+  // One-time change handlers for "Add client" form selects (visual styling)
+  [newClientReview, newClientImage, newClientProfile, newClientQuestion, newClientMentionCategory]
+    .filter(Boolean)
+    .forEach(sel => sel.addEventListener("change", () => applySelectVisualForCategory(sel)));
+
+  // Category search
+  if (catSearchEl) {
+    catSearchEl.addEventListener("input", () => {
+      applyCatSearchFilter();
+    });
+  }
+
   load();
+
+  // Detect CMS client after dictionary loads (small delay to let storage callback finish)
+  setTimeout(detectCurrentClient, 300);
+
+  // Re-detect when options page regains focus (user may have switched CMS tabs/clients)
+  window.addEventListener("focus", () => {
+    setTimeout(detectCurrentClient, 200);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Live reload: when dictionary changes from popup or context menu, update
+  // our in-memory copy so we never overwrite external additions.
+  // ---------------------------------------------------------------------------
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (!changes.dictionary) return;
+    if (savingInProgress) return; // ignore our own saves
+
+    const newDict = changes.dictionary.newValue;
+    if (!newDict) return;
+
+    // Preserve structure
+    if (!Array.isArray(newDict.ignoreList)) newDict.ignoreList = [];
+    if (!Array.isArray(newDict.categories)) newDict.categories = [];
+    if (!Array.isArray(newDict.clients)) newDict.clients = [];
+
+    currentDict = newDict;
+    renderClients();
+    renderCategories();
+    showMsg("Dictionary updated from popup / context menu", "success");
+  });
 
 })();
