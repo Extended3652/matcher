@@ -190,7 +190,7 @@
 
     let extra = "";
     if (mentionCat !== "-" || aliases.length > 0 || !incPat || note) {
-      extra += " | Mentions: " + mentionCat + " (" + aliases.length + ")";
+      extra += " | Content mentions: " + mentionCat + " (" + aliases.length + ")";
       if (!incPat) extra += " [no pattern]";
       if (note) extra += " [note]";
     }
@@ -492,7 +492,7 @@
       const fMCat = document.createElement("div");
       fMCat.className = "field";
       const lMCat = document.createElement("label");
-      lMCat.textContent = "Mentions: Category";
+      lMCat.textContent = "Content mentions category";
       const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
       fMCat.appendChild(lMCat);
       fMCat.appendChild(sMCat);
@@ -502,7 +502,7 @@
       fAliases.className = "field";
       fAliases.style.gridColumn = "1 / -1";
       const lAliases = document.createElement("label");
-      lAliases.textContent = "Mentions: Aliases (one per line, supports * and ?)";
+      lAliases.textContent = "Content mentions aliases (one per line, supports * and ?)";
       const tAliases = document.createElement("textarea");
       tAliases.className = "word-list";
       tAliases.spellcheck = false;
@@ -529,7 +529,7 @@
       const incHelp = document.createElement("div");
       incHelp.className = "muted";
       incHelp.style.marginTop = "4px";
-      incHelp.textContent = "If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
+      incHelp.textContent = "If Content mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
       fInc.appendChild(incHelp);
 
       mGrid.appendChild(fInc);
