@@ -350,18 +350,6 @@
     </p>
   </div>
 
-  <!-- Ignore List -->
-  <div class="section ignore-section">
-    <h2>Ignore List <span id="ignoreCount" style="font-size:12px; color:#999;"></span></h2>
-    <p style="font-size: 12px; color: #777; margin-bottom: 8px;">
-      Words here block highlights from all categories. One per line. Wildcards (* ?) work.
-    </p>
-    <textarea id="ignoreListArea" class="word-list" spellcheck="false"></textarea>
-    <div style="margin-top: 8px;">
-      <button class="primary" id="btnSaveIgnore">Save Ignore List</button>
-    </div>
-  </div>
-
   <!-- Clients -->
   <div class="section">
     <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
@@ -431,6 +419,25 @@
       <input type="text" id="newCatName" placeholder="New category name">
       <input type="color" id="newCatColor" value="#FF9900">
       <button class="primary" id="btnAddCat">Add Category</button>
+    </div>
+
+    <!-- Ignore List (top category) -->
+    <div class="cat-editor" id="ignoreListEditor">
+      <div class="cat-header" id="ignoreListHeader">
+        <span class="cat-arrow" id="ignoreListArrow">&#9654;</span>
+        <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e0e0e0; border:1px solid rgba(0,0,0,0.2);"></span>
+        <span class="cat-header-name">Ignore List</span>
+        <span class="cat-header-count" id="ignoreCount"></span>
+      </div>
+      <div class="cat-body" id="ignoreListBody">
+        <p style="font-size: 12px; color: #777; margin-bottom: 8px;">
+          Words here block highlights from all categories. One per line. Wildcards (* ?) work.
+        </p>
+        <textarea id="ignoreListArea" class="word-list" spellcheck="false"></textarea>
+        <div style="margin-top: 8px;">
+          <button class="primary" id="btnSaveIgnore">Save Ignore List</button>
+        </div>
+      </div>
     </div>
 
     <div id="catEditors"></div>

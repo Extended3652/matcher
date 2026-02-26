@@ -243,6 +243,18 @@
     ignoreCount.textContent = "(" + lines.length + " words)";
   });
 
+  document.getElementById("ignoreListHeader").addEventListener("click", () => {
+    const ignoreBody = document.getElementById("ignoreListBody");
+    const ignoreArrow = document.getElementById("ignoreListArrow");
+    const isOpen = ignoreBody.classList.contains("open");
+    document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
+    document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+    if (!isOpen) {
+      ignoreBody.classList.add("open");
+      ignoreArrow.classList.add("open");
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Clients
   // ---------------------------------------------------------------------------
