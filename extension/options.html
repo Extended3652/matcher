@@ -329,6 +329,23 @@
       color: #888;
       font-size: 12px;
     }
+
+    .field-divider {
+      grid-column: 1 / -1;
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 6px 0 2px;
+    }
+
+    .field-group-label {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #999;
+      margin-bottom: 2px;
+    }
   </style>
 </head>
 <body>
@@ -367,27 +384,28 @@
     <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
     <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
       Match against the client name shown in the CMS header. Pattern supports * and ?.
-      Review uses the Default setting. Image/Profile/Question can override Default.
+      Review uses the Default setting. Image/Profile/Question/Comment can override Default.
       <span class="pill">No highlight</span> uses grey.
     </p>
 
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
-      <span id="clientShowing" class="muted"></span>
-    </div>
-
     <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
+      <h3 style="margin: 0 0 10px; color: #444;">Add client</h3>
       <div class="client-add-grid">
+
+        <div class="field-group-label">Client identity</div>
+
         <div class="field">
-          <label>Pattern</label>
-          <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
+          <label>Client name</label>
+          <input type="text" id="newClientPattern" placeholder="Client name (supports * and ?)">
         </div>
 
         <div class="field">
-          <label>Review (Default)</label>
+          <label>Default category</label>
           <select id="newClientReview"></select>
         </div>
+
+        <hr class="field-divider">
+        <div class="field-group-label">Content type overrides</div>
 
         <div class="field">
           <label>Image override</label>
@@ -403,12 +421,48 @@
           <label>Question override</label>
           <select id="newClientQuestion"></select>
         </div>
+
+        <div class="field">
+          <label>Comment override</label>
+          <select id="newClientComment"></select>
+        </div>
+
+        <hr class="field-divider">
+        <div class="field-group-label">Mentions</div>
+
+        <div class="field">
+          <label>Mentions category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" class="word-list" spellcheck="false" style="min-height:70px;"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Also treat the client name as a mention in content
+          </label>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)">
+        </div>
+
       </div>
 
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
       </div>
+    </div>
+
+    <div class="clients-topbar">
+      <input type="text" id="clientSearch" placeholder="Search clients (name contains...)">
+      <span id="clientShowing" class="muted"></span>
     </div>
 
     <div class="client-list">
