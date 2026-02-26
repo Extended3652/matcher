@@ -120,14 +120,23 @@
     }
   }
 
+  function findMatchedClient() {
+    const clients = (currentDict && currentDict.clients) || [];
+    return clients.find(c => {
+      const rx = globToRegexForClient(c && c.pattern);
+      return rx && rx.test(currentClientName);
+    }) || null;
+  }
+
   function renderClientBanner() {
-    if (!currentClientName || checkClientKnown(currentClientName)) {
+    if (!currentClientName) {
       clientBannerEl.style.display = "none";
       return;
     }
 
+    const matchedClient = findMatchedClient();
+
     clientBannerEl.style.display = "";
-    clientBannerMsg.textContent = "\u26a0 " + currentClientName + " isn\u2019t in your client list";
 
     const cats = (currentDict && currentDict.categories) || [];
     bannerCatSelect.innerHTML = "";
@@ -148,12 +157,33 @@
       bannerCatSelect.appendChild(opt);
     });
 
-    // Auto-select first real category so there's always a default
-    if (cats.length > 0) bannerCatSelect.value = cats[0].name || "";
+    if (matchedClient) {
+      // Known client: show name + current defaultCategory so it can be changed inline
+      clientBannerEl.classList.add("known");
+      clientBannerMsg.textContent = currentClientName;
+      bannerAddBtn.style.display = "none";
+      bannerCatSelect.value = matchedClient.defaultCategory || "";
+    } else {
+      // Unknown client: show warning + add prompt
+      clientBannerEl.classList.remove("known");
+      clientBannerMsg.textContent = "\u26a0 " + currentClientName + " isn\u2019t in your client list";
+      bannerAddBtn.style.display = "";
+      // Auto-select first real category so there's always a default
+      if (cats.length > 0) bannerCatSelect.value = cats[0].name || "";
+    }
+
     updateBannerSelectStyle();
   }
 
-  bannerCatSelect.addEventListener("change", updateBannerSelectStyle);
+  bannerCatSelect.addEventListener("change", () => {
+    updateBannerSelectStyle();
+    // Auto-save defaultCategory when the client is already known
+    const matchedClient = findMatchedClient();
+    if (matchedClient) {
+      matchedClient.defaultCategory = bannerCatSelect.value || null;
+      saveDictionary();
+    }
+  });
 
   bannerAddBtn.addEventListener("click", () => {
     if (!currentClientName) return;
