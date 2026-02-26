@@ -229,10 +229,16 @@
   // ---------------------------------------------------------------------------
   // Storage + refresh helpers
   // ---------------------------------------------------------------------------
-  function refreshActiveTab() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
+  const CMS_URL_PATTERNS = [
+    "https://cms.bazaarvoice.com/*",
+    "https://workbench.bazaarvoice.com/*",
+    "http://minotaur:8124/*",
+  ];
+
+  function refreshCmsTabs() {
+    chrome.tabs.query({ url: CMS_URL_PATTERNS }, (tabs) => {
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
       }
     });
   }
@@ -240,7 +246,7 @@
   function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       updateStats();
-      refreshActiveTab();
+      refreshCmsTabs();
     });
   }
 

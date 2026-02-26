@@ -221,11 +221,19 @@
     });
   }
 
+  const CMS_URL_PATTERNS = [
+    "https://cms.bazaarvoice.com/*",
+    "https://workbench.bazaarvoice.com/*",
+    "http://minotaur:8124/*",
+  ];
+
   function saveDictionary(msg) {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
+      chrome.tabs.query({ url: CMS_URL_PATTERNS }, (tabs) => {
+        for (const tab of tabs) {
+          chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
+        }
       });
     });
   }
