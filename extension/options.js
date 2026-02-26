@@ -34,6 +34,9 @@
   const newClientQuestion = document.getElementById("newClientQuestion");
 
   // Newer "Mentions" fields (must exist in options.html)
+  const newClientComment  = document.getElementById("newClientComment");
+
+  // Mentions fields (optional, only present if options.html is extended)
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
@@ -174,13 +177,14 @@
   function formatSummary(entry) {
     const def = entry.defaultCategory ? entry.defaultCategory : "-";
     const o = entry.overrides || {};
-    const img = o.Image ? o.Image : "-";
+    const img = o.Image   ? o.Image   : "-";
     const pro = o.Profile ? o.Profile : "-";
-    const q = o.Question ? o.Question : "-";
+    const q   = o.Question ? o.Question : "-";
+    const cmt = o.Comment  ? o.Comment  : "-";
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
-    const incPat = (entry.includePatternInContent !== false); // default true
+    const incPat = (entry.includePatternInContent !== false);
     const note = entry.note ? String(entry.note).trim() : "";
 
     let extra = "";
@@ -190,7 +194,7 @@
       if (note) extra += " [note]";
     }
 
-    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
+    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + " | Cmt: " + cmt + extra;
   }
 
   function pickHeaderSwatchCategory(entry) {
@@ -198,6 +202,7 @@
     if (o.Image) return o.Image;
     if (o.Profile) return o.Profile;
     if (o.Question) return o.Question;
+    if (o.Comment) return o.Comment;
     if (entry.defaultCategory) return entry.defaultCategory;
     return null;
   }
@@ -241,21 +246,27 @@
     newClientImage.innerHTML = "";
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
+    if (newClientComment) newClientComment.innerHTML = "";
 
     const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
-    const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const imgSel    = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const proSel    = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const qSel      = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const cSel      = makeCategorySelect({ mode: "override", value: "" }, stMap);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
-    while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
-    while (proSel.firstChild) newClientProfile.appendChild(proSel.firstChild);
-    while (qSel.firstChild) newClientQuestion.appendChild(qSel.firstChild);
+    while (imgSel.firstChild)    newClientImage.appendChild(imgSel.firstChild);
+    while (proSel.firstChild)    newClientProfile.appendChild(proSel.firstChild);
+    while (qSel.firstChild)      newClientQuestion.appendChild(qSel.firstChild);
+    if (newClientComment) {
+      while (cSel.firstChild) newClientComment.appendChild(cSel.firstChild);
+    }
 
-    newClientReview.value = "";
-    newClientImage.value = "";
-    newClientProfile.value = "";
+    newClientReview.value   = "";
+    newClientImage.value    = "";
+    newClientProfile.value  = "";
     newClientQuestion.value = "";
+    if (newClientComment) newClientComment.value = "";
 
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
@@ -391,10 +402,12 @@
       const grid = document.createElement("div");
       grid.className = "client-edit-grid";
 
+      // Client Name (full-width row)
       const fPat = document.createElement("div");
       fPat.className = "field";
+      fPat.style.gridColumn = "1 / -1";
       const lPat = document.createElement("label");
-      lPat.textContent = "Client Name";
+      lPat.textContent = "Client Name / Pattern";
       const iPat = document.createElement("input");
       iPat.type = "text";
       iPat.value = pat;
@@ -402,19 +415,34 @@
       fPat.appendChild(iPat);
       grid.appendChild(fPat);
 
+      // ── Default ──
+      const sepDefault = document.createElement("div");
+      sepDefault.className = "client-section-label";
+      sepDefault.style.gridColumn = "1 / -1";
+      sepDefault.textContent = "Default";
+      grid.appendChild(sepDefault);
+
       const fReview = document.createElement("div");
       fReview.className = "field";
+      fReview.style.gridColumn = "1 / -1";
       const lReview = document.createElement("label");
-      lReview.textContent = "Header: Review (Default)";
+      lReview.textContent = "Review highlight";
       const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
 
+      // ── Overrides ──
+      const sepOverrides = document.createElement("div");
+      sepOverrides.className = "client-section-label";
+      sepOverrides.style.gridColumn = "1 / -1";
+      sepOverrides.textContent = "Overrides";
+      grid.appendChild(sepOverrides);
+
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
-      lImg.textContent = "Header: Image override";
+      lImg.textContent = "Image";
       const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
@@ -423,7 +451,7 @@
       const fPro = document.createElement("div");
       fPro.className = "field";
       const lPro = document.createElement("label");
-      lPro.textContent = "Header: Profile override";
+      lPro.textContent = "Profile";
       const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
@@ -432,11 +460,20 @@
       const fQ = document.createElement("div");
       fQ.className = "field";
       const lQ = document.createElement("label");
-      lQ.textContent = "Header: Question override";
+      lQ.textContent = "Question";
       const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
       grid.appendChild(fQ);
+
+      const fCmt = document.createElement("div");
+      fCmt.className = "field";
+      const lCmt = document.createElement("label");
+      lCmt.textContent = "Comment";
+      const sCmt = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Comment) || "" }, styleByName);
+      fCmt.appendChild(lCmt);
+      fCmt.appendChild(sCmt);
+      grid.appendChild(fCmt);
 
       body.appendChild(grid);
 
@@ -591,6 +628,14 @@
         saveDictionary();
       });
 
+      sCmt.addEventListener("change", () => {
+        if (!entry.overrides) entry.overrides = {};
+        if (sCmt.value) entry.overrides.Comment = sCmt.value;
+        else delete entry.overrides.Comment;
+        refreshHeaderVisuals();
+        saveDictionary();
+      });
+
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
         saveDictionary();
@@ -664,19 +709,21 @@
       note: newClientNote ? (newClientNote.value || "").trim() : ""
     };
 
-    if (newClientImage.value) entry.overrides.Image = newClientImage.value;
-    if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
+    if (newClientImage.value)    entry.overrides.Image    = newClientImage.value;
+    if (newClientProfile.value)  entry.overrides.Profile  = newClientProfile.value;
     if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
+    if (newClientComment && newClientComment.value) entry.overrides.Comment = newClientComment.value;
 
     clients.push(entry);
     currentDict.clients = clients;
     ensureClientsSorted();
 
-    newClientPattern.value = "";
-    newClientReview.value = "";
-    newClientImage.value = "";
-    newClientProfile.value = "";
+    newClientPattern.value  = "";
+    newClientReview.value   = "";
+    newClientImage.value    = "";
+    newClientProfile.value  = "";
     newClientQuestion.value = "";
+    if (newClientComment) newClientComment.value = "";
 
     if (newClientMentionCategory) newClientMentionCategory.value = "";
     if (newClientAliases) newClientAliases.value = "";
@@ -1120,8 +1167,30 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Pre-fill new-client pattern from the active CMS tab
+  // ---------------------------------------------------------------------------
+  function tryPreFillClientName() {
+    if (!newClientPattern) return;
+    // host_permissions for cms.bazaarvoice.com let us query by URL without needing "tabs" permission
+    chrome.tabs.query({ url: "https://cms.bazaarvoice.com/*" }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs || !tabs.length) return;
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (resp) => {
+        if (chrome.runtime.lastError || !resp || !resp.clientName) return;
+        const name = resp.clientName.trim();
+        if (!name) return;
+        // Only pre-fill if the user hasn't typed anything yet
+        if (!newClientPattern.value) {
+          newClientPattern.value = name;
+        }
+        newClientPattern.placeholder = name;
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------------
   load();
+  tryPreFillClientName();
 
 })();
