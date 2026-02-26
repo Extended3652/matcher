@@ -493,6 +493,20 @@ assertMatches(
   [{ cat:"PRF", word:"shit" }]
 );
 
+assertMatches(
+  "middle wildcard crosses space: after*taste matches 'after taste'",
+  cfg([cat("a", "SI", "#00f", ["after*taste"])]),
+  "I have a bad after taste",
+  [{ cat:"SI", word:"after taste" }]
+);
+
+assertMatches(
+  "middle wildcard crosses space: after*taste matches 'aftertaste'",
+  cfg([cat("a", "SI", "#00f", ["after*taste"])]),
+  "That left an aftertaste",
+  [{ cat:"SI", word:"aftertaste" }]
+);
+
 // =============================================================================
 // Summary
 // =============================================================================

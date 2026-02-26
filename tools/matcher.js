@@ -117,8 +117,9 @@ function globToRegexFragment(pattern) {
           const adjacentToSpace = (isFirst && next === " ") || (isLast && prev === " ");
           result += adjacentToSpace ? "[^\\s]*" : "[^\\s\\p{P}]*";
         } else {
-          // Middle wildcard: stay in-token but allow contractions (e.g. d*t → didn't)
-          result += "[^\\s]*?";
+          // Middle wildcard: allow non-space chars OR a space followed by a non-space
+          // (so after*taste matches "aftertaste" and "after taste" but not trailing spaces)
+          result += "(\\S|\\s(?=\\S))*?";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
