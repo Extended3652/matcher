@@ -121,9 +121,10 @@
             const adjacentToSpace = (isFirst && next === " ") || (isLast && prev === " ");
             result += adjacentToSpace ? "[^\\s]*" : "[^\\s\\p{P}]*";
           } else {
-            // Middle wildcard: allow non-space chars OR a space followed by a non-space
-            // (so after*taste matches "aftertaste" and "after taste" but not trailing spaces)
-            result += "(\\S|\\s(?=\\S))*?";
+            // Middle wildcard: within-token only (non-space chars).
+            // e.g. "wal*mart" → "walmart", "sh*t" → "shit", "ave*no" → "aveeno".
+            // Cross-word matching is handled explicitly by the space-surrounded case (" * ").
+            result += "\\S*?";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
