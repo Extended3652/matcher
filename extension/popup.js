@@ -17,11 +17,15 @@
 (function() {
   "use strict";
 
-  const masterToggle = document.getElementById("masterToggle");
-  const statsEl      = document.getElementById("stats");
-  const catListEl    = document.getElementById("catList");
-  const btnOptions   = document.getElementById("btnOptions");
-  const popupSearch  = document.getElementById("popupSearch");
+  const masterToggle   = document.getElementById("masterToggle");
+  const statsEl        = document.getElementById("stats");
+  const catListEl      = document.getElementById("catList");
+  const btnOptions     = document.getElementById("btnOptions");
+  const popupSearch    = document.getElementById("popupSearch");
+  const clientBar      = document.getElementById("clientBar");
+  const clientBarSwatch = document.getElementById("clientBarSwatch");
+  const clientBarName  = document.getElementById("clientBarName");
+  const clientBarCat   = document.getElementById("clientBarCat");
 
   let currentDict = null;
 
@@ -257,6 +261,7 @@
 
       renderAll();
       updateStats();
+      updateClientInfo();
     });
   }
 
@@ -285,6 +290,48 @@
   btnOptions.addEventListener("click", () => {
     chrome.runtime.openOptionsPage();
   });
+
+  // ---------------------------------------------------------------------------
+  // Client info bar
+  // ---------------------------------------------------------------------------
+  function updateClientInfo() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) return;
+
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientInfo" }, (response) => {
+        if (chrome.runtime.lastError || !response) {
+          clientBar.style.display = "none";
+          return;
+        }
+
+        if (!response.clientName) {
+          clientBar.style.display = "none";
+          return;
+        }
+
+        clientBarName.textContent = response.clientName;
+
+        if (response.catName) {
+          clientBarSwatch.style.backgroundColor = response.catColor || "#FFFF00";
+          clientBarSwatch.style.display = "inline-block";
+          clientBarCat.textContent = "\u2192 " + response.catName;
+          clientBarCat.className = "client-bar-cat";
+        } else if (response.pattern) {
+          // rule exists but no category assigned
+          clientBarSwatch.style.display = "none";
+          clientBarCat.textContent = "(no category assigned)";
+          clientBarCat.className = "client-bar-norule";
+        } else {
+          // no rule at all
+          clientBarSwatch.style.display = "none";
+          clientBarCat.textContent = "(no client rule)";
+          clientBarCat.className = "client-bar-norule";
+        }
+
+        clientBar.style.display = "flex";
+      });
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Stats

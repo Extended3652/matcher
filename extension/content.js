@@ -1,6 +1,6 @@
 // =============================================================================
 // CMS Highlighter - Content Script
-// - Walk text nodes
+// - Walk text nodes grouped by block-level ancestor (cross-node phrase matching)
 // - Wrap matches in spans
 // - Client name in navbar can be highlighted based on dict.clients rules
 // =============================================================================
@@ -22,6 +22,9 @@
   // Client highlight config
   let clientRules = [];
   let categoryStyleByName = new Map();
+
+  // Retry timers for SPA late-loading content
+  let retryTimers = [];
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -157,6 +160,25 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Block-level grouping for cross-node phrase matching
+  // ---------------------------------------------------------------------------
+  const BLOCK_TAGS = new Set([
+    "ADDRESS","ARTICLE","ASIDE","BLOCKQUOTE","CANVAS","DD","DIV","DL","DT",
+    "FIELDSET","FIGCAPTION","FIGURE","FOOTER","FORM","H1","H2","H3","H4","H5","H6",
+    "HEADER","HR","LI","MAIN","NAV","OL","P","PRE","SECTION","SUMMARY",
+    "TABLE","TBODY","TD","TH","THEAD","TFOOT","TR","UL"
+  ]);
+
+  function nearestBlockAncestor(node) {
+    let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    while (el && el !== document.body) {
+      if (BLOCK_TAGS.has(el.tagName)) return el;
+      el = el.parentElement;
+    }
+    return document.body;
+  }
+
+  // ---------------------------------------------------------------------------
   // DOM walking
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
@@ -265,6 +287,61 @@
     return MatcherEngine.findMatches(text, compiledMatcher) || [];
   }
 
+  // ---------------------------------------------------------------------------
+  // Block-level highlight: groups text nodes by block ancestor for cross-node
+  // phrase matching (e.g. "customer service" spanning a <strong> tag).
+  // ---------------------------------------------------------------------------
+  function highlightBlock(textNodes) {
+    if (!textNodes || textNodes.length === 0) return;
+
+    // Build virtual concatenated text with position mapping
+    const segments = []; // { node, vStart, vEnd }
+    let vText = "";
+
+    for (const node of textNodes) {
+      if (!node.parentNode) continue; // detached node
+      const text = node.textContent;
+      if (!text) continue;
+      segments.push({ node, vStart: vText.length, vEnd: vText.length + text.length });
+      vText += text;
+    }
+
+    if (!vText.trim() || segments.length === 0) return;
+
+    const matches = sanitizeMatches(findMatchesForText(vText), vText.length);
+    if (matches.length === 0) return;
+
+    // Distribute each match's coverage to the text nodes it overlaps
+    const nodeOps = new Map(); // textNode → [{start, end, categoryName, color, fColor}]
+
+    for (const match of matches) {
+      for (const seg of segments) {
+        const lo = Math.max(match.start, seg.vStart);
+        const hi = Math.min(match.end, seg.vEnd);
+        if (lo >= hi) continue;
+
+        if (!nodeOps.has(seg.node)) nodeOps.set(seg.node, []);
+        nodeOps.get(seg.node).push({
+          start: lo - seg.vStart,
+          end:   hi - seg.vStart,
+          categoryName: match.categoryName,
+          color:        match.color,
+          fColor:       match.fColor,
+        });
+      }
+    }
+
+    // Render into each affected text node
+    for (const [node, ops] of nodeOps) {
+      if (!node.parentNode) continue;
+      ops.sort((a, b) => a.start - b.start);
+      renderMatchesIntoNode(node, ops);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Highlight a single text node (used for characterData mutations)
+  // ---------------------------------------------------------------------------
   function highlightTextNode(textNode) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -281,6 +358,9 @@
     renderMatchesIntoNode(textNode, matches);
   }
 
+  // ---------------------------------------------------------------------------
+  // highlightAll: gather text nodes, group by block ancestor, process each block
+  // ---------------------------------------------------------------------------
   function highlightAll(root) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -288,9 +368,20 @@
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
+    if (textNodes.length === 0) return;
 
+    // Group by nearest block-level ancestor so that multi-word phrases that
+    // span inline elements (e.g. "customer <strong>service</strong>") are still
+    // matched as a phrase against the higher-priority category.
+    const blockGroups = new Map();
     for (const node of textNodes) {
-      highlightTextNode(node);
+      const block = nearestBlockAncestor(node);
+      if (!blockGroups.has(block)) blockGroups.set(block, []);
+      blockGroups.get(block).push(node);
+    }
+
+    for (const nodes of blockGroups.values()) {
+      highlightBlock(nodes);
     }
   }
 
@@ -391,6 +482,24 @@
   }
 
   // ---------------------------------------------------------------------------
+  // SPA hash-change handler (re-scan when route changes)
+  // ---------------------------------------------------------------------------
+  function onHashChange() {
+    if (isBlockedRoute()) {
+      removeAllHighlights();
+      return;
+    }
+    if (!globalEnabled || !compiledMatcher) return;
+
+    // Brief delay to let the SPA render the new view
+    setTimeout(() => {
+      removeAllHighlights();
+      highlightAll(document.body);
+      applyClientHighlight();
+    }, 250);
+  }
+
+  // ---------------------------------------------------------------------------
   // Init + messages
   // ---------------------------------------------------------------------------
   function init() {
@@ -433,9 +542,23 @@
         highlightAll(document.body);
         applyClientHighlight();
         startObserver();
+
+        // Retry scans for SPA content that loads after initial paint
+        // (clear any previous timers first)
+        retryTimers.forEach(t => clearTimeout(t));
+        retryTimers = [300, 1500, 4000].map(delay =>
+          setTimeout(() => {
+            if (globalEnabled && compiledMatcher && !isBlockedRoute()) {
+              highlightAll(document.body);
+              applyClientHighlight();
+            }
+          }, delay)
+        );
       }
     });
   }
+
+  window.addEventListener("hashchange", onHashChange, { passive: true });
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !message.action) {
@@ -494,6 +617,23 @@
           clients: clientRules.length
         });
         break;
+
+      case "getClientInfo": {
+        const clientName = getCmsClientName();
+        const rule = findClientRule(clientName);
+        const type = getCmsContentType();
+        const catName = rule ? pickClientCategory(rule, type) : null;
+        const catStyle = catName ? categoryStyleByName.get(catName) : null;
+        sendResponse({
+          clientName: clientName || "",
+          pattern:    rule ? (rule.pattern || "") : "",
+          catName:    catName || "",
+          catColor:   catStyle ? catStyle.color  : "",
+          catFColor:  catStyle ? catStyle.fColor : "",
+          contentType: type,
+        });
+        break;
+      }
 
       default:
         sendResponse({ error: "unknown action" });
