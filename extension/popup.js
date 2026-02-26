@@ -24,6 +24,7 @@
   const popupSearch  = document.getElementById("popupSearch");
 
   let currentDict = null;
+  let lastClientName = "";
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -293,18 +294,25 @@
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) {
         statsEl.textContent = "No active tab";
+        lastClientName = "";
+        renderClientBar("");
         return;
       }
 
       chrome.tabs.sendMessage(tabs[0].id, { action: "getStats" }, (response) => {
         if (chrome.runtime.lastError || !response) {
           statsEl.textContent = "Not running on this page";
+          lastClientName = "";
+          renderClientBar("");
           return;
         }
 
         statsEl.textContent =
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
+
+        lastClientName = response.clientName || "";
+        renderClientBar(lastClientName);
       });
     });
   }
@@ -375,6 +383,151 @@
     e.currentTarget.classList.remove("dragging");
     dragIndex = null;
     document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client bar
+  // ---------------------------------------------------------------------------
+  function globMatchesClientName(pattern, clientName) {
+    const p = String(pattern || "").trim();
+    if (!p) return false;
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i").test(clientName); } catch (e) { return false; }
+  }
+
+  function findMatchingClient(clientName) {
+    const clients = (currentDict && currentDict.clients) || [];
+    for (const c of clients) {
+      if (c && globMatchesClientName(c.pattern, clientName)) return c;
+    }
+    return null;
+  }
+
+  function buildClientCategorySelect(currentValue) {
+    const sel = document.createElement("select");
+    const noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = "(no highlight)";
+    sel.appendChild(noneOpt);
+    for (const cat of (currentDict && currentDict.categories) || []) {
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = cat.name;
+      opt.style.backgroundColor = cat.color || "#FFFF00";
+      opt.style.color = cat.fColor || "#000000";
+      sel.appendChild(opt);
+    }
+    sel.value = currentValue || "";
+    function applyVisual() {
+      const cat = ((currentDict && currentDict.categories) || []).find(c => c.name === sel.value);
+      if (cat) {
+        sel.style.backgroundColor = cat.color || "";
+        sel.style.color = cat.fColor || "";
+        sel.style.borderColor = "rgba(0,0,0,0.25)";
+      } else {
+        sel.style.backgroundColor = "";
+        sel.style.color = "";
+        sel.style.borderColor = "";
+      }
+    }
+    applyVisual();
+    sel.addEventListener("change", applyVisual);
+    return sel;
+  }
+
+  function showClientAddForm(bar, clientName) {
+    bar.innerHTML = "";
+    bar.className = "client-bar";
+
+    const label = document.createElement("span");
+    label.className = "client-bar-label";
+    label.textContent = "Pattern:";
+    bar.appendChild(label);
+
+    const patInput = document.createElement("input");
+    patInput.type = "text";
+    patInput.value = clientName;
+    patInput.title = "Client name pattern (supports * and ?)";
+    bar.appendChild(patInput);
+
+    const sel = buildClientCategorySelect("");
+    sel.title = "Default category";
+    bar.appendChild(sel);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "client-bar-add";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", () => {
+      const pattern = normalizeTrim(patInput.value);
+      if (!pattern) return;
+      if (!currentDict.clients) currentDict.clients = [];
+      const lowerPat = pattern.toLowerCase();
+      const existing = currentDict.clients.find(c => String(c.pattern || "").toLowerCase() === lowerPat);
+      if (existing) {
+        existing.defaultCategory = sel.value || null;
+      } else {
+        currentDict.clients.push({
+          pattern: pattern,
+          defaultCategory: sel.value || null,
+          overrides: {},
+          aliases: [],
+          includePatternInContent: true
+        });
+      }
+      saveDictionary();
+      refreshActiveTab();
+      renderClientBar(clientName);
+    });
+    bar.appendChild(saveBtn);
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "client-bar-cancel";
+    cancelBtn.textContent = "\u2715";
+    cancelBtn.addEventListener("click", () => renderClientBar(clientName));
+    bar.appendChild(cancelBtn);
+  }
+
+  function renderClientBar(clientName) {
+    const bar = document.getElementById("clientBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    if (!clientName) {
+      bar.style.display = "none";
+      return;
+    }
+    bar.style.display = "";
+    bar.className = "client-bar";
+
+    const label = document.createElement("span");
+    label.className = "client-bar-label";
+    label.textContent = "Client:";
+    bar.appendChild(label);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "client-bar-name";
+    nameSpan.textContent = clientName;
+    nameSpan.title = clientName;
+    bar.appendChild(nameSpan);
+
+    const matched = findMatchingClient(clientName);
+    if (matched) {
+      const sel = buildClientCategorySelect(matched.defaultCategory || "");
+      sel.title = "Default category for this client";
+      sel.addEventListener("change", () => {
+        matched.defaultCategory = sel.value || null;
+        saveDictionary();
+        refreshActiveTab();
+      });
+      bar.appendChild(sel);
+    } else {
+      const addBtn = document.createElement("button");
+      addBtn.className = "client-bar-add";
+      addBtn.textContent = "+ Add";
+      addBtn.title = "Add this client to the dictionary";
+      addBtn.addEventListener("click", () => showClientAddForm(bar, clientName));
+      bar.appendChild(addBtn);
+    }
   }
 
   // ---------------------------------------------------------------------------
