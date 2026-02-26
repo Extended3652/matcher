@@ -150,7 +150,8 @@
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      margin-top: 12px;
     }
 
     .clients-topbar input[type="text"] {
@@ -161,8 +162,8 @@
       border: 1px solid #e5e5e5;
       border-radius: 6px;
       background: #fbfbfb;
-      padding: 12px;
-      margin-bottom: 12px;
+      padding: 14px;
+      margin-bottom: 4px;
     }
 
     .client-add-grid {
@@ -188,8 +189,24 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      margin-top: 10px;
+      margin-top: 12px;
       flex-wrap: wrap;
+    }
+
+    /* Section separators & group labels inside add box */
+    .add-sep {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 12px 0;
+    }
+
+    .add-group-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #777;
+      margin-bottom: 8px;
     }
 
     .client-list {
@@ -314,6 +331,21 @@
       width: 100%;
     }
 
+    .client-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #999;
+      margin: 10px 0 6px;
+    }
+
+    .client-sep {
+      border: none;
+      border-top: 1px solid #ececec;
+      margin: 10px 0;
+    }
+
     .pill {
       display: inline-block;
       padding: 2px 8px;
@@ -367,28 +399,33 @@
     <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
     <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
       Match against the client name shown in the CMS header. Pattern supports * and ?.
-      Review uses the Default setting. Image/Profile/Question can override Default.
+      Review uses the Default setting. Image / Profile / Question / Comments can each override Default.
       <span class="pill">No highlight</span> uses grey.
     </p>
 
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
-      <span id="clientShowing" class="muted"></span>
-    </div>
-
+    <!-- Add client form -->
     <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
+      <h3 style="margin: 0 0 10px; color: #444;">Add client</h3>
+
+      <!-- Group 1: Identity & Default -->
+      <p class="add-group-label">Identity &amp; Default</p>
       <div class="client-add-grid">
         <div class="field">
-          <label>Pattern</label>
-          <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
+          <label>Client Name (pattern, supports * and ?)</label>
+          <input type="text" id="newClientPattern" placeholder="e.g. Acme Corp*">
         </div>
 
         <div class="field">
           <label>Review (Default)</label>
           <select id="newClientReview"></select>
         </div>
+      </div>
 
+      <hr class="add-sep">
+
+      <!-- Group 2: Content-type overrides -->
+      <p class="add-group-label">Content-type overrides <span class="muted" style="text-transform:none; letter-spacing:0;">(leave &ldquo;&ndash;&rdquo; to use Default)</span></p>
+      <div class="client-add-grid">
         <div class="field">
           <label>Image override</label>
           <select id="newClientImage"></select>
@@ -403,14 +440,54 @@
           <label>Question override</label>
           <select id="newClientQuestion"></select>
         </div>
+
+        <div class="field">
+          <label>Comments override</label>
+          <select id="newClientComments"></select>
+        </div>
+      </div>
+
+      <hr class="add-sep">
+
+      <!-- Group 3: Mentions (optional) -->
+      <p class="add-group-label">Mentions <span class="muted" style="text-transform:none; letter-spacing:0;">(optional &mdash; for in-content name matching)</span></p>
+      <div class="client-add-grid">
+        <div class="field">
+          <label>Mentions category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" class="word-list" style="min-height: 60px;" spellcheck="false" placeholder="Optional alternate names / patterns to match in content"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer; font-size:13px; color:#333;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Also treat the Client Name itself as a mention in content (in addition to aliases)
+          </label>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note <span class="muted">(optional, not used for matching)</span></label>
+          <input type="text" id="newClientNote" placeholder="Internal note about this client">
+        </div>
       </div>
 
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
-        <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
+        <span class="muted">Tip: leave overrides as &ldquo;&ndash;&rdquo; to inherit Default.</span>
       </div>
     </div>
 
+    <!-- Search (right above the list) -->
+    <div class="clients-topbar">
+      <input type="text" id="clientSearch" placeholder="Search clients (pattern, note, or alias contains...)">
+      <span id="clientShowing" class="muted"></span>
+    </div>
+
+    <!-- Client list -->
     <div class="client-list">
       <div class="client-list-header">
         <span style="width:14px;"></span>

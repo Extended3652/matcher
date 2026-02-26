@@ -70,6 +70,7 @@
     if (raw.includes("image")) return "Image";
     if (raw.includes("profile")) return "Profile";
     if (raw.includes("question")) return "Question";
+    if (raw.includes("comment")) return "Comments";
     return "Default";
   }
 
@@ -107,6 +108,7 @@
     if (contentType === "Image" && overrides.Image) return overrides.Image;
     if (contentType === "Profile" && overrides.Profile) return overrides.Profile;
     if (contentType === "Question" && overrides.Question) return overrides.Question;
+    if (contentType === "Comments" && overrides.Comments) return overrides.Comments;
 
     // Default: blank means no highlight
     return rule.defaultCategory || null;
@@ -133,6 +135,9 @@
 
     const clientName = getCmsClientName();
     if (!clientName) return;
+
+    // Store so the options page can pre-fill the "Add client" form
+    chrome.storage.local.set({ lastCmsClient: clientName });
 
     const rule = findClientRule(clientName);
     if (!rule) return;

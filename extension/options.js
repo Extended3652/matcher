@@ -35,8 +35,9 @@
   const newClientImage    = document.getElementById("newClientImage");
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
+  const newClientComments = document.getElementById("newClientComments");
 
-  // Newer "Mentions" fields (must exist in options.html)
+  // Mentions fields
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
@@ -180,6 +181,7 @@
     const img = o.Image ? o.Image : "-";
     const pro = o.Profile ? o.Profile : "-";
     const q = o.Question ? o.Question : "-";
+    const com = o.Comments ? o.Comments : "-";
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
@@ -193,7 +195,7 @@
       if (note) extra += " [note]";
     }
 
-    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
+    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + " | Com: " + com + extra;
   }
 
   function pickHeaderSwatchCategory(entry) {
@@ -201,6 +203,7 @@
     if (o.Image) return o.Image;
     if (o.Profile) return o.Profile;
     if (o.Question) return o.Question;
+    if (o.Comments) return o.Comments;
     if (entry.defaultCategory) return entry.defaultCategory;
     return null;
   }
@@ -209,11 +212,16 @@
   // Load / Save
   // ---------------------------------------------------------------------------
   function load() {
-    chrome.storage.local.get(["dictionary"], (result) => {
+    chrome.storage.local.get(["dictionary", "lastCmsClient"], (result) => {
       currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
       if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
       if (!Array.isArray(currentDict.categories)) currentDict.categories = [];
       if (!Array.isArray(currentDict.clients)) currentDict.clients = [];
+
+      // Pre-fill the "Add client" pattern from the last seen CMS client
+      if (result.lastCmsClient && newClientPattern && !newClientPattern.value) {
+        newClientPattern.value = result.lastCmsClient;
+      }
 
       renderIgnoreList();
       renderClients();
@@ -253,23 +261,27 @@
     newClientImage.innerHTML = "";
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
+    newClientComments.innerHTML = "";
 
     const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
     const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
     const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
     const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const comSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
     while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
     while (proSel.firstChild) newClientProfile.appendChild(proSel.firstChild);
     while (qSel.firstChild) newClientQuestion.appendChild(qSel.firstChild);
+    while (comSel.firstChild) newClientComments.appendChild(comSel.firstChild);
 
     newClientReview.value = "";
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+    newClientComments.value = "";
 
-    // Mentions category select, if present in HTML
+    // Mentions category select
     if (newClientMentionCategory) {
       newClientMentionCategory.innerHTML = "";
       const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
@@ -403,6 +415,12 @@
       const grid = document.createElement("div");
       grid.className = "client-edit-grid";
 
+      // --- Identity & Default group ---
+      const secLabelIdentity = document.createElement("p");
+      secLabelIdentity.className = "client-section-label";
+      secLabelIdentity.textContent = "Identity & Default";
+      body.appendChild(secLabelIdentity);
+
       const fPat = document.createElement("div");
       fPat.className = "field";
       const lPat = document.createElement("label");
@@ -417,42 +435,77 @@
       const fReview = document.createElement("div");
       fReview.className = "field";
       const lReview = document.createElement("label");
-      lReview.textContent = "Header: Review (Default)";
+      lReview.textContent = "Review (Default)";
       const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
 
+      body.appendChild(grid);
+
+      // --- separator ---
+      const sep1 = document.createElement("hr");
+      sep1.className = "client-sep";
+      body.appendChild(sep1);
+
+      // --- Content-type overrides group ---
+      const secLabelOverrides = document.createElement("p");
+      secLabelOverrides.className = "client-section-label";
+      secLabelOverrides.textContent = "Content-type overrides";
+      body.appendChild(secLabelOverrides);
+
+      const overrideGrid = document.createElement("div");
+      overrideGrid.className = "client-edit-grid";
+
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
-      lImg.textContent = "Header: Image override";
+      lImg.textContent = "Image override";
       const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
-      grid.appendChild(fImg);
+      overrideGrid.appendChild(fImg);
 
       const fPro = document.createElement("div");
       fPro.className = "field";
       const lPro = document.createElement("label");
-      lPro.textContent = "Header: Profile override";
+      lPro.textContent = "Profile override";
       const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
-      grid.appendChild(fPro);
+      overrideGrid.appendChild(fPro);
 
       const fQ = document.createElement("div");
       fQ.className = "field";
       const lQ = document.createElement("label");
-      lQ.textContent = "Header: Question override";
+      lQ.textContent = "Question override";
       const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
-      grid.appendChild(fQ);
+      overrideGrid.appendChild(fQ);
 
-      body.appendChild(grid);
+      const fComments = document.createElement("div");
+      fComments.className = "field";
+      const lComments = document.createElement("label");
+      lComments.textContent = "Comments override";
+      const sComments = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Comments) || "" }, styleByName);
+      fComments.appendChild(lComments);
+      fComments.appendChild(sComments);
+      overrideGrid.appendChild(fComments);
 
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      body.appendChild(overrideGrid);
+
+      // --- separator ---
+      const sep2 = document.createElement("hr");
+      sep2.className = "client-sep";
+      body.appendChild(sep2);
+
+      // --- Mentions group ---
+      const secLabelMentions = document.createElement("p");
+      secLabelMentions.className = "client-section-label";
+      secLabelMentions.textContent = "Mentions";
+      body.appendChild(secLabelMentions);
+
       const mentionsWrap = document.createElement("div");
       mentionsWrap.className = "client-mentions-wrap";
 
@@ -603,6 +656,14 @@
         saveDictionary();
       });
 
+      sComments.addEventListener("change", () => {
+        if (!entry.overrides) entry.overrides = {};
+        if (sComments.value) entry.overrides.Comments = sComments.value;
+        else delete entry.overrides.Comments;
+        refreshHeaderVisuals();
+        saveDictionary();
+      });
+
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
         saveDictionary();
@@ -679,6 +740,7 @@
     if (newClientImage.value) entry.overrides.Image = newClientImage.value;
     if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
     if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
+    if (newClientComments && newClientComments.value) entry.overrides.Comments = newClientComments.value;
 
     clients.push(entry);
     currentDict.clients = clients;
@@ -689,6 +751,7 @@
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+    if (newClientComments) newClientComments.value = "";
 
     if (newClientMentionCategory) newClientMentionCategory.value = "";
     if (newClientAliases) newClientAliases.value = "";
