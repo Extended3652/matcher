@@ -113,9 +113,16 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
+            // Edge wildcard adjacent to a space = word-boundary role (e.g. "* complaint", "review *")
+            // Allow apostrophes so contractions (didn't) match, but stay in-token.
+            // Edge wildcards attached directly to letters (e.g. *etailer, amazon*) keep the
+            // punctuation boundary so they don't gobble hyphens in "e-retailer".
+            const adjSpace = (isFirst && next === " ") || (isLast && prev === " ");
+            result += adjSpace ? "[^\\s]*" : "[^\\s\\p{P}]*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            // Middle wildcard: non-whitespace only, lazy.
+            // \S*? allows apostrophes (d*t → didn't) while staying within one token.
+            result += "\\S*?";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";

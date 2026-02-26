@@ -17,13 +17,15 @@
 (function() {
   "use strict";
 
-  const masterToggle = document.getElementById("masterToggle");
-  const statsEl      = document.getElementById("stats");
-  const catListEl    = document.getElementById("catList");
-  const btnOptions   = document.getElementById("btnOptions");
-  const popupSearch  = document.getElementById("popupSearch");
+  const masterToggle  = document.getElementById("masterToggle");
+  const statsEl       = document.getElementById("stats");
+  const clientBanner  = document.getElementById("clientBanner");
+  const catListEl     = document.getElementById("catList");
+  const btnOptions    = document.getElementById("btnOptions");
+  const popupSearch   = document.getElementById("popupSearch");
 
   let currentDict = null;
+  let currentClientName = ""; // client name detected from the active CMS tab
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -76,6 +78,162 @@
 
   function confirmRemove(label, value) {
     return window.confirm(`Remove from ${label}?\n\n${value}`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client banner helpers
+  // ---------------------------------------------------------------------------
+  function clientGlobToRegex(pattern) {
+    const p = String(pattern || "").trim();
+    if (!p) return null;
+    const rx = "^" + p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (_) { return null; }
+  }
+
+  function findMatchedClient(name) {
+    const clients = (currentDict && currentDict.clients) || [];
+    for (const c of clients) {
+      if (!c || !c.pattern) continue;
+      const rx = clientGlobToRegex(c.pattern);
+      if (rx && rx.test(name)) return c;
+    }
+    return null;
+  }
+
+  function renderClientBanner() {
+    if (!clientBanner) return;
+    const name = currentClientName;
+
+    if (!name) {
+      clientBanner.style.display = "none";
+      return;
+    }
+
+    const matched = findMatchedClient(name);
+    const cats = (currentDict && currentDict.categories) || [];
+
+    clientBanner.innerHTML = "";
+    clientBanner.style.display = "flex";
+
+    if (matched) {
+      // Known client — show name + defaultCategory dropdown (auto-saves on change)
+      clientBanner.className = "client-banner known";
+
+      const label = document.createElement("span");
+      label.className = "cb-label";
+      label.textContent = "Client:";
+      clientBanner.appendChild(label);
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "cb-name";
+      nameSpan.textContent = name;
+      nameSpan.title = name;
+      clientBanner.appendChild(nameSpan);
+
+      const sel = document.createElement("select");
+      sel.title = "Default category for this client";
+
+      const blankOpt = document.createElement("option");
+      blankOpt.value = "";
+      blankOpt.textContent = "(no highlight)";
+      sel.appendChild(blankOpt);
+
+      cats.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.name;
+        opt.textContent = c.name;
+        if (c.color) {
+          opt.style.backgroundColor = c.color;
+          opt.style.color = c.fColor || "#000";
+        }
+        sel.appendChild(opt);
+      });
+
+      sel.value = matched.defaultCategory || "";
+      if (matched.defaultCategory) {
+        const st = cats.find(c => c.name === matched.defaultCategory);
+        if (st) {
+          sel.style.backgroundColor = st.color || "";
+          sel.style.color = st.fColor || "";
+        }
+      }
+
+      sel.addEventListener("change", () => {
+        matched.defaultCategory = sel.value || null;
+        const st = cats.find(c => c.name === sel.value);
+        sel.style.backgroundColor = st ? (st.color || "") : "";
+        sel.style.color = st ? (st.fColor || "") : "";
+        saveDictionary();
+      });
+
+      clientBanner.appendChild(sel);
+
+    } else {
+      // Unknown client — warning + category picker + Add button
+      clientBanner.className = "client-banner unknown";
+
+      const label = document.createElement("span");
+      label.className = "cb-label";
+      label.textContent = "\u26a0";
+      clientBanner.appendChild(label);
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "cb-name";
+      nameSpan.textContent = name + " isn\u2019t in your client list";
+      nameSpan.title = name;
+      clientBanner.appendChild(nameSpan);
+
+      const sel = document.createElement("select");
+      sel.title = "Default category";
+
+      const blankOpt = document.createElement("option");
+      blankOpt.value = "";
+      blankOpt.textContent = "(no highlight)";
+      sel.appendChild(blankOpt);
+
+      cats.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.name;
+        opt.textContent = c.name;
+        if (c.color) {
+          opt.style.backgroundColor = c.color;
+          opt.style.color = c.fColor || "#000";
+        }
+        sel.appendChild(opt);
+      });
+
+      // Pre-select first category
+      if (cats.length > 0) {
+        sel.value = cats[0].name;
+        sel.style.backgroundColor = cats[0].color || "";
+        sel.style.color = cats[0].fColor || "";
+      }
+
+      sel.addEventListener("change", () => {
+        const st = cats.find(c => c.name === sel.value);
+        sel.style.backgroundColor = st ? (st.color || "") : "";
+        sel.style.color = st ? (st.fColor || "") : "";
+      });
+
+      clientBanner.appendChild(sel);
+
+      const addBtn = document.createElement("button");
+      addBtn.textContent = "+ Add client";
+      addBtn.addEventListener("click", () => {
+        if (!currentDict.clients) currentDict.clients = [];
+        // Avoid duplicate
+        if (findMatchedClient(name)) return;
+
+        currentDict.clients.push({
+          pattern: name,
+          defaultCategory: sel.value || null,
+          overrides: {}
+        });
+        saveDictionary();
+        renderClientBanner();
+      });
+      clientBanner.appendChild(addBtn);
+    }
   }
 
   function sameEditing(scope, catIndex, entryIndex) {
@@ -251,9 +409,10 @@
       const enabled = result.enabled !== false;
       masterToggle.checked = enabled;
 
-      currentDict = result.dictionary || { ignoreList: [], categories: [] };
+      currentDict = result.dictionary || { ignoreList: [], categories: [], clients: [] };
       if (!currentDict.ignoreList) currentDict.ignoreList = [];
       if (!currentDict.categories) currentDict.categories = [];
+      if (!currentDict.clients) currentDict.clients = [];
 
       renderAll();
       updateStats();
@@ -293,12 +452,16 @@
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) {
         statsEl.textContent = "No active tab";
+        currentClientName = "";
+        renderClientBanner();
         return;
       }
 
       chrome.tabs.sendMessage(tabs[0].id, { action: "getStats" }, (response) => {
         if (chrome.runtime.lastError || !response) {
           statsEl.textContent = "Not running on this page";
+          currentClientName = "";
+          renderClientBanner();
           return;
         }
 
@@ -306,14 +469,22 @@
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
       });
+
+      // Get client name separately (content script may be slow to respond)
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (resp) => {
+        currentClientName = (!chrome.runtime.lastError && resp) ? (resp.clientName || "") : "";
+        renderClientBanner();
+      });
     });
   }
 
   // ---------------------------------------------------------------------------
-  // Search filters (top)
+  // Search filters (top) — debounced so rapid typing doesn't thrash the DOM
   // ---------------------------------------------------------------------------
+  let searchDebounce = null;
   popupSearch.addEventListener("input", () => {
-    renderAll();
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(renderAll, 60);
   });
 
   function matchesGlobalSearchForIgnore(q) {

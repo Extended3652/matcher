@@ -109,9 +109,10 @@ function globToRegexFragment(pattern) {
         if (prev === " " && next === " ") {
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
-          result += "[^\\s\\p{P}]*";
+          const adjSpace = (isFirst && next === " ") || (isLast && prev === " ");
+          result += adjSpace ? "[^\\s]*" : "[^\\s\\p{P}]*";
         } else {
-          result += "[^\\s\\p{P}]*?";
+          result += "\\S*?";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";

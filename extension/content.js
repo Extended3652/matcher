@@ -1,8 +1,8 @@
 // =============================================================================
 // CMS Highlighter - Content Script
-// - Walk text nodes
+// - Group text nodes by block ancestor for cross-element phrase matching
 // - Wrap matches in spans
-// - Client name in navbar can be highlighted based on dict.clients rules
+// - Client name in navbar highlighted based on dict.clients rules
 // =============================================================================
 
 (function() {
@@ -14,6 +14,18 @@
   // Guardrails
   const MAX_SPAN_LEN = 120;
 
+  // O(1) tag skip lookup (replaces per-node array allocation)
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
+
+  // Block-level elements: text nodes inside different blocks are matched independently.
+  // This prevents cross-paragraph phrase matches while enabling cross-inline-element phrases.
+  const BLOCK_TAGS = new Set([
+    "P", "DIV", "LI", "TD", "TH", "BLOCKQUOTE", "PRE",
+    "H1", "H2", "H3", "H4", "H5", "H6",
+    "ARTICLE", "SECTION", "ASIDE", "HEADER", "FOOTER", "MAIN", "NAV",
+    "FIGURE", "FIGCAPTION", "DETAILS", "SUMMARY", "TR"
+  ]);
+
   let globalEnabled = true;
 
   // Compiled matcher
@@ -22,6 +34,10 @@
   // Client highlight config
   let clientRules = [];
   let categoryStyleByName = new Map();
+
+  // Generation counter: incremented on every highlightAll / removeAllHighlights call.
+  // In-flight async chunk processors compare against this and abort if it changed.
+  let highlightGeneration = 0;
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -55,7 +71,11 @@
   // Client-name highlight
   // ---------------------------------------------------------------------------
   function getCmsClientNameEl() {
-    return document.querySelector(".navbar-inner .client-name");
+    return (
+      document.querySelector(".navbar-inner .client-name") ||
+      document.querySelector(".client-name") ||
+      document.querySelector("[data-client-name]")
+    );
   }
 
   function getCmsClientName() {
@@ -77,7 +97,6 @@
     const p = String(pattern || "").trim();
     if (!p) return null;
 
-    // Escape regex specials, then convert * and ? to wildcards
     const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
     const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
 
@@ -108,14 +127,45 @@
     if (contentType === "Profile" && overrides.Profile) return overrides.Profile;
     if (contentType === "Question" && overrides.Question) return overrides.Question;
 
-    // Default: blank means no highlight
     return rule.defaultCategory || null;
+  }
+
+  function applyClientHighlight() {
+    const el = getCmsClientNameEl();
+
+    // Clear previous highlight
+    if (el && el.hasAttribute("data-client-hl")) {
+      el.style.backgroundColor = "";
+      el.style.color = "";
+      el.style.borderRadius = "";
+      el.style.padding = "";
+      el.removeAttribute("data-client-hl");
+    }
+
+    if (isBlockedRoute() || !globalEnabled || !el) return;
+
+    const clientName = String(el.textContent || "").trim();
+    if (!clientName) return;
+
+    const rule = findClientRule(clientName);
+    if (!rule) return;
+
+    const catName = pickClientCategory(rule, getCmsContentType());
+    if (!catName) return;
+
+    const style = categoryStyleByName.get(catName);
+    if (!style) return;
+
+    el.style.backgroundColor = style.color;
+    el.style.color = style.fColor;
+    el.style.borderRadius = "3px";
+    el.style.padding = "2px 6px";
+    el.setAttribute("data-client-hl", "1");
   }
 
   function clearClientHighlight() {
     const el = getCmsClientNameEl();
     if (!el) return;
-
     if (el.hasAttribute("data-client-hl")) {
       el.style.backgroundColor = "";
       el.style.color = "";
@@ -125,83 +175,64 @@
     }
   }
 
-  function applyClientHighlight() {
-    clearClientHighlight();
-
-    if (isBlockedRoute()) return;
-    if (!globalEnabled) return;
-
-    const clientName = getCmsClientName();
-    if (!clientName) return;
-
-    const rule = findClientRule(clientName);
-    if (!rule) return;
-
-    const type = getCmsContentType();
-    const catName = pickClientCategory(rule, type);
-
-    // blank means no highlight
-    if (!catName) return;
-
-    const style = categoryStyleByName.get(catName);
-    if (!style) return;
-
-    const el = getCmsClientNameEl();
-    if (!el) return;
-
-    el.style.backgroundColor = style.color;
-    el.style.color = style.fColor;
-    el.style.borderRadius = "3px";
-    el.style.padding = "2px 6px";
-    el.setAttribute("data-client-hl", "1");
+  // ---------------------------------------------------------------------------
+  // DOM walking — group text nodes by block ancestor
+  // ---------------------------------------------------------------------------
+  function shouldSkipNode(node) {
+    if (!node || !node.parentElement) return true;
+    if (node.parentElement.classList.contains(HL_CLASS)) return true;
+    if (node.parentElement.hasAttribute(MARKER_ATTR)) return true;
+    if (SKIP_TAGS.has(node.parentElement.tagName || "")) return true;
+    return false;
   }
 
-  // ---------------------------------------------------------------------------
-  // DOM walking
-  // ---------------------------------------------------------------------------
-  function getTextNodes(root) {
-    const nodes = [];
+  function getBlockAncestor(node) {
+    let el = node.parentElement;
+    while (el && el !== document.body) {
+      if (BLOCK_TAGS.has(el.tagName)) return el;
+      el = el.parentElement;
+    }
+    return document.body;
+  }
+
+  // Returns groups: each group = { nodes[], offsets[], combined }
+  // All text nodes under the same block ancestor are concatenated so that
+  // multi-word patterns spanning inline elements (e.g. <span>makes my</span> <span>nose run</span>)
+  // can be matched as a single string.
+  function groupTextNodes(root) {
+    const target = root || document.body;
     const walker = document.createTreeWalker(
-      root,
+      target,
       NodeFilter.SHOW_TEXT,
       {
-        acceptNode: function(node) {
-          if (!node || !node.parentElement) return NodeFilter.FILTER_REJECT;
-
-          // Skip nodes inside our own highlights
-          if (node.parentElement.classList.contains(HL_CLASS)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip script/style/textarea/input/select/noscript
-          const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip already-processed parents
-          if (node.parentElement.hasAttribute(MARKER_ATTR)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Only process nodes with visible text
-          if (!node.textContent || node.textContent.trim().length === 0) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          return NodeFilter.FILTER_ACCEPT;
+        acceptNode(node) {
+          return shouldSkipNode(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
         }
       }
     );
 
+    const groupMap = new Map(); // block element → group object
+
     while (walker.nextNode()) {
-      nodes.push(walker.currentNode);
+      const node = walker.currentNode;
+      // Include whitespace-only nodes — they contribute spaces between inline elements
+      // (e.g. the space between </span> and <span>) so cross-element phrases match correctly.
+      const block = getBlockAncestor(node);
+      if (!groupMap.has(block)) {
+        groupMap.set(block, { nodes: [], offsets: [], combined: "" });
+      }
+      const g = groupMap.get(block);
+      g.offsets.push(g.combined.length);
+      g.combined += node.textContent;
+      g.nodes.push(node);
     }
-    return nodes;
+
+    // Only return groups with actual visible text
+    return Array.from(groupMap.values()).filter(g => g.combined.trim().length > 0);
   }
 
   // ---------------------------------------------------------------------------
-  // Match sanitization (matcher-core.js already resolves overlaps)
+  // Match sanitization
   // ---------------------------------------------------------------------------
   function sanitizeMatches(matches, textLen) {
     if (!Array.isArray(matches) || matches.length === 0) return [];
@@ -220,7 +251,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Rendering
+  // Rendering — split a text node at match boundaries and wrap in spans
   // ---------------------------------------------------------------------------
   function renderMatchesIntoNode(textNode, matches) {
     if (!textNode || !textNode.parentNode) return;
@@ -258,46 +289,83 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Run matcher on text
+  // Highlight one group (cross-node phrase matching)
   // ---------------------------------------------------------------------------
   function findMatchesForText(text) {
     if (!text || !compiledMatcher) return [];
     return MatcherEngine.findMatches(text, compiledMatcher) || [];
   }
 
-  function highlightTextNode(textNode) {
-    if (isBlockedRoute()) return;
-    if (!globalEnabled) return;
-    if (!compiledMatcher) return;
+  function highlightGroup(group) {
+    const { nodes, offsets, combined } = group;
+    if (!combined || !compiledMatcher) return;
 
-    if (!textNode || !textNode.parentNode) return;
-
-    const text = textNode.textContent;
-    if (!text || text.trim().length === 0) return;
-
-    const matches = sanitizeMatches(findMatchesForText(text), text.length);
+    const matches = sanitizeMatches(findMatchesForText(combined), combined.length);
     if (matches.length === 0) return;
 
-    renderMatchesIntoNode(textNode, matches);
+    for (let ni = 0; ni < nodes.length; ni++) {
+      const node = nodes[ni];
+      if (!node.parentNode) continue;
+
+      // Whitespace-only nodes included for spacing but have nothing to highlight
+      if (!node.textContent.trim()) continue;
+
+      const nodeStart = offsets[ni];
+      const nodeEnd = nodeStart + node.textContent.length;
+
+      // Collect matches that overlap with this node's slice of the combined string
+      const nodeMatches = [];
+      for (const m of matches) {
+        const s = Math.max(m.start, nodeStart);
+        const e = Math.min(m.end, nodeEnd);
+        if (s >= e) continue;
+        nodeMatches.push({ ...m, start: s - nodeStart, end: e - nodeStart });
+      }
+
+      if (nodeMatches.length > 0) {
+        renderMatchesIntoNode(node, nodeMatches);
+      }
+    }
   }
 
+  // ---------------------------------------------------------------------------
+  // highlightAll — chunked async so the page stays responsive
+  // ---------------------------------------------------------------------------
   function highlightAll(root) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
     if (!compiledMatcher) return;
 
-    const target = root || document.body;
-    const textNodes = getTextNodes(target);
+    highlightGeneration++;
+    const gen = highlightGeneration;
 
-    for (const node of textNodes) {
-      highlightTextNode(node);
+    const groups = groupTextNodes(root || document.body);
+    const CHUNK = 20; // block groups per frame
+
+    let i = 0;
+    function processChunk() {
+      if (gen !== highlightGeneration) return; // cancelled by removeAllHighlights or new refresh
+
+      const end = Math.min(i + CHUNK, groups.length);
+      for (; i < end; i++) {
+        if (gen !== highlightGeneration) return;
+        highlightGroup(groups[i]);
+      }
+
+      if (i < groups.length) {
+        setTimeout(processChunk, 0); // yield to browser, then continue
+      }
     }
+
+    processChunk();
   }
 
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    highlightGeneration++; // cancel any in-flight async chunks
+
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
     spans.forEach(span => {
@@ -306,7 +374,7 @@
       parent.replaceChild(document.createTextNode(span.textContent), span);
       parents.add(parent);
     });
-    // Normalize once per parent, not once per span (avoids redundant reflows)
+    // Normalize once per parent (avoids redundant reflows)
     parents.forEach(p => p.normalize());
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
@@ -316,11 +384,11 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Observer
+  // Observer — with element-level deduplication
   // ---------------------------------------------------------------------------
   let observer = null;
   let debounceTimer = null;
-  let pendingNodes = [];
+  let pendingSet = new Set(); // deduplicates elements (and block ancestors of text nodes)
 
   function startObserver() {
     if (observer) return;
@@ -329,7 +397,6 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
-        // Text node content changed in-place (e.g. SPA framework updating nodeValue/data)
         if (mutation.type === "characterData") {
           const node = mutation.target;
           if (
@@ -338,7 +405,8 @@
             !node.parentElement.classList.contains(HL_CLASS) &&
             !node.parentElement.hasAttribute(MARKER_ATTR)
           ) {
-            pendingNodes.push({ type: "text", node });
+            // Re-scan the block ancestor so group-based matching picks up the change
+            pendingSet.add(getBlockAncestor(node));
           }
           continue;
         }
@@ -346,10 +414,10 @@
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
-            pendingNodes.push({ type: "element", node });
+            pendingSet.add(node);
           } else if (node.nodeType === Node.TEXT_NODE) {
             if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
-              pendingNodes.push({ type: "text", node });
+              pendingSet.add(getBlockAncestor(node));
             }
           }
         }
@@ -357,24 +425,18 @@
 
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        const batch = pendingNodes;
-        pendingNodes = [];
+        const nodes = Array.from(pendingSet);
+        pendingSet = new Set();
 
-        for (const item of batch) {
-          if (!item.node || !item.node.parentNode) continue;
-
-          if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
-              highlightAll(item.node);
-            }
+        for (const node of nodes) {
+          if (!node || !node.parentNode) continue;
+          if (node === document.body || node === document.documentElement) {
+            highlightAll(document.body);
           } else {
-            highlightTextNode(item.node);
+            highlightAll(node);
           }
         }
 
-        // Also update the client-name highlight when the header changes
         applyClientHighlight();
       }, 80);
     });
@@ -387,7 +449,7 @@
       observer.disconnect();
       observer = null;
     }
-    pendingNodes = [];
+    pendingSet = new Set();
   }
 
   // ---------------------------------------------------------------------------
@@ -413,10 +475,7 @@
         return;
       }
 
-      // Compile matcher
       compiledMatcher = MatcherEngine.compileAll(dict);
-
-      // Build client highlight maps
       categoryStyleByName = buildCategoryStyleMap(dict);
       clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
       for (const r of clientRules) {
@@ -465,7 +524,6 @@
           const dict = result.dictionary;
           if (dict && dict.categories) {
             compiledMatcher = MatcherEngine.compileAll(dict);
-
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
             for (const r of clientRules) {
@@ -490,9 +548,14 @@
         sendResponse({
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
-          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
+          cats: compiledMatcher && compiledMatcher.compiledCategories
+            ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
         });
+        break;
+
+      case "getClientName":
+        sendResponse({ clientName: getCmsClientName() });
         break;
 
       default:
