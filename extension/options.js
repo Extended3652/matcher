@@ -231,17 +231,8 @@
   // Ignore List
   // ---------------------------------------------------------------------------
   function renderIgnoreList() {
-    const words = currentDict.ignoreList || [];
-    ignoreArea.value = words.join("\n");
-    ignoreCount.textContent = "(" + words.length + " words)";
+    // Ignore list is now rendered as the top entry in renderCategories()
   }
-
-  btnSaveIgnore.addEventListener("click", () => {
-    const lines = ignoreArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    currentDict.ignoreList = lines;
-    saveDictionary("Ignore list saved (" + lines.length + " words)");
-    ignoreCount.textContent = "(" + lines.length + " words)";
-  });
 
   // ---------------------------------------------------------------------------
   // Clients
@@ -706,6 +697,77 @@
   // ---------------------------------------------------------------------------
   function renderCategories() {
     catEditorsEl.innerHTML = "";
+    if (!currentDict) return;
+
+    // Render ignore list as the top "category" entry
+    const ignoreEditor = document.createElement("div");
+    ignoreEditor.className = "cat-editor";
+
+    const ignoreHeader = document.createElement("div");
+    ignoreHeader.className = "cat-header";
+
+    const ignoreArrow = document.createElement("span");
+    ignoreArrow.className = "cat-arrow";
+    ignoreArrow.textContent = "\u25b6";
+    ignoreHeader.appendChild(ignoreArrow);
+
+    const ignoreNameSpan = document.createElement("span");
+    ignoreNameSpan.className = "cat-header-name";
+    ignoreNameSpan.textContent = "Ignore List (global)";
+    ignoreHeader.appendChild(ignoreNameSpan);
+
+    const ignoreCountSpan = document.createElement("span");
+    ignoreCountSpan.className = "cat-header-count";
+    const ignoreWords = currentDict.ignoreList || [];
+    ignoreCountSpan.textContent = ignoreWords.length + " words";
+    ignoreHeader.appendChild(ignoreCountSpan);
+
+    ignoreEditor.appendChild(ignoreHeader);
+
+    const ignoreBody = document.createElement("div");
+    ignoreBody.className = "cat-body";
+
+    const ignoreDesc = document.createElement("p");
+    ignoreDesc.style.fontSize = "12px";
+    ignoreDesc.style.color = "#777";
+    ignoreDesc.style.marginBottom = "8px";
+    ignoreDesc.textContent = "Words here block highlights from all categories. One per line. Wildcards (* ?) work.";
+    ignoreBody.appendChild(ignoreDesc);
+
+    const ignoreTextarea = document.createElement("textarea");
+    ignoreTextarea.className = "word-list";
+    ignoreTextarea.spellcheck = false;
+    ignoreTextarea.value = ignoreWords.join("\n");
+    ignoreBody.appendChild(ignoreTextarea);
+
+    const ignoreSaveRow = document.createElement("div");
+    ignoreSaveRow.style.marginTop = "8px";
+    const ignoreSaveBtn = document.createElement("button");
+    ignoreSaveBtn.className = "primary";
+    ignoreSaveBtn.textContent = "Save Ignore List";
+    ignoreSaveBtn.addEventListener("click", () => {
+      const lines = ignoreTextarea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      currentDict.ignoreList = lines;
+      saveDictionary("Ignore list saved (" + lines.length + " words)");
+      ignoreCountSpan.textContent = lines.length + " words";
+    });
+    ignoreSaveRow.appendChild(ignoreSaveBtn);
+    ignoreBody.appendChild(ignoreSaveRow);
+
+    ignoreEditor.appendChild(ignoreBody);
+
+    ignoreHeader.addEventListener("click", () => {
+      const isOpen = ignoreBody.classList.contains("open");
+      document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
+      document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+      if (!isOpen) {
+        ignoreBody.classList.add("open");
+        ignoreArrow.classList.add("open");
+      }
+    });
+
+    catEditorsEl.appendChild(ignoreEditor);
+
     if (!currentDict.categories) return;
 
     currentDict.categories.forEach((cat, index) => {
