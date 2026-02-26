@@ -268,8 +268,12 @@
             return NodeFilter.FILTER_REJECT;
           }
 
-          // Only process nodes with visible text
-          if (!node.textContent || node.textContent.trim().length === 0) {
+          // Only process nodes with actual content (including whitespace-only
+          // nodes — they may carry the space between two inline spans, e.g.
+          // "<span>makes my</span> <span>nose run</span>", and filtering
+          // them out would collapse "makes my nose run" into "makes mynose run"
+          // so multi-word phrases would never match).
+          if (!node.textContent) {
             return NodeFilter.FILTER_REJECT;
           }
 
