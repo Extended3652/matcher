@@ -116,6 +116,73 @@
       color: #b2bec3;
       font-style: italic;
     }
+    .client-bar-btn {
+      flex-shrink: 0;
+      padding: 3px 8px;
+      border: 1px solid #b2bec3;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      color: #2d3436;
+      line-height: 1.4;
+    }
+    .client-bar-btn:hover { background: #ecf0f1; }
+
+    .client-rule-editor {
+      display: none;
+      padding: 10px 12px 12px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid #ddd;
+      gap: 8px;
+      flex-direction: column;
+    }
+    .client-rule-editor.open { display: flex; }
+    .client-rule-editor label {
+      font-size: 12px;
+      color: #636e72;
+      margin-bottom: 2px;
+      display: block;
+    }
+    .client-rule-editor input[type="text"] {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid #cfd8dc;
+      border-radius: 7px;
+      font-size: 13px;
+      background: #fff;
+      color: #333;
+    }
+    .client-rule-editor select {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid #cfd8dc;
+      border-radius: 7px;
+      font-size: 13px;
+      background: #fff;
+      color: #333;
+      cursor: pointer;
+    }
+    .client-rule-editor-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .client-rule-editor-actions button {
+      padding: 6px 12px;
+      border-radius: 7px;
+      border: 1px solid #bdc3c7;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .client-rule-editor-actions button.primary {
+      background: #2c3e50;
+      color: #fff;
+      border-color: #2c3e50;
+    }
+    .client-rule-editor-actions button.primary:hover { background: #3d5166; }
+    .client-rule-editor-actions button:not(.primary):hover { background: #ecf0f1; }
 
     .search-bar {
       padding: 8px 12px;
@@ -302,6 +369,22 @@
     <span class="client-bar-swatch" id="clientBarSwatch" style="display:none"></span>
     <span class="client-bar-name" id="clientBarName"></span>
     <span class="client-bar-cat" id="clientBarCat"></span>
+    <button class="client-bar-btn" id="clientBarEditBtn" title="Add or edit client rule"></button>
+  </div>
+
+  <div class="client-rule-editor" id="clientRuleEditor">
+    <div>
+      <label for="clientRulePattern">Client pattern (glob, e.g. "Walmart*")</label>
+      <input type="text" id="clientRulePattern" placeholder="Client name or glob pattern">
+    </div>
+    <div>
+      <label for="clientRuleCategory">Default category</label>
+      <select id="clientRuleCategory"></select>
+    </div>
+    <div class="client-rule-editor-actions">
+      <button id="clientRuleCancel" type="button">Cancel</button>
+      <button id="clientRuleSave" type="button" class="primary">Save</button>
+    </div>
   </div>
 
   <div class="search-bar">

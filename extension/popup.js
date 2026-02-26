@@ -17,15 +17,24 @@
 (function() {
   "use strict";
 
-  const masterToggle   = document.getElementById("masterToggle");
-  const statsEl        = document.getElementById("stats");
-  const catListEl      = document.getElementById("catList");
-  const btnOptions     = document.getElementById("btnOptions");
-  const popupSearch    = document.getElementById("popupSearch");
-  const clientBar      = document.getElementById("clientBar");
+  const masterToggle    = document.getElementById("masterToggle");
+  const statsEl         = document.getElementById("stats");
+  const catListEl       = document.getElementById("catList");
+  const btnOptions      = document.getElementById("btnOptions");
+  const popupSearch     = document.getElementById("popupSearch");
+  const clientBar       = document.getElementById("clientBar");
   const clientBarSwatch = document.getElementById("clientBarSwatch");
-  const clientBarName  = document.getElementById("clientBarName");
-  const clientBarCat   = document.getElementById("clientBarCat");
+  const clientBarName   = document.getElementById("clientBarName");
+  const clientBarCat    = document.getElementById("clientBarCat");
+  const clientBarEditBtn = document.getElementById("clientBarEditBtn");
+  const clientRuleEditor = document.getElementById("clientRuleEditor");
+  const clientRulePattern  = document.getElementById("clientRulePattern");
+  const clientRuleCategory = document.getElementById("clientRuleCategory");
+  const clientRuleCancel   = document.getElementById("clientRuleCancel");
+  const clientRuleSave     = document.getElementById("clientRuleSave");
+
+  // Track what the editor is editing: null or { existingIndex: number|null, clientName: string }
+  let clientEditorState = null;
 
   let currentDict = null;
 
@@ -292,8 +301,97 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Client info bar
+  // Client info bar + inline rule editor
   // ---------------------------------------------------------------------------
+
+  // Populate the category <select> with current dict categories (colored)
+  function populateCategorySelect(selectedName) {
+    clientRuleCategory.innerHTML = "";
+
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = "(no highlight)";
+    clientRuleCategory.appendChild(none);
+
+    const cats = (currentDict && currentDict.categories) || [];
+    for (const cat of cats) {
+      if (!cat || !cat.name) continue;
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = cat.name;
+      opt.style.backgroundColor = cat.color || "#FFFF00";
+      opt.style.color = cat.fColor || "#000000";
+      clientRuleCategory.appendChild(opt);
+    }
+
+    clientRuleCategory.value = selectedName || "";
+    applySelectColor();
+  }
+
+  function applySelectColor() {
+    const cats = (currentDict && currentDict.categories) || [];
+    const cat = cats.find(c => c && c.name === clientRuleCategory.value);
+    if (cat) {
+      clientRuleCategory.style.backgroundColor = cat.color || "#FFFF00";
+      clientRuleCategory.style.color = cat.fColor || "#000000";
+    } else {
+      clientRuleCategory.style.backgroundColor = "";
+      clientRuleCategory.style.color = "";
+    }
+  }
+
+  clientRuleCategory.addEventListener("change", applySelectColor);
+
+  function openClientRuleEditor(clientName, existingPattern, existingCatName, existingIndex) {
+    clientEditorState = { existingIndex: existingIndex ?? null, clientName };
+    clientRulePattern.value = existingPattern || clientName || "";
+    populateCategorySelect(existingCatName || "");
+    clientRuleEditor.classList.add("open");
+    clientRulePattern.focus();
+  }
+
+  function closeClientRuleEditor() {
+    clientRuleEditor.classList.remove("open");
+    clientEditorState = null;
+  }
+
+  clientRuleCancel.addEventListener("click", closeClientRuleEditor);
+
+  clientRuleSave.addEventListener("click", () => {
+    if (!clientEditorState) return;
+    const pattern = normalizeTrim(clientRulePattern.value);
+    if (!pattern) return;
+
+    const defaultCategory = clientRuleCategory.value || "";
+
+    if (!currentDict.clients) currentDict.clients = [];
+
+    if (clientEditorState.existingIndex !== null && clientEditorState.existingIndex >= 0) {
+      // Update existing rule
+      const rule = currentDict.clients[clientEditorState.existingIndex];
+      if (rule) {
+        rule.pattern = pattern;
+        rule.defaultCategory = defaultCategory;
+      }
+    } else {
+      // Check for duplicate pattern (case-insensitive)
+      const dup = currentDict.clients.findIndex(
+        r => r && String(r.pattern || "").toLowerCase() === pattern.toLowerCase()
+      );
+      if (dup !== -1) {
+        // Update the existing match instead of adding a duplicate
+        currentDict.clients[dup].defaultCategory = defaultCategory;
+      } else {
+        currentDict.clients.push({ pattern, defaultCategory });
+      }
+    }
+
+    closeClientRuleEditor();
+    saveDictionary();
+    refreshActiveTab();
+    updateClientInfo();
+  });
+
   function updateClientInfo() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) return;
@@ -311,22 +409,44 @@
 
         clientBarName.textContent = response.clientName;
 
+        // Find the rule index in currentDict so we can edit it
+        const clients = (currentDict && currentDict.clients) || [];
+        const existingIndex = clients.findIndex(r => r && r.pattern === response.pattern);
+
         if (response.catName) {
           clientBarSwatch.style.backgroundColor = response.catColor || "#FFFF00";
           clientBarSwatch.style.display = "inline-block";
           clientBarCat.textContent = "\u2192 " + response.catName;
           clientBarCat.className = "client-bar-cat";
+          clientBarEditBtn.textContent = "Edit";
+          clientBarEditBtn.title = "Edit client rule";
         } else if (response.pattern) {
-          // rule exists but no category assigned
           clientBarSwatch.style.display = "none";
-          clientBarCat.textContent = "(no category assigned)";
+          clientBarCat.textContent = "(no category)";
           clientBarCat.className = "client-bar-norule";
+          clientBarEditBtn.textContent = "Edit";
+          clientBarEditBtn.title = "Edit client rule";
         } else {
-          // no rule at all
           clientBarSwatch.style.display = "none";
-          clientBarCat.textContent = "(no client rule)";
+          clientBarCat.textContent = "(no rule)";
           clientBarCat.className = "client-bar-norule";
+          clientBarEditBtn.textContent = "+ Add Rule";
+          clientBarEditBtn.title = "Add a client rule for this client";
         }
+
+        // Wire up the edit/add button
+        clientBarEditBtn.onclick = () => {
+          if (clientRuleEditor.classList.contains("open")) {
+            closeClientRuleEditor();
+          } else {
+            openClientRuleEditor(
+              response.clientName,
+              response.pattern,
+              response.catName,
+              existingIndex >= 0 ? existingIndex : null
+            );
+          }
+        };
 
         clientBar.style.display = "flex";
       });
