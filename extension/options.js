@@ -224,6 +224,9 @@
   function saveDictionary(msg) {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
+      });
     });
   }
 
