@@ -11,10 +11,7 @@
   // Elements
   // ---------------------------------------------------------------------------
   const msgEl         = document.getElementById("msg");
-  const ignoreArea    = document.getElementById("ignoreListArea");
-  const ignoreCount   = document.getElementById("ignoreCount");
   const catEditorsEl  = document.getElementById("catEditors");
-  const btnSaveIgnore = document.getElementById("btnSaveIgnore");
   const btnExport     = document.getElementById("btnExport");
   const btnImportHT   = document.getElementById("btnImportHT");
   const btnImportJSON = document.getElementById("btnImportJSON");
@@ -230,18 +227,8 @@
   // ---------------------------------------------------------------------------
   // Ignore List
   // ---------------------------------------------------------------------------
-  function renderIgnoreList() {
-    const words = currentDict.ignoreList || [];
-    ignoreArea.value = words.join("\n");
-    ignoreCount.textContent = "(" + words.length + " words)";
-  }
-
-  btnSaveIgnore.addEventListener("click", () => {
-    const lines = ignoreArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    currentDict.ignoreList = lines;
-    saveDictionary("Ignore list saved (" + lines.length + " words)");
-    ignoreCount.textContent = "(" + lines.length + " words)";
-  });
+  // Rendered as the first card inside renderCategories(); nothing to do here.
+  function renderIgnoreList() {}
 
   // ---------------------------------------------------------------------------
   // Clients
@@ -707,6 +694,87 @@
   function renderCategories() {
     catEditorsEl.innerHTML = "";
     if (!currentDict.categories) return;
+
+    // ── Ignore List — rendered as the first (top) category card ──────────────
+    (function() {
+      const igEditor = document.createElement("div");
+      igEditor.className = "cat-editor";
+
+      const igHeader = document.createElement("div");
+      igHeader.className = "cat-header";
+
+      const igArrow = document.createElement("span");
+      igArrow.className = "cat-arrow";
+      igArrow.textContent = "\u25b6";
+      igHeader.appendChild(igArrow);
+
+      const igSwatch = document.createElement("span");
+      igSwatch.style.display = "inline-block";
+      igSwatch.style.width = "14px";
+      igSwatch.style.height = "14px";
+      igSwatch.style.borderRadius = "3px";
+      igSwatch.style.backgroundColor = "#d1d5db";
+      igSwatch.style.border = "1px solid rgba(0,0,0,0.2)";
+      igHeader.appendChild(igSwatch);
+
+      const igNameSpan = document.createElement("span");
+      igNameSpan.className = "cat-header-name";
+      igNameSpan.textContent = "Ignore List";
+      igHeader.appendChild(igNameSpan);
+
+      const igCountSpan = document.createElement("span");
+      igCountSpan.className = "cat-header-count";
+      const igWords = currentDict.ignoreList || [];
+      igCountSpan.textContent = igWords.length + " words";
+      igHeader.appendChild(igCountSpan);
+
+      igEditor.appendChild(igHeader);
+
+      const igBody = document.createElement("div");
+      igBody.className = "cat-body";
+
+      const igDesc = document.createElement("p");
+      igDesc.style.fontSize = "11px";
+      igDesc.style.color = "#999";
+      igDesc.style.marginBottom = "6px";
+      igDesc.textContent = "Words here block highlights from all categories. One per line. Wildcards (* ?) work.";
+      igBody.appendChild(igDesc);
+
+      const igArea = document.createElement("textarea");
+      igArea.className = "word-list";
+      igArea.style.minHeight = "250px";
+      igArea.spellcheck = false;
+      igArea.value = igWords.join("\n");
+      igBody.appendChild(igArea);
+
+      const igSaveRow = document.createElement("div");
+      igSaveRow.style.marginTop = "10px";
+      const igSaveBtn = document.createElement("button");
+      igSaveBtn.className = "primary";
+      igSaveBtn.textContent = "Save Ignore List";
+      igSaveBtn.addEventListener("click", () => {
+        const lines = igArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        currentDict.ignoreList = lines;
+        igCountSpan.textContent = lines.length + " words";
+        saveDictionary("Ignore list saved (" + lines.length + " words)");
+      });
+      igSaveRow.appendChild(igSaveBtn);
+      igBody.appendChild(igSaveRow);
+
+      igHeader.addEventListener("click", () => {
+        const isOpen = igBody.classList.contains("open");
+        document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
+        document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+        if (!isOpen) {
+          igBody.classList.add("open");
+          igArrow.classList.add("open");
+        }
+      });
+
+      igEditor.appendChild(igBody);
+      catEditorsEl.appendChild(igEditor);
+    })();
+    // ─────────────────────────────────────────────────────────────────────────
 
     currentDict.categories.forEach((cat, index) => {
       const editor = document.createElement("div");
