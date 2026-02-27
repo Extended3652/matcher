@@ -32,6 +32,7 @@
   const newClientImage    = document.getElementById("newClientImage");
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
+  const newClientComment  = document.getElementById("newClientComment");
 
   // Newer "Mentions" fields (must exist in options.html)
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
@@ -176,7 +177,8 @@
     const o = entry.overrides || {};
     const img = o.Image ? o.Image : "-";
     const pro = o.Profile ? o.Profile : "-";
-    const q = o.Question ? o.Question : "-";
+    const q   = o.Question ? o.Question : "-";
+    const cmt = o.Comment  ? o.Comment  : "-";
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
@@ -190,7 +192,7 @@
       if (note) extra += " [note]";
     }
 
-    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
+    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + " | Cmt: " + cmt + extra;
   }
 
   function pickHeaderSwatchCategory(entry) {
@@ -240,21 +242,25 @@
     newClientImage.innerHTML = "";
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
+    if (newClientComment) newClientComment.innerHTML = "";
 
     const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
     const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
     const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
     const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const cSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
     while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
     while (proSel.firstChild) newClientProfile.appendChild(proSel.firstChild);
     while (qSel.firstChild) newClientQuestion.appendChild(qSel.firstChild);
+    if (newClientComment) { while (cSel.firstChild) newClientComment.appendChild(cSel.firstChild); }
 
     newClientReview.value = "";
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+    if (newClientComment) newClientComment.value = "";
 
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
@@ -437,6 +443,15 @@
       fQ.appendChild(sQ);
       grid.appendChild(fQ);
 
+      const fCmt = document.createElement("div");
+      fCmt.className = "field";
+      const lCmt = document.createElement("label");
+      lCmt.textContent = "Header: Comment override";
+      const sCmt = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Comment) || "" }, styleByName);
+      fCmt.appendChild(lCmt);
+      fCmt.appendChild(sCmt);
+      grid.appendChild(fCmt);
+
       body.appendChild(grid);
 
       // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
@@ -590,6 +605,14 @@
         saveDictionary();
       });
 
+      sCmt.addEventListener("change", () => {
+        if (!entry.overrides) entry.overrides = {};
+        if (sCmt.value) entry.overrides.Comment = sCmt.value;
+        else delete entry.overrides.Comment;
+        refreshHeaderVisuals();
+        saveDictionary();
+      });
+
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
         saveDictionary();
@@ -666,6 +689,7 @@
     if (newClientImage.value) entry.overrides.Image = newClientImage.value;
     if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
     if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
+    if (newClientComment && newClientComment.value) entry.overrides.Comment = newClientComment.value;
 
     clients.push(entry);
     currentDict.clients = clients;
@@ -676,6 +700,7 @@
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+    if (newClientComment) newClientComment.value = "";
 
     if (newClientMentionCategory) newClientMentionCategory.value = "";
     if (newClientAliases) newClientAliases.value = "";
