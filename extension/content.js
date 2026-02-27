@@ -70,6 +70,7 @@
     if (raw.includes("image")) return "Image";
     if (raw.includes("profile")) return "Profile";
     if (raw.includes("question")) return "Question";
+    if (raw.includes("comment")) return "Comment";
     return "Default";
   }
 
@@ -107,6 +108,7 @@
     if (contentType === "Image" && overrides.Image) return overrides.Image;
     if (contentType === "Profile" && overrides.Profile) return overrides.Profile;
     if (contentType === "Question" && overrides.Question) return overrides.Question;
+    if (contentType === "Comment" && overrides.Comment) return overrides.Comment;
 
     // Default: blank means no highlight
     return rule.defaultCategory || null;
@@ -493,6 +495,10 @@
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
         });
+        break;
+
+      case "getClientName":
+        sendResponse({ clientName: getCmsClientName() });
         break;
 
       default:

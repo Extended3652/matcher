@@ -11,10 +11,7 @@
   // Elements
   // ---------------------------------------------------------------------------
   const msgEl         = document.getElementById("msg");
-  const ignoreArea    = document.getElementById("ignoreListArea");
-  const ignoreCount   = document.getElementById("ignoreCount");
   const catEditorsEl  = document.getElementById("catEditors");
-  const btnSaveIgnore = document.getElementById("btnSaveIgnore");
   const btnExport     = document.getElementById("btnExport");
   const btnImportHT   = document.getElementById("btnImportHT");
   const btnImportJSON = document.getElementById("btnImportJSON");
@@ -35,6 +32,7 @@
   const newClientImage    = document.getElementById("newClientImage");
   const newClientProfile  = document.getElementById("newClientProfile");
   const newClientQuestion = document.getElementById("newClientQuestion");
+  const newClientComment  = document.getElementById("newClientComment");
 
   // Newer "Mentions" fields (must exist in options.html)
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
@@ -48,6 +46,7 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let addFormAutofilled = false; // only auto-fill from CMS once per load
 
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
@@ -95,6 +94,32 @@
 
   function patternKey(p) {
     return normalizePattern(p).toLowerCase();
+  }
+
+  function findClientByKey(key) {
+    const clients = currentDict && Array.isArray(currentDict.clients) ? currentDict.clients : [];
+    return clients.find(c => patternKey(c && c.pattern) === key) || null;
+  }
+
+  function guessActiveCmsClientName(cb) {
+    if (!chrome.tabs || !chrome.tabs.query || !chrome.tabs.sendMessage) {
+      cb("");
+      return;
+    }
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs && tabs[0];
+      if (!tab || !tab.id) {
+        cb("");
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (res) => {
+        if (chrome.runtime.lastError || !res || !res.clientName) {
+          cb("");
+          return;
+        }
+        cb(normalizePattern(res.clientName));
+      });
+    });
   }
 
   function getCategoryNames() {
@@ -179,7 +204,8 @@
     const o = entry.overrides || {};
     const img = o.Image ? o.Image : "-";
     const pro = o.Profile ? o.Profile : "-";
-    const q = o.Question ? o.Question : "-";
+    const q   = o.Question ? o.Question : "-";
+    const cmt = o.Comment  ? o.Comment  : "-";
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
@@ -193,7 +219,7 @@
       if (note) extra += " [note]";
     }
 
-    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + extra;
+    return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + " | Cmt: " + cmt + extra;
   }
 
   function pickHeaderSwatchCategory(entry) {
@@ -218,6 +244,16 @@
       renderIgnoreList();
       renderClients();
       renderCategories();
+
+      // Auto-fill the Add Client form once from the active CMS tab, if available.
+      if (!addFormAutofilled) {
+        addFormAutofilled = true;
+        guessActiveCmsClientName((name) => {
+          if (!name) return;
+          newClientPattern.value = name;
+          syncAddClientFormFromPattern();
+        });
+      }
     });
   }
 
@@ -230,18 +266,8 @@
   // ---------------------------------------------------------------------------
   // Ignore List
   // ---------------------------------------------------------------------------
-  function renderIgnoreList() {
-    const words = currentDict.ignoreList || [];
-    ignoreArea.value = words.join("\n");
-    ignoreCount.textContent = "(" + words.length + " words)";
-  }
-
-  btnSaveIgnore.addEventListener("click", () => {
-    const lines = ignoreArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    currentDict.ignoreList = lines;
-    saveDictionary("Ignore list saved (" + lines.length + " words)");
-    ignoreCount.textContent = "(" + lines.length + " words)";
-  });
+  // Rendered as the first card inside renderCategories(); nothing to do here.
+  function renderIgnoreList() {}
 
   // ---------------------------------------------------------------------------
   // Clients
@@ -253,21 +279,25 @@
     newClientImage.innerHTML = "";
     newClientProfile.innerHTML = "";
     newClientQuestion.innerHTML = "";
+    if (newClientComment) newClientComment.innerHTML = "";
 
     const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
     const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
     const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
     const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const cSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
     while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
     while (proSel.firstChild) newClientProfile.appendChild(proSel.firstChild);
     while (qSel.firstChild) newClientQuestion.appendChild(qSel.firstChild);
+    if (newClientComment) { while (cSel.firstChild) newClientComment.appendChild(cSel.firstChild); }
 
     newClientReview.value = "";
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
+    if (newClientComment) newClientComment.value = "";
 
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
@@ -275,6 +305,62 @@
       const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
       while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
       newClientMentionCategory.value = "";
+    }
+  }
+
+  function syncAddClientFormFromPattern() {
+    const pattern = normalizePattern(newClientPattern.value);
+    const key = patternKey(pattern);
+    const existing = pattern ? findClientByKey(key) : null;
+
+    if (!pattern) {
+      newClientReview.value = "";
+      newClientImage.value = "";
+      newClientProfile.value = "";
+      newClientQuestion.value = "";
+      if (newClientComment) newClientComment.value = "";
+      if (newClientMentionCategory) newClientMentionCategory.value = "";
+      if (newClientAliases) newClientAliases.value = "";
+      if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+      if (newClientNote) newClientNote.value = "";
+      btnAddClient.textContent = "Add Client";
+      return;
+    }
+
+    if (existing) {
+      // Load existing client into the add/edit form
+      newClientReview.value = existing.defaultCategory || "";
+      newClientImage.value = (existing.overrides && existing.overrides.Image) || "";
+      newClientProfile.value = (existing.overrides && existing.overrides.Profile) || "";
+      newClientQuestion.value = (existing.overrides && existing.overrides.Question) || "";
+      if (newClientComment) {
+        newClientComment.value = (existing.overrides && existing.overrides.Comment) || "";
+      }
+      if (newClientMentionCategory) {
+        newClientMentionCategory.value = existing.mentionCategory || "";
+      }
+      if (newClientAliases) {
+        newClientAliases.value = Array.isArray(existing.aliases) ? existing.aliases.join("\n") : "";
+      }
+      if (newClientIncludePatternInContent) {
+        newClientIncludePatternInContent.checked = (existing.includePatternInContent !== false);
+      }
+      if (newClientNote) {
+        newClientNote.value = existing.note ? String(existing.note) : "";
+      }
+      btnAddClient.textContent = "Save Client";
+    } else {
+      // New client: keep pattern, reset the rest
+      newClientReview.value = "";
+      newClientImage.value = "";
+      newClientProfile.value = "";
+      newClientQuestion.value = "";
+      if (newClientComment) newClientComment.value = "";
+      if (newClientMentionCategory) newClientMentionCategory.value = "";
+      if (newClientAliases) newClientAliases.value = "";
+      if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+      if (newClientNote) newClientNote.value = "";
+      btnAddClient.textContent = "Add Client";
     }
   }
 
@@ -323,6 +409,9 @@
 
     const styleByName = getCategoryStyleByName();
     populateAddClientDropdowns(styleByName);
+
+    // After dropdowns are repopulated, re-sync the add/edit form selection
+    syncAddClientFormFromPattern();
 
     clientListBodyEl.innerHTML = "";
 
@@ -449,6 +538,15 @@
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
       grid.appendChild(fQ);
+
+      const fCmt = document.createElement("div");
+      fCmt.className = "field";
+      const lCmt = document.createElement("label");
+      lCmt.textContent = "Header: Comment override";
+      const sCmt = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Comment) || "" }, styleByName);
+      fCmt.appendChild(lCmt);
+      fCmt.appendChild(sCmt);
+      grid.appendChild(fCmt);
 
       body.appendChild(grid);
 
@@ -603,6 +701,14 @@
         saveDictionary();
       });
 
+      sCmt.addEventListener("change", () => {
+        if (!entry.overrides) entry.overrides = {};
+        if (sCmt.value) entry.overrides.Comment = sCmt.value;
+        else delete entry.overrides.Comment;
+        refreshHeaderVisuals();
+        saveDictionary();
+      });
+
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
         saveDictionary();
@@ -651,6 +757,12 @@
     renderClients();
   });
 
+  if (newClientPattern) {
+    newClientPattern.addEventListener("input", () => {
+      syncAddClientFormFromPattern();
+    });
+  }
+
   btnAddClient.addEventListener("click", () => {
     const pattern = normalizePattern(newClientPattern.value);
     if (!pattern) {
@@ -660,44 +772,45 @@
 
     const clients = currentDict.clients || [];
     const key = patternKey(pattern);
-    const exists = clients.some(c => patternKey(c.pattern) === key);
-    if (exists) {
-      showMsg('Client "' + pattern + '" already exists', "error");
-      return;
+    let entry = findClientByKey(key);
+    const isUpdate = !!entry;
+
+    if (!entry) {
+      entry = {
+        pattern: pattern,
+        defaultCategory: null,
+        overrides: {},
+        mentionCategory: null,
+        aliases: [],
+        includePatternInContent: true,
+        note: ""
+      };
+      clients.push(entry);
+      currentDict.clients = clients;
     }
 
-    const entry = {
-      pattern: pattern,
-      defaultCategory: newClientReview.value ? newClientReview.value : null,
-      overrides: {},
-      mentionCategory: (newClientMentionCategory && newClientMentionCategory.value) ? newClientMentionCategory.value : null,
-      aliases: newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [],
-      includePatternInContent: newClientIncludePatternInContent ? !!newClientIncludePatternInContent.checked : true,
-      note: newClientNote ? (newClientNote.value || "").trim() : ""
-    };
+    entry.pattern = pattern;
+    entry.defaultCategory = newClientReview.value ? newClientReview.value : null;
+    if (!entry.overrides) entry.overrides = {};
+    entry.overrides.Image = newClientImage.value || undefined;
+    entry.overrides.Profile = newClientProfile.value || undefined;
+    entry.overrides.Question = newClientQuestion.value || undefined;
+    if (newClientComment) {
+      entry.overrides.Comment = newClientComment.value || undefined;
+    }
+    entry.mentionCategory = (newClientMentionCategory && newClientMentionCategory.value)
+      ? newClientMentionCategory.value
+      : null;
+    entry.aliases = newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [];
+    entry.includePatternInContent = newClientIncludePatternInContent
+      ? !!newClientIncludePatternInContent.checked
+      : true;
+    entry.note = newClientNote ? (newClientNote.value || "").trim() : "";
 
-    if (newClientImage.value) entry.overrides.Image = newClientImage.value;
-    if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
-    if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
-
-    clients.push(entry);
-    currentDict.clients = clients;
     ensureClientsSorted();
-
-    newClientPattern.value = "";
-    newClientReview.value = "";
-    newClientImage.value = "";
-    newClientProfile.value = "";
-    newClientQuestion.value = "";
-
-    if (newClientMentionCategory) newClientMentionCategory.value = "";
-    if (newClientAliases) newClientAliases.value = "";
-    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
-    if (newClientNote) newClientNote.value = "";
-
     openClientKey = patternKey(pattern);
 
-    saveDictionary('Added client "' + pattern + '"');
+    saveDictionary((isUpdate ? 'Updated client "' : 'Added client "') + pattern + '"');
     renderClients();
   });
 
@@ -707,6 +820,87 @@
   function renderCategories() {
     catEditorsEl.innerHTML = "";
     if (!currentDict.categories) return;
+
+    // ── Ignore List — rendered as the first (top) category card ──────────────
+    (function() {
+      const igEditor = document.createElement("div");
+      igEditor.className = "cat-editor";
+
+      const igHeader = document.createElement("div");
+      igHeader.className = "cat-header";
+
+      const igArrow = document.createElement("span");
+      igArrow.className = "cat-arrow";
+      igArrow.textContent = "\u25b6";
+      igHeader.appendChild(igArrow);
+
+      const igSwatch = document.createElement("span");
+      igSwatch.style.display = "inline-block";
+      igSwatch.style.width = "14px";
+      igSwatch.style.height = "14px";
+      igSwatch.style.borderRadius = "3px";
+      igSwatch.style.backgroundColor = "#d1d5db";
+      igSwatch.style.border = "1px solid rgba(0,0,0,0.2)";
+      igHeader.appendChild(igSwatch);
+
+      const igNameSpan = document.createElement("span");
+      igNameSpan.className = "cat-header-name";
+      igNameSpan.textContent = "Ignore List";
+      igHeader.appendChild(igNameSpan);
+
+      const igCountSpan = document.createElement("span");
+      igCountSpan.className = "cat-header-count";
+      const igWords = currentDict.ignoreList || [];
+      igCountSpan.textContent = igWords.length + " words";
+      igHeader.appendChild(igCountSpan);
+
+      igEditor.appendChild(igHeader);
+
+      const igBody = document.createElement("div");
+      igBody.className = "cat-body";
+
+      const igDesc = document.createElement("p");
+      igDesc.style.fontSize = "11px";
+      igDesc.style.color = "#999";
+      igDesc.style.marginBottom = "6px";
+      igDesc.textContent = "Words here block highlights from all categories. One per line. Wildcards (* ?) work.";
+      igBody.appendChild(igDesc);
+
+      const igArea = document.createElement("textarea");
+      igArea.className = "word-list";
+      igArea.style.minHeight = "250px";
+      igArea.spellcheck = false;
+      igArea.value = igWords.join("\n");
+      igBody.appendChild(igArea);
+
+      const igSaveRow = document.createElement("div");
+      igSaveRow.style.marginTop = "10px";
+      const igSaveBtn = document.createElement("button");
+      igSaveBtn.className = "primary";
+      igSaveBtn.textContent = "Save Ignore List";
+      igSaveBtn.addEventListener("click", () => {
+        const lines = igArea.value.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        currentDict.ignoreList = lines;
+        igCountSpan.textContent = lines.length + " words";
+        saveDictionary("Ignore list saved (" + lines.length + " words)");
+      });
+      igSaveRow.appendChild(igSaveBtn);
+      igBody.appendChild(igSaveRow);
+
+      igHeader.addEventListener("click", () => {
+        const isOpen = igBody.classList.contains("open");
+        document.querySelectorAll(".cat-body").forEach(b => b.classList.remove("open"));
+        document.querySelectorAll(".cat-arrow").forEach(a => a.classList.remove("open"));
+        if (!isOpen) {
+          igBody.classList.add("open");
+          igArrow.classList.add("open");
+        }
+      });
+
+      igEditor.appendChild(igBody);
+      catEditorsEl.appendChild(igEditor);
+    })();
+    // ─────────────────────────────────────────────────────────────────────────
 
     currentDict.categories.forEach((cat, index) => {
       const editor = document.createElement("div");

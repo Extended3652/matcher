@@ -311,21 +311,49 @@ function notifyTab(tab, message) {
 // ---------------------------------------------------------------------------
 // On install — set up defaults
 // ---------------------------------------------------------------------------
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === "install") {
-    chrome.storage.local.get(["dictionary"], (result) => {
-      if (!result.dictionary) {
-        chrome.storage.local.set({
-          enabled: true,
-          dictionary: { ignoreList: [], categories: [] },
-          contextExact: false,
-          contextCaseSensitive: false,
-        });
-      }
-    });
-  }
+chrome.runtime.onInstalled.addListener(() => {
+  // On first install or update, ensure we have a real dictionary.
+  // If storage is empty (no categories), seed from bundled default_dictionary.json.
+  chrome.storage.local.get(["dictionary", "enabled", "contextExact", "contextCaseSensitive"], (result) => {
+    const existing = result.dictionary;
+    const hasCats = !!(existing && Array.isArray(existing.categories) && existing.categories.length > 0);
 
-  buildContextMenu();
+    if (hasCats) {
+      buildContextMenu();
+      return;
+    }
+
+    // Seed from packaged default if available
+    const url = chrome.runtime.getURL("default_dictionary.json");
+    fetch(url)
+      .then(resp => resp.ok ? resp.json() : Promise.reject(new Error("Failed to load default_dictionary.json")))
+      .then((dict) => {
+        const payload = {
+          enabled: result.enabled !== false,
+          dictionary: dict,
+          contextExact: !!result.contextExact,
+          contextCaseSensitive: !!result.contextCaseSensitive,
+        };
+        chrome.storage.local.set(payload, () => {
+          buildContextMenu();
+        });
+      })
+      .catch(() => {
+        // Fallback: if fetch fails, at least ensure we have an empty structure
+        if (!existing) {
+          chrome.storage.local.set({
+            enabled: true,
+            dictionary: { ignoreList: [], categories: [] },
+            contextExact: false,
+            contextCaseSensitive: false,
+          }, () => {
+            buildContextMenu();
+          });
+        } else {
+          buildContextMenu();
+        }
+      });
+  });
 });
 
 // ---------------------------------------------------------------------------
