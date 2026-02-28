@@ -64,31 +64,13 @@
   }
 
   function getCmsContentType() {
-    // Try the old selector first (for backwards compatibility)
-    let el = document.querySelector(".navbar-inner .decisionAreaLabel");
-    if (el) {
-      const raw = String(el.textContent || "").trim().toLowerCase();
-      if (raw.includes("image")) return "Image";
-      if (raw.includes("profile")) return "Profile";
-      if (raw.includes("question")) return "Question";
-      return "Default";
-    }
+    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
-    // New selector: find <dt>contentType</dt> and get the next <dd> sibling
-    const dtElements = document.querySelectorAll("dt");
-    for (const dt of dtElements) {
-      if (dt.textContent.trim().toLowerCase() === "contenttype") {
-        const dd = dt.nextElementSibling;
-        if (dd && dd.tagName === "DD") {
-          const raw = String(dd.textContent || "").trim().toLowerCase();
-          if (raw.includes("image")) return "Image";
-          if (raw.includes("profile")) return "Profile";
-          if (raw.includes("question")) return "Question";
-        }
-        break;
-      }
-    }
-
+    if (raw.includes("image")) return "Image";
+    if (raw.includes("profile")) return "Profile";
+    if (raw.includes("question")) return "Question";
+    if (raw.includes("comment")) return "Comment";
     return "Default";
   }
 
@@ -126,6 +108,7 @@
     if (contentType === "Image" && overrides.Image) return overrides.Image;
     if (contentType === "Profile" && overrides.Profile) return overrides.Profile;
     if (contentType === "Question" && overrides.Question) return overrides.Question;
+    if (contentType === "Comment" && overrides.Comment) return overrides.Comment;
 
     // Default: blank means no highlight
     return rule.defaultCategory || null;
@@ -318,12 +301,15 @@
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     const spans = document.querySelectorAll("." + HL_CLASS);
+    const parents = new Set();
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
-      parent.normalize();
+      parents.add(parent);
     });
+    // Normalize once per parent, not once per span (avoids redundant reflows)
+    parents.forEach(p => p.normalize());
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
@@ -345,6 +331,20 @@
       if (isBlockedRoute()) return;
 
       for (const mutation of mutations) {
+        // Text node content changed in-place (e.g. SPA framework updating nodeValue/data)
+        if (mutation.type === "characterData") {
+          const node = mutation.target;
+          if (
+            node.nodeType === Node.TEXT_NODE &&
+            node.parentElement &&
+            !node.parentElement.classList.contains(HL_CLASS) &&
+            !node.parentElement.hasAttribute(MARKER_ATTR)
+          ) {
+            pendingNodes.push({ type: "text", node });
+          }
+          continue;
+        }
+
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
@@ -381,7 +381,7 @@
       }, 80);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
   function stopObserver() {
@@ -495,6 +495,10 @@
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
         });
+        break;
+
+      case "getClientName":
+        sendResponse({ clientName: getCmsClientName() });
         break;
 
       default:

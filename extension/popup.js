@@ -17,13 +17,18 @@
 (function() {
   "use strict";
 
-  const masterToggle = document.getElementById("masterToggle");
-  const statsEl      = document.getElementById("stats");
-  const catListEl    = document.getElementById("catList");
-  const btnOptions   = document.getElementById("btnOptions");
-  const popupSearch  = document.getElementById("popupSearch");
+  const masterToggle    = document.getElementById("masterToggle");
+  const statsEl         = document.getElementById("stats");
+  const catListEl       = document.getElementById("catList");
+  const btnOptions      = document.getElementById("btnOptions");
+  const popupSearch     = document.getElementById("popupSearch");
+  const clientBannerEl  = document.getElementById("clientBanner");
+  const bannerNameEl    = document.getElementById("bannerClientName");
+  const bannerCatSelEl  = document.getElementById("bannerCatSelect");
+  const bannerAddBtnEl  = document.getElementById("bannerAddBtn");
 
   let currentDict = null;
+  let detectedClientName = ""; // client name read from the active CMS tab
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -41,11 +46,16 @@
   }
 
   // Inserts word into arr at the correct alphabetical position (by bare word).
+  // Binary search: O(log n) comparisons instead of O(n).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);
-    let i = 0;
-    while (i < arr.length && sortKey(arr[i]) < key) i++;
-    arr.splice(i, 0, word);
+    let lo = 0, hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sortKey(arr[mid]) < key) lo = mid + 1;
+      else hi = mid;
+    }
+    arr.splice(lo, 0, word);
   }
 
   // ---------------------------------------------------------------------------
@@ -71,6 +81,160 @@
 
   function confirmRemove(label, value) {
     return window.confirm(`Remove from ${label}?\n\n${value}`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client banner helpers
+  // ---------------------------------------------------------------------------
+  function clientGlobToRegex(pattern) {
+    const p = String(pattern || "").trim();
+    if (!p) return null;
+    const esc = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const rx = "^" + esc.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    try { return new RegExp(rx, "i"); } catch (_) { return null; }
+  }
+
+  function findMatchedClient(name) {
+    if (!name || !currentDict) return null;
+    const clients = currentDict.clients || [];
+    for (const c of clients) {
+      const rx = clientGlobToRegex(c.pattern);
+      if (rx && rx.test(name)) return c;
+    }
+    return null;
+  }
+
+  function applyBannerSelectColor() {
+    const val = bannerCatSelEl.value;
+    const cat = (currentDict.categories || []).find(c => c.name === val);
+    if (cat) {
+      bannerCatSelEl.style.backgroundColor = cat.color || "";
+      bannerCatSelEl.style.color = cat.fColor || "#000";
+    } else {
+      bannerCatSelEl.style.backgroundColor = "";
+      bannerCatSelEl.style.color = "";
+    }
+  }
+
+  function populateBannerSelect(selectedValue) {
+    bannerCatSelEl.innerHTML = "";
+    const defOpt = document.createElement("option");
+    defOpt.value = "";
+    defOpt.textContent = "(no highlight)";
+    bannerCatSelEl.appendChild(defOpt);
+
+    for (const cat of (currentDict.categories || [])) {
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = cat.name;
+      if (cat.color) {
+        opt.style.backgroundColor = cat.color;
+        opt.style.color = cat.fColor || "#000";
+      }
+      bannerCatSelEl.appendChild(opt);
+    }
+    bannerCatSelEl.value = selectedValue || "";
+    applyBannerSelectColor();
+  }
+
+  function renderClientBanner() {
+    if (!detectedClientName) {
+      clientBannerEl.style.display = "none";
+      return;
+    }
+    clientBannerEl.style.display = "block";
+    const matched = findMatchedClient(detectedClientName);
+
+    // Remove previous listeners by cloning
+    const newSel = bannerCatSelEl.cloneNode(false);
+    bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
+    // (re-assign the const-declared alias via the outer-scope var approach — we
+    //  work around the const by operating on the DOM id instead)
+    const selEl = document.getElementById("bannerCatSelect");
+    const addBtn = document.getElementById("bannerAddBtn");
+
+    if (matched) {
+      // Known client — show current defaultCategory, allow changing
+      clientBannerEl.style.background = "#e8f4fd";
+      clientBannerEl.style.borderBottom = "1px solid #bee3f8";
+      bannerNameEl.textContent = detectedClientName;
+      addBtn.style.display = "none";
+
+      // Re-populate
+      selEl.innerHTML = "";
+      const defOpt = document.createElement("option");
+      defOpt.value = "";
+      defOpt.textContent = "(no highlight)";
+      selEl.appendChild(defOpt);
+      for (const cat of (currentDict.categories || [])) {
+        const opt = document.createElement("option");
+        opt.value = cat.name;
+        opt.textContent = cat.name;
+        if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
+        selEl.appendChild(opt);
+      }
+      selEl.value = matched.defaultCategory || "";
+
+      const applyColor = () => {
+        const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
+        if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
+        else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
+      };
+      applyColor();
+
+      selEl.addEventListener("change", () => {
+        matched.defaultCategory = selEl.value || null;
+        saveDictionary();
+        applyColor();
+      });
+
+    } else {
+      // Unknown client — amber warning, show add button
+      clientBannerEl.style.background = "#fff8e1";
+      clientBannerEl.style.borderBottom = "1px solid #ffe082";
+      bannerNameEl.textContent = "\u26a0 " + detectedClientName;
+      addBtn.style.display = "";
+
+      // Re-populate
+      selEl.innerHTML = "";
+      const defOpt = document.createElement("option");
+      defOpt.value = "";
+      defOpt.textContent = "(no highlight)";
+      selEl.appendChild(defOpt);
+      for (const cat of (currentDict.categories || [])) {
+        const opt = document.createElement("option");
+        opt.value = cat.name;
+        opt.textContent = cat.name;
+        if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
+        selEl.appendChild(opt);
+      }
+      // Pre-select first category
+      const firstCat = (currentDict.categories || [])[0];
+      selEl.value = firstCat ? firstCat.name : "";
+
+      const applyColor = () => {
+        const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
+        if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
+        else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
+      };
+      applyColor();
+      selEl.addEventListener("change", applyColor);
+
+      // Clone add button to clear old listener
+      const newAdd = addBtn.cloneNode(true);
+      addBtn.parentNode.replaceChild(newAdd, addBtn);
+      newAdd.addEventListener("click", () => {
+        if (!currentDict.clients) currentDict.clients = [];
+        const entry = {
+          pattern: detectedClientName,
+          defaultCategory: selEl.value || null,
+          overrides: {}
+        };
+        currentDict.clients.push(entry);
+        saveDictionary();
+        renderClientBanner();
+      });
+    }
   }
 
   function sameEditing(scope, catIndex, entryIndex) {
@@ -246,12 +410,45 @@
       const enabled = result.enabled !== false;
       masterToggle.checked = enabled;
 
-      currentDict = result.dictionary || { ignoreList: [], categories: [] };
-      if (!currentDict.ignoreList) currentDict.ignoreList = [];
-      if (!currentDict.categories) currentDict.categories = [];
+      const dict = result.dictionary;
+      const hasCats = !!(dict && Array.isArray(dict.categories) && dict.categories.length > 0);
 
-      renderAll();
-      updateStats();
+      if (hasCats) {
+        currentDict = dict;
+        if (!currentDict.ignoreList) currentDict.ignoreList = [];
+        if (!currentDict.clients) currentDict.clients = [];
+        renderAll();
+        updateStats();
+        return;
+      }
+
+      // No categories in storage yet: seed from bundled default_dictionary.json
+      const url = chrome.runtime.getURL("default_dictionary.json");
+      fetch(url)
+        .then(resp => resp.ok ? resp.json() : Promise.reject(new Error("Failed to load default_dictionary.json")))
+        .then((defaultDict) => {
+          currentDict = defaultDict || { ignoreList: [], categories: [], clients: [] };
+          if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
+          if (!Array.isArray(currentDict.categories)) currentDict.categories = [];
+          if (!Array.isArray(currentDict.clients)) currentDict.clients = [];
+
+          chrome.storage.local.set(
+            {
+              enabled: enabled,
+              dictionary: currentDict
+            },
+            () => {
+              renderAll();
+              updateStats();
+            }
+          );
+        })
+        .catch(() => {
+          // Fallback: show empty structure so the UI still works
+          currentDict = { ignoreList: [], categories: [], clients: [] };
+          renderAll();
+          updateStats();
+        });
     });
   }
 
@@ -288,18 +485,27 @@
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) {
         statsEl.textContent = "No active tab";
+        clientBannerEl.style.display = "none";
         return;
       }
 
       chrome.tabs.sendMessage(tabs[0].id, { action: "getStats" }, (response) => {
         if (chrome.runtime.lastError || !response) {
           statsEl.textContent = "Not running on this page";
+          clientBannerEl.style.display = "none";
           return;
         }
 
         statsEl.textContent =
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
+
+        // Query the client name separately so the banner can show the right state
+        chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
+          detectedClientName = (!chrome.runtime.lastError && nameResp && nameResp.clientName)
+            ? nameResp.clientName : "";
+          renderClientBanner();
+        });
       });
     });
   }
@@ -762,8 +968,12 @@
     colorInput.className = "cat-color-input";
     colorInput.value = cat.color || "#FFFF00";
 
+    // Live preview while dragging - no storage writes on every pixel
     colorInput.addEventListener("input", () => {
       swatch.style.backgroundColor = colorInput.value;
+    });
+    // Persist only when picker is released/committed
+    colorInput.addEventListener("change", () => {
       cat.color = colorInput.value;
       saveDictionary();
     });
