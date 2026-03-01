@@ -338,8 +338,13 @@ function findMatches(text, compiled) {
   // --- Remove matches that overlap with any Ignore range ---
   let filtered = allMatches;
   if (ignoreRanges.length > 0) {
+    // A category match is suppressed only when it is fully contained within an
+    // ignore range (match.start >= ig.start && match.end <= ig.end).
+    // Using a simple overlap test would incorrectly kill multi-word phrase
+    // patterns (e.g. "same?day deliver*" → "same-day delivery") whenever one
+    // of their component words appears in the ignore list (e.g. "delivery").
     filtered = allMatches.filter(match => {
-      return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
+      return !ignoreRanges.some(ig => match.start >= ig.start && match.end <= ig.end);
     });
   }
 

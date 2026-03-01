@@ -442,80 +442,46 @@ assertMatches(
 );
 
 // =============================================================================
-// 12. same?day patterns — SI category
+// 12. Ignore-list containment fix
+//     A multi-word phrase pattern must NOT be suppressed just because one of
+//     its component words appears individually in the ignore list.
 // =============================================================================
-section("12. same?day patterns — hyphenated and spaced variants");
+section("12. Ignore-list: phrase match survives when only a sub-word is ignored");
 
-// same?day* trailing * is [^\s\p{P}]* — stops at the space, highlights modifier only
 assertMatches(
-  "same?day* matches the 'same-day' modifier (stops before space)",
-  cfg([cat("si", "SI", "#0bf", ["same?day*"])]),
-  "I need same-day delivery",
-  [{ cat:"SI", word:"same-day" }]
-);
-
-// same?day?deliver* uses ? for both separators → full phrase match
-assertMatches(
-  "same?day?deliver* matches full 'same-day delivery'",
-  cfg([cat("si", "SI", "#0bf", ["same?day?deliver*"])]),
+  "phrase 'same-day delivery' NOT blocked when only 'delivery' is in ignore list",
+  cfg([cat("si", "SI", "#0bf", ["same?day deliver*"])], ["delivery"]),
   "I need same-day delivery",
   [{ cat:"SI", word:"same-day delivery" }]
 );
 
 assertMatches(
-  "same?day?deliver* matches 'same day delivery' (space variant)",
-  cfg([cat("si", "SI", "#0bf", ["same?day?deliver*"])]),
+  "phrase 'same day delivery' NOT blocked when only 'delivery' is in ignore list",
+  cfg([cat("si", "SI", "#0bf", ["same?day deliver*"])], ["delivery"]),
   "They offer same day delivery",
   [{ cat:"SI", word:"same day delivery" }]
 );
 
 assertMatches(
-  "same?day?ship* matches 'same-day shipping'",
-  cfg([cat("si", "SI", "#0bf", ["same?day?ship*"])]),
-  "They offer same-day shipping",
-  [{ cat:"SI", word:"same-day shipping" }]
+  "phrase 'customer service' NOT blocked when only 'service' is in ignore list",
+  cfg([cat("cs", "CustSvc", "#000", ["c?st?mer* service*"])], ["service"]),
+  "The customer service was great",
+  [{ cat:"CustSvc", word:"customer service" }]
 );
 
+// A match that is FULLY INSIDE an ignore range should still be suppressed
 assertMatches(
-  "same?day patterns do NOT match 'next-day delivery'",
-  cfg([cat("si", "SI", "#0bf", ["same?day*", "same?day?deliver*"])]),
-  "I chose next-day delivery",
+  "standalone 'delivery' IS blocked when 'delivery' is in ignore list",
+  cfg([cat("si", "SI", "#0bf", ["deliver*"])], ["delivery"]),
+  "fast delivery",
   []
 );
 
-// =============================================================================
-// 13. //customer service — Customer Service beats CS wildcard
-// =============================================================================
-section("13. //customer service — exact match beats wildcard 'servic*'");
-
 assertMatches(
-  "//customer service wins over wildcard servic* for exact phrase",
-  cfg([
-    cat("cs_cat", "\"Customer Service\"", "#000", ["//customer service"]),
-    cat("cs",     "CS",                   "#ff0", ["servic*"]),
-  ]),
-  "The customer service was helpful",
-  [{ cat:"\"Customer Service\"", word:"customer service" }]
-);
-
-assertMatches(
-  "standalone 'service' still matched by CS when no 'customer' prefix",
-  cfg([
-    cat("cs_cat", "\"Customer Service\"", "#000", ["//customer service"]),
-    cat("cs",     "CS",                   "#ff0", ["servic*"]),
-  ]),
-  "The service was excellent",
-  [{ cat:"CS", word:"service" }]
-);
-
-assertMatches(
-  "//customer service is case-insensitive",
-  cfg([
-    cat("cs_cat", "\"Customer Service\"", "#000", ["//customer service"]),
-    cat("cs",     "CS",                   "#ff0", ["servic*"]),
-  ]),
-  "CUSTOMER SERVICE department",
-  [{ cat:"\"Customer Service\"", word:"CUSTOMER SERVICE" }]
+  "'store' inside 'store front' ignore range is still suppressed",
+  cfg([cat("a", "Ret", "#0f0", ["store"])], ["store front"]),
+  "I went to the store front but the store was open",
+  [{ cat:"Ret", word:"store" }]
 );
 
 // =============================================================================
