@@ -109,9 +109,9 @@ function globToRegexFragment(pattern) {
         if (prev === " " && next === " ") {
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
-          result += "[^\\s\\p{P}]*";
+          result += "(?:[^\\s\\p{P}]|['\u2019])*";
         } else {
-          result += "[^\\s\\p{P}]*?";
+          result += "(?:[^\\s\\p{P}]|['\u2019])*?";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";

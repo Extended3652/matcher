@@ -450,9 +450,28 @@ assertMatches(
 );
 
 // =============================================================================
-// 11. Disabled categories
+// 11. Wildcard crosses apostrophe in contractions
 // =============================================================================
-section("11. Disabled categories");
+section("11. Wildcard crosses apostrophe in contractions");
+
+assertMatches(
+  "h*t matches haven't",
+  cfg([cat("a", "Test", "#ff0", ["h*t given * any answer*"])]),
+  "haven't given me any answers",
+  [{ cat: "Test", word: "haven't given me any answers" }]
+);
+
+assertMatches(
+  "middle wildcard crosses apostrophe: d*t matches didn't",
+  cfg([cat("a", "Test", "#ff0", ["d*t"])]),
+  "didn't",
+  [{ cat: "Test", word: "didn't" }]
+);
+
+// =============================================================================
+// 12. Disabled categories
+// =============================================================================
+section("12. Disabled categories");
 
 assertMatches(
   "disabled category produces no matches",
