@@ -388,6 +388,29 @@ assertMatches(
   [{ cat:"High", word:"walmart" }]
 );
 
+assertMatches(
+  "//word does NOT steal plain phrase match that contains it",
+  cfg([
+    cat("ph", "Phrase",  "#0f0", ["customer service"]),  // plain phrase, longer
+    cat("ex", "Exact",   "#f00", ["//customer"]),        // exact word, contained
+  ]),
+  "The customer service was great",
+  // //customer matches "customer" [4,12]; "customer service" matches [4,20]
+  // "customer service" (container, non-wildcard) should win over //customer (contained, exact)
+  [{ cat:"Phrase", word:"customer service" }]
+);
+
+assertMatches(
+  "//word still beats wildcard* container (isExact fix preserved)",
+  cfg([
+    cat("wc", "Wildcard", "#00f", ["customer*"]),   // matches "customer" (no trailing non-space), wildcard
+    cat("ex", "Exact",    "#f00", ["//customer"]),  // matches "customer", exact
+  ]),
+  "I love customer products",
+  // Both match "customer" at the same span — non-wildcard beats wildcard regardless
+  [{ cat:"Exact", word:"customer" }]
+);
+
 // =============================================================================
 // 9. LIT: prefix (literal asterisk)
 // =============================================================================

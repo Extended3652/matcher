@@ -208,9 +208,7 @@
         if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
         selEl.appendChild(opt);
       }
-      // Pre-select first category
-      const firstCat = (currentDict.categories || [])[0];
-      selEl.value = firstCat ? firstCat.name : "";
+      selEl.value = ""; // default to (no highlight)
 
       const applyColor = () => {
         const cat = (currentDict.categories || []).find(c => c.name === selEl.value);

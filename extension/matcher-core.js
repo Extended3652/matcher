@@ -256,14 +256,16 @@
     if (aContainsB && !bContainsA) {
       const aExact = !!a.isExact;
       const bExact = !!b.isExact;
-      if (bExact && !aExact) return b;
+      // Let an exact contained match beat the container only when the container
+      // is a wildcard — prevents //word from stealing a longer plain-phrase match.
+      if (bExact && !aExact && !!a.isWildcard) return b;
       return a;
     }
 
     if (bContainsA && !aContainsB) {
       const aExact = !!a.isExact;
       const bExact = !!b.isExact;
-      if (aExact && !bExact) return a;
+      if (aExact && !bExact && !!b.isWildcard) return a;
       return b;
     }
 
