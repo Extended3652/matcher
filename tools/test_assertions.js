@@ -442,6 +442,83 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. same?day patterns — SI category
+// =============================================================================
+section("12. same?day patterns — hyphenated and spaced variants");
+
+// same?day* trailing * is [^\s\p{P}]* — stops at the space, highlights modifier only
+assertMatches(
+  "same?day* matches the 'same-day' modifier (stops before space)",
+  cfg([cat("si", "SI", "#0bf", ["same?day*"])]),
+  "I need same-day delivery",
+  [{ cat:"SI", word:"same-day" }]
+);
+
+// same?day?deliver* uses ? for both separators → full phrase match
+assertMatches(
+  "same?day?deliver* matches full 'same-day delivery'",
+  cfg([cat("si", "SI", "#0bf", ["same?day?deliver*"])]),
+  "I need same-day delivery",
+  [{ cat:"SI", word:"same-day delivery" }]
+);
+
+assertMatches(
+  "same?day?deliver* matches 'same day delivery' (space variant)",
+  cfg([cat("si", "SI", "#0bf", ["same?day?deliver*"])]),
+  "They offer same day delivery",
+  [{ cat:"SI", word:"same day delivery" }]
+);
+
+assertMatches(
+  "same?day?ship* matches 'same-day shipping'",
+  cfg([cat("si", "SI", "#0bf", ["same?day?ship*"])]),
+  "They offer same-day shipping",
+  [{ cat:"SI", word:"same-day shipping" }]
+);
+
+assertMatches(
+  "same?day patterns do NOT match 'next-day delivery'",
+  cfg([cat("si", "SI", "#0bf", ["same?day*", "same?day?deliver*"])]),
+  "I chose next-day delivery",
+  []
+);
+
+// =============================================================================
+// 13. //customer service — Customer Service beats CS wildcard
+// =============================================================================
+section("13. //customer service — exact match beats wildcard 'servic*'");
+
+assertMatches(
+  "//customer service wins over wildcard servic* for exact phrase",
+  cfg([
+    cat("cs_cat", "\"Customer Service\"", "#000", ["//customer service"]),
+    cat("cs",     "CS",                   "#ff0", ["servic*"]),
+  ]),
+  "The customer service was helpful",
+  [{ cat:"\"Customer Service\"", word:"customer service" }]
+);
+
+assertMatches(
+  "standalone 'service' still matched by CS when no 'customer' prefix",
+  cfg([
+    cat("cs_cat", "\"Customer Service\"", "#000", ["//customer service"]),
+    cat("cs",     "CS",                   "#ff0", ["servic*"]),
+  ]),
+  "The service was excellent",
+  [{ cat:"CS", word:"service" }]
+);
+
+assertMatches(
+  "//customer service is case-insensitive",
+  cfg([
+    cat("cs_cat", "\"Customer Service\"", "#000", ["//customer service"]),
+    cat("cs",     "CS",                   "#ff0", ["servic*"]),
+  ]),
+  "CUSTOMER SERVICE department",
+  [{ cat:"\"Customer Service\"", word:"CUSTOMER SERVICE" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));

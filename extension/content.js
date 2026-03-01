@@ -163,6 +163,9 @@
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
     const nodes = [];
+    // Resolve the client-name element once to avoid per-node DOM queries
+    const clientNameEl = document.querySelector(".navbar-inner .client-name");
+
     const walker = document.createTreeWalker(
       root,
       NodeFilter.SHOW_TEXT,
@@ -172,6 +175,15 @@
 
           // Skip nodes inside our own highlights
           if (node.parentElement.classList.contains(HL_CLASS)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // Skip the client-name element — its highlighting is managed by
+          // applyClientHighlight() based on client rules, not the word dictionary.
+          // Running the dictionary here would wrap the client name in a category-
+          // colored span whose inline style overrides the element-level style that
+          // applyClientHighlight() sets, causing client overrides to have no effect.
+          if (clientNameEl && clientNameEl.contains(node)) {
             return NodeFilter.FILTER_REJECT;
           }
 
