@@ -394,6 +394,26 @@
           <label>Comment override</label>
           <select id="newClientComment"></select>
         </div>
+
+        <div class="field">
+          <label>Mentions: Category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Mentions: Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" style="width:100%; min-height:70px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="One alias per line"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1; display:flex; align-items:center; gap:8px; margin-top:2px;">
+          <input type="checkbox" id="newClientIncludePatternInContent" checked>
+          <label for="newClientIncludePatternInContent" style="min-width:unset; font-weight:normal;">Also treat Client Name as a mention in content (if Mentions category is set)</label>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)" style="width:100%;">
+        </div>
       </div>
 
       <div class="client-add-actions">

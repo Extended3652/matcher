@@ -145,12 +145,12 @@
     clientBannerEl.style.display = "block";
     const matched = findMatchedClient(detectedClientName);
 
-    // Remove previous listeners by cloning
-    const newSel = bannerCatSelEl.cloneNode(false);
-    bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
-    // (re-assign the const-declared alias via the outer-scope var approach — we
-    //  work around the const by operating on the DOM id instead)
-    const selEl = document.getElementById("bannerCatSelect");
+    // Remove previous listeners by cloning. Always fetch current in-DOM element
+    // via getElementById so we don't hold a stale reference after prior renders.
+    const currentSel = document.getElementById("bannerCatSelect");
+    const newSel = currentSel.cloneNode(false);
+    currentSel.parentNode.replaceChild(newSel, currentSel);
+    const selEl = newSel;
     const addBtn = document.getElementById("bannerAddBtn");
 
     if (matched) {
@@ -398,6 +398,7 @@
 
   function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      refreshActiveTab();
       updateStats();
     });
   }

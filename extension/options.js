@@ -53,6 +53,18 @@
   const NO_HL_FG = "#555555";
 
   // ---------------------------------------------------------------------------
+  // Tab refresh — notify the active content script after saves
+  // ---------------------------------------------------------------------------
+  function refreshActiveTab() {
+    if (!chrome.tabs || !chrome.tabs.query) return;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs && tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
   function showMsg(text, type) {
@@ -260,6 +272,7 @@
   function saveDictionary(msg) {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
+      refreshActiveTab();
     });
   }
 
