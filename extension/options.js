@@ -72,22 +72,6 @@
       .filter(s => s.length > 0);
   }
 
-  function sortKey(raw) {
-    return safeStr(raw).replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
-  }
-
-  // Binary search: O(log n) comparisons instead of O(n).
-  function insertAlphabetically(arr, word) {
-    const key = sortKey(word);
-    let lo = 0, hi = arr.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (sortKey(arr[mid]) < key) lo = mid + 1;
-      else hi = mid;
-    }
-    arr.splice(lo, 0, word);
-  }
-
   function normalizePattern(p) {
     return safeStr(p).trim();
   }

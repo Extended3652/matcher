@@ -9,6 +9,8 @@
 
 "use strict";
 
+importScripts("shared.js");
+
 const MENU_PARENT_ID = "cms-hl-parent";
 const MENU_SEP1_ID   = "cms-hl-sep1";
 const MENU_EXACT_ID  = "cms-hl-exact";
@@ -18,27 +20,6 @@ const MENU_IGNORE_ID = "cms-hl-ignore";
 
 let menuBuildInProgress = false;
 let menuBuildQueued = false;
-
-// ---------------------------------------------------------------------------
-// Alphabetical insert helper
-// ---------------------------------------------------------------------------
-// Strips CS: and // prefixes so that "CS://HP" sorts by "hp", not the prefix.
-function sortKey(raw) {
-  return String(raw || "").replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
-}
-
-// Inserts word into arr at the correct alphabetical position (by bare word).
-// Binary search: O(log n) comparisons instead of O(n).
-function insertAlphabetically(arr, word) {
-  const key = sortKey(word);
-  let lo = 0, hi = arr.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (sortKey(arr[mid]) < key) lo = mid + 1;
-    else hi = mid;
-  }
-  arr.splice(lo, 0, word);
-}
 
 // ---------------------------------------------------------------------------
 // Small helpers to make contextMenus idempotent and avoid duplicate-id errors
