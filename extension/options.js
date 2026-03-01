@@ -46,6 +46,8 @@
   let currentDict = null;
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
+  let openBodyEl    = null; // DOM ref to the currently-expanded client body
+  let openArrowEl   = null; // DOM ref to its arrow span
   let addFormAutofilled = false; // only auto-fill from CMS once per load
 
   // Use the same "no highlight" grey concept you want
@@ -149,15 +151,17 @@
     return map;
   }
 
-  function makeCategorySelect(opts, stMapArg) {
+  function makeCategorySelect(opts, stMapArg, namesArg) {
     // opts:
     // - mode: "review" or "override"
     // - value: current value (string or null)
     // review: includes "(no highlight)" + categories
     // override: includes "-" (inherit) + categories
     // stMapArg: optional pre-built style map to avoid redundant Map construction
-    const sel = document.createElement("select");
+    // namesArg: optional pre-built category names array
+    const sel   = document.createElement("select");
     const stMap = stMapArg || getCategoryStyleByName();
+    const names = namesArg !== undefined ? namesArg : getCategoryNames();
 
     function resetSelectVisual() {
       sel.style.backgroundColor = "";
@@ -200,7 +204,7 @@
       sel.appendChild(makeOption("", "(no highlight)", null));
     }
 
-    for (const name of getCategoryNames()) {
+    for (const name of names) {
       sel.appendChild(makeOption(name, name, stMap.get(name) || null));
     }
 
@@ -285,7 +289,7 @@
   // ---------------------------------------------------------------------------
   // Clients
   // ---------------------------------------------------------------------------
-  function populateAddClientDropdowns(stMap) {
+  function populateAddClientDropdowns(stMap, names) {
     // We build temp <select>s so we inherit the same options + styling logic
     // then move options into the real DOM selects.
     newClientReview.innerHTML = "";
@@ -294,11 +298,11 @@
     newClientQuestion.innerHTML = "";
     if (newClientComment) newClientComment.innerHTML = "";
 
-    const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
-    const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const cSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+    const reviewSel = makeCategorySelect({ mode: "review",   value: "" }, stMap, names);
+    const imgSel    = makeCategorySelect({ mode: "override", value: "" }, stMap, names);
+    const proSel    = makeCategorySelect({ mode: "override", value: "" }, stMap, names);
+    const qSel      = makeCategorySelect({ mode: "override", value: "" }, stMap, names);
+    const cSel      = makeCategorySelect({ mode: "override", value: "" }, stMap, names);
 
     while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
     while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
@@ -315,7 +319,7 @@
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
       newClientMentionCategory.innerHTML = "";
-      const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+      const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap, names);
       while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
       newClientMentionCategory.value = "";
     }
@@ -410,9 +414,13 @@
   function renderClients() {
     if (!currentDict) return;
 
+    // Discard stale references from the previous render.
+    openBodyEl  = null;
+    openArrowEl = null;
+
     ensureClientsSorted();
 
-    const all = currentDict.clients || [];
+    const all  = currentDict.clients || [];
     const list = filteredClients();
 
     clientCountEl.textContent = "(" + all.length + " entries)";
@@ -420,10 +428,12 @@
       ? ("Showing " + list.length)
       : ("Showing " + list.length + " of " + all.length);
 
+    // Compute once and reuse everywhere in this render pass.
     const styleByName = getCategoryStyleByName();
-    populateAddClientDropdowns(styleByName);
+    const catNames    = getCategoryNames();
+    populateAddClientDropdowns(styleByName, catNames);
 
-    // After dropdowns are repopulated, re-sync the add/edit form selection
+    // After dropdowns are repopulated, re-sync the add/edit form selection.
     syncAddClientFormFromPattern();
 
     clientListBodyEl.innerHTML = "";
@@ -446,6 +456,9 @@
       return;
     }
 
+    // Batch all card inserts into a single DOM operation.
+    const frag = document.createDocumentFragment();
+
     list.forEach((entry) => {
       const pat = safeStr(entry.pattern);
       const key = patternKey(pat);
@@ -453,6 +466,7 @@
       const card = document.createElement("div");
       card.className = "client-card";
 
+      // ── Header (always built) ──────────────────────────────────────────────
       const header = document.createElement("div");
       header.className = "client-header";
 
@@ -472,7 +486,6 @@
 
       const summary = document.createElement("span");
       summary.className = "client-summary";
-      summary.textContent = formatSummary(entry);
       header.appendChild(summary);
 
       const actions = document.createElement("div");
@@ -499,8 +512,34 @@
 
       header.appendChild(actions);
 
+      // Shared: update header swatch + summary from current entry state.
+      // Called immediately and again whenever an edit field changes.
+      function refreshHeaderVisuals() {
+        summary.textContent = formatSummary(entry);
+        const catName = pickHeaderSwatchCategory(entry);
+        if (!catName) {
+          swatch.style.backgroundColor = NO_HL_BG;
+          swatch.style.borderColor = "#bdbdbd";
+        } else {
+          const st = styleByName.get(catName);
+          if (st) {
+            swatch.style.backgroundColor = st.color;
+            swatch.style.borderColor = "rgba(0,0,0,0.2)";
+          } else {
+            swatch.style.backgroundColor = NO_HL_BG;
+            swatch.style.borderColor = "#bdbdbd";
+          }
+        }
+      }
+      refreshHeaderVisuals();
+
+      // ── Body (built lazily on first expand) ───────────────────────────────
       const body = document.createElement("div");
       body.className = "client-body";
+      let bodyBuilt = false;
+
+      function buildBody() {
+        bodyBuilt = true;
 
       const grid = document.createElement("div");
       grid.className = "client-edit-grid";
@@ -520,7 +559,7 @@
       fReview.className = "field";
       const lReview = document.createElement("label");
       lReview.textContent = "Header: Review (Default)";
-      const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName);
+      const sReview = makeCategorySelect({ mode: "review", value: entry.defaultCategory || "" }, styleByName, catNames);
       fReview.appendChild(lReview);
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
@@ -529,7 +568,7 @@
       fImg.className = "field";
       const lImg = document.createElement("label");
       lImg.textContent = "Header: Image override";
-      const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName);
+      const sImg = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Image) || "" }, styleByName, catNames);
       fImg.appendChild(lImg);
       fImg.appendChild(sImg);
       grid.appendChild(fImg);
@@ -538,7 +577,7 @@
       fPro.className = "field";
       const lPro = document.createElement("label");
       lPro.textContent = "Header: Profile override";
-      const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName);
+      const sPro = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Profile) || "" }, styleByName, catNames);
       fPro.appendChild(lPro);
       fPro.appendChild(sPro);
       grid.appendChild(fPro);
@@ -547,7 +586,7 @@
       fQ.className = "field";
       const lQ = document.createElement("label");
       lQ.textContent = "Header: Question override";
-      const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName);
+      const sQ = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Question) || "" }, styleByName, catNames);
       fQ.appendChild(lQ);
       fQ.appendChild(sQ);
       grid.appendChild(fQ);
@@ -556,7 +595,7 @@
       fCmt.className = "field";
       const lCmt = document.createElement("label");
       lCmt.textContent = "Header: Comment override";
-      const sCmt = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Comment) || "" }, styleByName);
+      const sCmt = makeCategorySelect({ mode: "override", value: (entry.overrides && entry.overrides.Comment) || "" }, styleByName, catNames);
       fCmt.appendChild(lCmt);
       fCmt.appendChild(sCmt);
       grid.appendChild(fCmt);
@@ -574,7 +613,7 @@
       fMCat.className = "field";
       const lMCat = document.createElement("label");
       lMCat.textContent = "Mentions: Category";
-      const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
+      const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName, catNames);
       fMCat.appendChild(lMCat);
       fMCat.appendChild(sMCat);
       mGrid.appendChild(fMCat);
@@ -630,27 +669,6 @@
 
       mentionsWrap.appendChild(mGrid);
       body.appendChild(mentionsWrap);
-
-      function refreshHeaderVisuals() {
-        summary.textContent = formatSummary(entry);
-
-        const catName = pickHeaderSwatchCategory(entry);
-        if (!catName) {
-          swatch.style.backgroundColor = NO_HL_BG;
-          swatch.style.borderColor = "#bdbdbd";
-        } else {
-          const st = styleByName.get(catName);
-          if (st) {
-            swatch.style.backgroundColor = st.color;
-            swatch.style.borderColor = "rgba(0,0,0,0.2)";
-          } else {
-            swatch.style.backgroundColor = NO_HL_BG;
-            swatch.style.borderColor = "#bdbdbd";
-          }
-        }
-      }
-
-      refreshHeaderVisuals();
 
       function commitClientListRefresh() {
         ensureClientsSorted();
@@ -745,25 +763,49 @@
         saveDictionary();
         summary.textContent = formatSummary(entry);
       });
+      } // end buildBody()
 
+      // ── Click: toggle expand/collapse without a full re-render ────────────
       header.addEventListener("click", () => {
-        const isOpen = (openClientKey === key);
-        openClientKey = isOpen ? null : key;
-        renderClients();
+        if (openBodyEl === body) {
+          // Collapse this card.
+          body.classList.remove("open");
+          arrow.classList.remove("open");
+          openBodyEl    = null;
+          openArrowEl   = null;
+          openClientKey = null;
+        } else {
+          // Close whatever was open.
+          if (openBodyEl) {
+            openBodyEl.classList.remove("open");
+            openArrowEl.classList.remove("open");
+          }
+          // Build body DOM the first time this card is opened.
+          if (!bodyBuilt) buildBody();
+          body.classList.add("open");
+          arrow.classList.add("open");
+          openBodyEl    = body;
+          openArrowEl   = arrow;
+          openClientKey = key;
+        }
       });
 
+      // Re-open the card that was open before this re-render (e.g. after save).
       if (openClientKey === key) {
+        buildBody();
         body.classList.add("open");
         arrow.classList.add("open");
-      } else {
-        body.classList.remove("open");
-        arrow.classList.remove("open");
+        openBodyEl  = body;
+        openArrowEl = arrow;
       }
 
       card.appendChild(header);
       card.appendChild(body);
-      clientListBodyEl.appendChild(card);
+      frag.appendChild(card);
     });
+
+    // Single DOM write for the whole list.
+    clientListBodyEl.appendChild(frag);
   }
 
   clientSearchEl.addEventListener("input", () => {
