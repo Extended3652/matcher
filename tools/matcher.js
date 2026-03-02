@@ -109,7 +109,10 @@ function globToRegexFragment(pattern) {
         if (prev === " " && next === " ") {
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
-          result += "[^\\s\\p{P}]*";
+          // When adjacent to a space in the pattern, require at least one char to
+          // prevent the wildcard matching empty and letting \s+ grab the space.
+          const adjacentToSpace = (isFirst && next === " ") || (isLast && prev === " ");
+          result += adjacentToSpace ? "[^\\s\\p{P}]+" : "[^\\s\\p{P}]*";
         } else {
           result += "[^\\s\\p{P}]*?";
         }

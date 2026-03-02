@@ -442,6 +442,53 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Asterisk at start/end adjacent to space must not grab spaces
+// =============================================================================
+section("12. Asterisk at start/end — no space grabbing");
+
+assertMatches(
+  "leading-* followed by space: '* store' does NOT match bare ' store' (space grabbed)",
+  cfg([cat("a", "Ret", "#0f0", ["* store"])]),
+  " store",
+  []
+);
+
+assertMatches(
+  "leading-* followed by space: '* store' still matches 'big store'",
+  cfg([cat("a", "Ret", "#0f0", ["* store"])]),
+  "big store",
+  [{ cat:"Ret", word:"big store" }]
+);
+
+assertMatches(
+  "trailing-* preceded by space: 'store *' does NOT match bare 'store ' (space grabbed)",
+  cfg([cat("a", "Ret", "#0f0", ["store *"])]),
+  "store ",
+  []
+);
+
+assertMatches(
+  "trailing-* preceded by space: 'store *' still matches 'store big'",
+  cfg([cat("a", "Ret", "#0f0", ["store *"])]),
+  "store big",
+  [{ cat:"Ret", word:"store big" }]
+);
+
+assertMatches(
+  "simple amazon* (no adjacent space) still works as before",
+  cfg([cat("a", "Ret", "#0f0", ["amazon*"])]),
+  "I use amazonian products",
+  [{ cat:"Ret", word:"amazonian" }]
+);
+
+assertMatches(
+  "simple *etailer (no adjacent space) still works as before",
+  cfg([cat("a", "Ret", "#0f0", ["*etailer"])]),
+  "That e-retailer is big",
+  [{ cat:"Ret", word:"retailer" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
