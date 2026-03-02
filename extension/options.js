@@ -40,6 +40,9 @@
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
 
+  // Client Aliases field
+  const newClientClientAliases = document.getElementById("newClientClientAliases");
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -208,15 +211,19 @@
     const cmt = o.Comment  ? o.Comment  : "-";
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
+    const clientAliases = Array.isArray(entry.clientAliases) ? entry.clientAliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
     const incPat = (entry.includePatternInContent !== false); // default true
     const note = entry.note ? String(entry.note).trim() : "";
 
     let extra = "";
     if (mentionCat !== "-" || aliases.length > 0 || !incPat || note) {
-      extra += " | Mentions: " + mentionCat + " (" + aliases.length + ")";
+      extra += " | General Mentions: " + mentionCat + " (" + aliases.length + ")";
       if (!incPat) extra += " [no pattern]";
       if (note) extra += " [note]";
+    }
+    if (clientAliases.length > 0) {
+      extra += " | Client Aliases: " + clientAliases.length;
     }
 
     return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + " | Cmt: " + cmt + extra;
@@ -323,6 +330,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
+      if (newClientClientAliases) newClientClientAliases.value = "";
       btnAddClient.textContent = "Add Client";
       return;
     }
@@ -348,6 +356,9 @@
       if (newClientNote) {
         newClientNote.value = existing.note ? String(existing.note) : "";
       }
+      if (newClientClientAliases) {
+        newClientClientAliases.value = Array.isArray(existing.clientAliases) ? existing.clientAliases.join("\n") : "";
+      }
       btnAddClient.textContent = "Save Client";
     } else {
       // New client: keep pattern, reset the rest
@@ -360,6 +371,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
+      if (newClientClientAliases) newClientClientAliases.value = "";
       btnAddClient.textContent = "Add Client";
     }
   }
@@ -382,6 +394,11 @@
 
       const aliases = Array.isArray(c && c.aliases) ? c.aliases : [];
       for (const a of aliases) {
+        if (safeStr(a).toLowerCase().includes(f)) return true;
+      }
+
+      const clientAliases = Array.isArray(c && c.clientAliases) ? c.clientAliases : [];
+      for (const a of clientAliases) {
         if (safeStr(a).toLowerCase().includes(f)) return true;
       }
       return false;
@@ -550,17 +567,23 @@
 
       body.appendChild(grid);
 
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      // General Mentions editor block
       const mentionsWrap = document.createElement("div");
       mentionsWrap.className = "client-mentions-wrap";
 
       const mGrid = document.createElement("div");
       mGrid.className = "client-edit-grid";
 
+      const mHeader = document.createElement("h3");
+      mHeader.style.gridColumn = "1 / -1";
+      mHeader.style.marginBottom = "4px";
+      mHeader.textContent = "General Mentions";
+      mGrid.appendChild(mHeader);
+
       const fMCat = document.createElement("div");
       fMCat.className = "field";
       const lMCat = document.createElement("label");
-      lMCat.textContent = "Mentions: Category";
+      lMCat.textContent = "General Mentions: Category";
       const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
       fMCat.appendChild(lMCat);
       fMCat.appendChild(sMCat);
@@ -570,7 +593,7 @@
       fAliases.className = "field";
       fAliases.style.gridColumn = "1 / -1";
       const lAliases = document.createElement("label");
-      lAliases.textContent = "Mentions: Aliases (one per line, supports * and ?)";
+      lAliases.textContent = "General Mentions: Aliases (one per line, supports * and ?)";
       const tAliases = document.createElement("textarea");
       tAliases.className = "word-list";
       tAliases.spellcheck = false;
@@ -597,7 +620,7 @@
       const incHelp = document.createElement("div");
       incHelp.className = "muted";
       incHelp.style.marginTop = "4px";
-      incHelp.textContent = "If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
+      incHelp.textContent = "If General Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.";
       fInc.appendChild(incHelp);
 
       mGrid.appendChild(fInc);
@@ -617,6 +640,41 @@
 
       mentionsWrap.appendChild(mGrid);
       body.appendChild(mentionsWrap);
+
+      // Client Aliases editor block
+      const clientAliasesWrap = document.createElement("div");
+      clientAliasesWrap.className = "client-mentions-wrap";
+      clientAliasesWrap.style.marginTop = "8px";
+
+      const caGrid = document.createElement("div");
+      caGrid.className = "client-edit-grid";
+
+      const caHeader = document.createElement("h3");
+      caHeader.style.gridColumn = "1 / -1";
+      caHeader.style.marginBottom = "4px";
+      caHeader.textContent = "Client Aliases";
+      caGrid.appendChild(caHeader);
+
+      const caDesc = document.createElement("div");
+      caDesc.className = "muted";
+      caDesc.style.gridColumn = "1 / -1";
+      caDesc.style.marginBottom = "6px";
+      caDesc.textContent = "Alternative names for this client that should be matched in content (non-client-name areas). Treated the same as General Mentions. One per line, supports * and ?.";
+      caGrid.appendChild(caDesc);
+
+      const fClientAliases = document.createElement("div");
+      fClientAliases.className = "field";
+      fClientAliases.style.gridColumn = "1 / -1";
+      const tClientAliases = document.createElement("textarea");
+      tClientAliases.className = "word-list";
+      tClientAliases.spellcheck = false;
+      tClientAliases.style.minHeight = "90px";
+      tClientAliases.value = Array.isArray(entry.clientAliases) ? entry.clientAliases.join("\n") : "";
+      fClientAliases.appendChild(tClientAliases);
+      caGrid.appendChild(fClientAliases);
+
+      clientAliasesWrap.appendChild(caGrid);
+      body.appendChild(clientAliasesWrap);
 
       function refreshHeaderVisuals() {
         summary.textContent = formatSummary(entry);
@@ -733,6 +791,12 @@
         summary.textContent = formatSummary(entry);
       });
 
+      tClientAliases.addEventListener("change", () => {
+        entry.clientAliases = normalizeAliasesFromTextarea(tClientAliases.value);
+        saveDictionary();
+        summary.textContent = formatSummary(entry);
+      });
+
       header.addEventListener("click", () => {
         const isOpen = (openClientKey === key);
         openClientKey = isOpen ? null : key;
@@ -782,6 +846,7 @@
         overrides: {},
         mentionCategory: null,
         aliases: [],
+        clientAliases: [],
         includePatternInContent: true,
         note: ""
       };
@@ -802,6 +867,7 @@
       ? newClientMentionCategory.value
       : null;
     entry.aliases = newClientAliases ? normalizeAliasesFromTextarea(newClientAliases.value) : [];
+    entry.clientAliases = newClientClientAliases ? normalizeAliasesFromTextarea(newClientClientAliases.value) : [];
     entry.includePatternInContent = newClientIncludePatternInContent
       ? !!newClientIncludePatternInContent.checked
       : true;
