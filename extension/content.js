@@ -64,6 +64,7 @@
   }
 
   function getCmsContentType() {
+    // Primary: read the content-type label from the navbar element.
     const el = document.querySelector(".navbar-inner .decisionAreaLabel");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
@@ -71,6 +72,16 @@
     if (raw.includes("profile")) return "Profile";
     if (raw.includes("question")) return "Question";
     if (raw.includes("comment")) return "Comment";
+
+    // Fallback: infer from the URL hash.  The real CMS is a hash-based SPA
+    // (e.g. #/moderation/image/12345) so the hash is a reliable signal when
+    // the DOM label hasn't settled yet or uses an unexpected string.
+    const hash = String(location.hash || "").toLowerCase();
+    if (hash.includes("/image")) return "Image";
+    if (hash.includes("/profile")) return "Profile";
+    if (hash.includes("/question")) return "Question";
+    if (hash.includes("/comment")) return "Comment";
+
     return "Default";
   }
 
@@ -506,6 +517,15 @@
     }
 
     return true;
+  });
+
+  // Re-apply the client highlight whenever the SPA navigates to a new item.
+  // The MutationObserver covers DOM changes, but a hashchange fires immediately
+  // when the route changes, giving a faster/more reliable trigger.
+  window.addEventListener("hashchange", () => {
+    if (!isBlockedRoute()) {
+      applyClientHighlight();
+    }
   });
 
   if (document.readyState === "loading") {
