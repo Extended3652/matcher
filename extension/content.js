@@ -114,6 +114,28 @@
     return rule.defaultCategory || null;
   }
 
+  // Build a compiled matcher, injecting the client name into the mentionsCategory
+  // words list so it gets highlighted everywhere (except the navbar client-name element,
+  // which is excluded in getTextNodes above).
+  function buildMatcherWithClientMentions(dict) {
+    const clientName = getCmsClientName();
+    if (!clientName || !clientRules.length) return MatcherEngine.compileAll(dict);
+
+    const rule = findClientRule(clientName);
+    if (!rule || !rule.mentionsCategory) return MatcherEngine.compileAll(dict);
+
+    const cloned = JSON.parse(JSON.stringify(dict));
+    const cat = (cloned.categories || []).find(c => c.name === rule.mentionsCategory);
+    if (!cat) return MatcherEngine.compileAll(dict);
+
+    if (!Array.isArray(cat.words)) cat.words = [];
+    if (!cat.words.includes(clientName)) {
+      cat.words.push(clientName);
+    }
+
+    return MatcherEngine.compileAll(cloned);
+  }
+
   function clearClientHighlight() {
     const el = getCmsClientNameEl();
     if (!el) return;
@@ -162,6 +184,7 @@
   // DOM walking
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
+    const clientNameEl = getCmsClientNameEl();
     const nodes = [];
     const walker = document.createTreeWalker(
       root,
@@ -188,6 +211,12 @@
 
           // Only process nodes with visible text
           if (!node.textContent || node.textContent.trim().length === 0) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // Skip nodes inside the CMS client-name element (client mentions
+          // should highlight the name everywhere EXCEPT that navbar area)
+          if (clientNameEl && clientNameEl.contains(node.parentElement)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -415,15 +444,16 @@
         return;
       }
 
-      // Compile matcher
-      compiledMatcher = MatcherEngine.compileAll(dict);
-
-      // Build client highlight maps
+      // Build client highlight maps first (needed before compiling matcher
+      // so buildMatcherWithClientMentions can resolve the mentions category)
       categoryStyleByName = buildCategoryStyleMap(dict);
       clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
       for (const r of clientRules) {
         r._rx = globToRegex(r.pattern);
       }
+
+      // Compile matcher (injects client name into mentionsCategory if configured)
+      compiledMatcher = buildMatcherWithClientMentions(dict);
 
       console.log(
         "CMS Highlighter: compiled " +
@@ -466,13 +496,12 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
-
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
             for (const r of clientRules) {
               r._rx = globToRegex(r.pattern);
             }
+            compiledMatcher = buildMatcherWithClientMentions(dict);
           }
 
           removeAllHighlights();

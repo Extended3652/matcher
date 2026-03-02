@@ -188,12 +188,55 @@
         applyColor();
       });
 
+      // Show delineation + mentions row
+      document.getElementById("bannerDivider").style.display = "block";
+      document.getElementById("bannerMentionsRow").style.display = "flex";
+
+      // Clone to clear old listeners
+      const mentEl = document.getElementById("bannerMentionsCatSelect");
+      const newMentSel = mentEl.cloneNode(false);
+      mentEl.parentNode.replaceChild(newMentSel, mentEl);
+      const mentSelEl = document.getElementById("bannerMentionsCatSelect");
+
+      // Populate with categories
+      mentSelEl.innerHTML = "";
+      const mDefOpt = document.createElement("option");
+      mDefOpt.value = "";
+      mDefOpt.textContent = "(no highlight)";
+      mentSelEl.appendChild(mDefOpt);
+      for (const cat of (currentDict.categories || [])) {
+        const opt = document.createElement("option");
+        opt.value = cat.name;
+        opt.textContent = cat.name;
+        if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
+        mentSelEl.appendChild(opt);
+      }
+      mentSelEl.value = matched.mentionsCategory || "";
+
+      const applyMentColor = () => {
+        const cat = (currentDict.categories || []).find(c => c.name === mentSelEl.value);
+        if (cat) { mentSelEl.style.backgroundColor = cat.color || ""; mentSelEl.style.color = cat.fColor || "#000"; }
+        else { mentSelEl.style.backgroundColor = ""; mentSelEl.style.color = ""; }
+      };
+      applyMentColor();
+
+      mentSelEl.addEventListener("change", () => {
+        matched.mentionsCategory = mentSelEl.value || null;
+        saveDictionary();
+        applyMentColor();
+        refreshActiveTab();
+      });
+
     } else {
       // Unknown client — amber warning, show add button
       clientBannerEl.style.background = "#fff8e1";
       clientBannerEl.style.borderBottom = "1px solid #ffe082";
       bannerNameEl.textContent = "\u26a0 " + detectedClientName;
       addBtn.style.display = "";
+
+      // Hide mentions row for unknown clients
+      document.getElementById("bannerDivider").style.display = "none";
+      document.getElementById("bannerMentionsRow").style.display = "none";
 
       // Re-populate
       selEl.innerHTML = "";
