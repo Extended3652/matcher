@@ -34,6 +34,8 @@
   const newClientQuestion = document.getElementById("newClientQuestion");
   const newClientComment  = document.getElementById("newClientComment");
 
+  const addClientHeading = document.getElementById("addClientHeading");
+
   // Newer "Mentions" fields (must exist in options.html)
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
@@ -323,6 +325,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
+      if (addClientHeading) addClientHeading.textContent = "Add client";
       btnAddClient.textContent = "Add Client";
       return;
     }
@@ -348,6 +351,7 @@
       if (newClientNote) {
         newClientNote.value = existing.note ? String(existing.note) : "";
       }
+      if (addClientHeading) addClientHeading.textContent = "Edit client";
       btnAddClient.textContent = "Save Client";
     } else {
       // New client: keep pattern, reset the rest
@@ -360,6 +364,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
+      if (addClientHeading) addClientHeading.textContent = "Add client";
       btnAddClient.textContent = "Add Client";
     }
   }
