@@ -109,10 +109,33 @@
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs && tabs[0];
       if (!tab || !tab.id) {
-        cb("");
+        findAnyCmsTab(cb);
         return;
       }
       chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (res) => {
+        if (!chrome.runtime.lastError && res && res.clientName) {
+          cb(normalizePattern(res.clientName));
+          return;
+        }
+        // Active tab has no content script (e.g. the options page itself).
+        // Fall back to searching all open CMS tabs.
+        findAnyCmsTab(cb);
+      });
+    });
+  }
+
+  function findAnyCmsTab(cb) {
+    const urls = [
+      "https://cms.bazaarvoice.com/*",
+      "https://workbench.bazaarvoice.com/*",
+      "http://minotaur:8124/*"
+    ];
+    chrome.tabs.query({ url: urls }, (cmsTabs) => {
+      if (chrome.runtime.lastError || !cmsTabs || cmsTabs.length === 0) {
+        cb("");
+        return;
+      }
+      chrome.tabs.sendMessage(cmsTabs[0].id, { action: "getClientName" }, (res) => {
         if (chrome.runtime.lastError || !res || !res.clientName) {
           cb("");
           return;
