@@ -34,7 +34,8 @@
   const newClientQuestion = document.getElementById("newClientQuestion");
   const newClientComment  = document.getElementById("newClientComment");
 
-  // Newer "Mentions" fields (must exist in options.html)
+  // Mentions fields
+  const newClientGeneralMention  = document.getElementById("newClientGeneralMention");
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
@@ -209,12 +210,13 @@
 
     const aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
     const mentionCat = entry.mentionCategory ? entry.mentionCategory : "-";
+    const generalMention = entry.generalMentionCategory ? entry.generalMentionCategory : "-";
     const incPat = (entry.includePatternInContent !== false); // default true
     const note = entry.note ? String(entry.note).trim() : "";
 
     let extra = "";
-    if (mentionCat !== "-" || aliases.length > 0 || !incPat || note) {
-      extra += " | Mentions: " + mentionCat + " (" + aliases.length + ")";
+    if (mentionCat !== "-" || generalMention !== "-" || aliases.length > 0 || !incPat || note) {
+      extra += " | Mentions: " + mentionCat + " | General: " + generalMention + " (" + aliases.length + ")";
       if (!incPat) extra += " [no pattern]";
       if (note) extra += " [note]";
     }
@@ -299,6 +301,14 @@
     newClientQuestion.value = "";
     if (newClientComment) newClientComment.value = "";
 
+    // General mention select
+    if (newClientGeneralMention) {
+      newClientGeneralMention.innerHTML = "";
+      const genSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+      while (genSel.firstChild) newClientGeneralMention.appendChild(genSel.firstChild);
+      newClientGeneralMention.value = "";
+    }
+
     // Mentions category select, if present in HTML
     if (newClientMentionCategory) {
       newClientMentionCategory.innerHTML = "";
@@ -319,6 +329,7 @@
       newClientProfile.value = "";
       newClientQuestion.value = "";
       if (newClientComment) newClientComment.value = "";
+      if (newClientGeneralMention) newClientGeneralMention.value = "";
       if (newClientMentionCategory) newClientMentionCategory.value = "";
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
@@ -335,6 +346,9 @@
       newClientQuestion.value = (existing.overrides && existing.overrides.Question) || "";
       if (newClientComment) {
         newClientComment.value = (existing.overrides && existing.overrides.Comment) || "";
+      }
+      if (newClientGeneralMention) {
+        newClientGeneralMention.value = existing.generalMentionCategory || "";
       }
       if (newClientMentionCategory) {
         newClientMentionCategory.value = existing.mentionCategory || "";
@@ -356,6 +370,7 @@
       newClientProfile.value = "";
       newClientQuestion.value = "";
       if (newClientComment) newClientComment.value = "";
+      if (newClientGeneralMention) newClientGeneralMention.value = "";
       if (newClientMentionCategory) newClientMentionCategory.value = "";
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
@@ -550,12 +565,26 @@
 
       body.appendChild(grid);
 
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      // Separator between overrides and mentions
+      const sectionDivider = document.createElement("div");
+      sectionDivider.className = "client-section-divider";
+      body.appendChild(sectionDivider);
+
+      // Mentions editor block
       const mentionsWrap = document.createElement("div");
       mentionsWrap.className = "client-mentions-wrap";
 
       const mGrid = document.createElement("div");
       mGrid.className = "client-edit-grid";
+
+      const fGenMCat = document.createElement("div");
+      fGenMCat.className = "field";
+      const lGenMCat = document.createElement("label");
+      lGenMCat.textContent = "General mention";
+      const sGenMCat = makeCategorySelect({ mode: "override", value: entry.generalMentionCategory || "" }, styleByName);
+      fGenMCat.appendChild(lGenMCat);
+      fGenMCat.appendChild(sGenMCat);
+      mGrid.appendChild(fGenMCat);
 
       const fMCat = document.createElement("div");
       fMCat.className = "field";
@@ -709,6 +738,12 @@
         saveDictionary();
       });
 
+      sGenMCat.addEventListener("change", () => {
+        entry.generalMentionCategory = sGenMCat.value ? sGenMCat.value : null;
+        saveDictionary();
+        summary.textContent = formatSummary(entry);
+      });
+
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
         saveDictionary();
@@ -780,6 +815,7 @@
         pattern: pattern,
         defaultCategory: null,
         overrides: {},
+        generalMentionCategory: null,
         mentionCategory: null,
         aliases: [],
         includePatternInContent: true,
@@ -798,6 +834,9 @@
     if (newClientComment) {
       entry.overrides.Comment = newClientComment.value || undefined;
     }
+    entry.generalMentionCategory = (newClientGeneralMention && newClientGeneralMention.value)
+      ? newClientGeneralMention.value
+      : null;
     entry.mentionCategory = (newClientMentionCategory && newClientMentionCategory.value)
       ? newClientMentionCategory.value
       : null;

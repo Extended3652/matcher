@@ -327,6 +327,16 @@
       color: #888;
       font-size: 12px;
     }
+
+    .client-mentions-divider {
+      border-top: 1px solid #e0e0e0;
+      margin: 12px 0 0;
+    }
+
+    .client-section-divider {
+      border-top: 1px solid #e0e0e0;
+      margin: 12px 0;
+    }
   </style>
 </head>
 <body>
@@ -393,6 +403,15 @@
         <div class="field">
           <label>Comment override</label>
           <select id="newClientComment"></select>
+        </div>
+      </div>
+
+      <div class="client-mentions-divider"></div>
+
+      <div class="client-add-grid" style="margin-top: 4px;">
+        <div class="field">
+          <label>General mention</label>
+          <select id="newClientGeneralMention"></select>
         </div>
       </div>
 
