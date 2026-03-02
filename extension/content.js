@@ -393,6 +393,45 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Client mention injection
+  // ---------------------------------------------------------------------------
+  // Clients with mentionCategory set contribute their pattern (and aliases) as
+  // word entries in that category, so they get highlighted in review text.
+  // includePatternInContent=false opts the main pattern out (aliases still apply).
+  function buildDictWithClientMentions(dict) {
+    const clients = Array.isArray(dict.clients) ? dict.clients : [];
+    if (clients.length === 0) return dict;
+
+    const extra = {}; // categoryName -> [word patterns]
+    for (const client of clients) {
+      const cat = client && client.mentionCategory;
+      if (!cat) continue;
+
+      if (!extra[cat]) extra[cat] = [];
+
+      if (Array.isArray(client.aliases)) {
+        for (const a of client.aliases) {
+          if (a) extra[cat].push(a);
+        }
+      }
+
+      if (client.includePatternInContent !== false && client.pattern) {
+        extra[cat].push(client.pattern);
+      }
+    }
+
+    const catNames = Object.keys(extra);
+    if (catNames.length === 0) return dict;
+
+    const categories = (dict.categories || []).map(cat => {
+      if (!cat || !cat.name || !extra[cat.name]) return cat;
+      return Object.assign({}, cat, { words: (cat.words || []).concat(extra[cat.name]) });
+    });
+
+    return Object.assign({}, dict, { categories });
+  }
+
+  // ---------------------------------------------------------------------------
   // Init + messages
   // ---------------------------------------------------------------------------
   function init() {
@@ -415,8 +454,8 @@
         return;
       }
 
-      // Compile matcher
-      compiledMatcher = MatcherEngine.compileAll(dict);
+      // Compile matcher (with client mention patterns merged in)
+      compiledMatcher = MatcherEngine.compileAll(buildDictWithClientMentions(dict));
 
       // Build client highlight maps
       categoryStyleByName = buildCategoryStyleMap(dict);
@@ -466,7 +505,7 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
+            compiledMatcher = MatcherEngine.compileAll(buildDictWithClientMentions(dict));
 
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
