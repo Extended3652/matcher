@@ -357,11 +357,24 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Rebuild context menu when dictionary or menu toggles change
+// Rebuild context menu when dictionary or menu toggles change.
+// Also push a refresh to all content-script tabs so client-rule changes
+// (saved from the options page) take effect immediately without a page reload.
 // ---------------------------------------------------------------------------
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+  if (changes.dictionary) {
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of (tabs || [])) {
+        if (!tab.id) continue;
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          // Suppress expected errors for tabs that don't have the content script.
+          void chrome.runtime.lastError;
+        });
+      }
+    });
   }
 });
