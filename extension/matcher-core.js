@@ -343,7 +343,7 @@
     let filtered = allMatches;
     if (ignoreRanges.length > 0) {
       filtered = allMatches.filter(match => {
-        return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
+        return !ignoreRanges.some(ig => ig.start <= match.start && ig.end >= match.end);
       });
     }
 
