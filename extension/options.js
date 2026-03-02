@@ -550,7 +550,11 @@
 
       body.appendChild(grid);
 
-      // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
+      const sep = document.createElement("hr");
+      sep.className = "client-section-divider";
+      body.appendChild(sep);
+
+      // Mentions editor block
       const mentionsWrap = document.createElement("div");
       mentionsWrap.className = "client-mentions-wrap";
 
