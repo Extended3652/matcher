@@ -113,9 +113,14 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
+            // If the wildcard is adjacent to a space in the pattern (e.g. "* term" or "term *"),
+            // require at least one char so the wildcard can't collapse to empty and pull
+            // the neighboring space into the match.
+            const adjacentToSpace = (isFirst && next === " ") || (isLast && prev === " ");
+            result += adjacentToSpace ? "[^\\s\\p{P}]+" : "[^\\s\\p{P}]*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            // Middle wildcard: allow punctuation (e.g. apostrophes in "doesn't") but not spaces.
+            result += "[^\\s]*?";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";

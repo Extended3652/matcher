@@ -442,6 +442,67 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Leading/trailing * adjacent to space must not grab the neighboring space
+// =============================================================================
+section("12. Wildcard adjacent to space — no space-grabbing");
+
+assertMatches(
+  "leading * adjacent to space does not match when only whitespace precedes term",
+  cfg([cat("a", "RET", "#0f0", ["* conditioner"])]),
+  "  conditioner daily",
+  // only spaces precede "conditioner" — wildcard requires a real word, not just whitespace
+  []
+);
+
+assertMatches(
+  "leading * adjacent to space matches word before space",
+  cfg([cat("a", "RET", "#0f0", ["* conditioner"])]),
+  "I use hair conditioner daily",
+  [{ cat: "RET", word: "hair conditioner" }]
+);
+
+assertMatches(
+  "trailing * adjacent to space does not match when nothing follows",
+  cfg([cat("a", "RET", "#0f0", ["conditioner *"])]),
+  "I use conditioner",
+  // nothing after "conditioner" for the wildcard to consume
+  []
+);
+
+assertMatches(
+  "trailing * adjacent to space matches word after space",
+  cfg([cat("a", "RET", "#0f0", ["conditioner *"])]),
+  "I use conditioner rinse daily",
+  [{ cat: "RET", word: "conditioner rinse" }]
+);
+
+// =============================================================================
+// 13. Middle * allows punctuation within a token (e.g. apostrophes)
+// =============================================================================
+section("13. Middle * allows punctuation within token");
+
+assertMatches(
+  "d*t matches doesn't via apostrophe wildcard",
+  cfg([cat("a", "PRF", "#f00", ["d*t"])]),
+  "doesn't work",
+  [{ cat: "PRF", word: "doesn't" }]
+);
+
+assertMatches(
+  "d*t irritat* my * matches doesn't irritate my throat",
+  cfg([cat("a", "IGN", "#0f0", ["d*t irritat* my *"])]),
+  "doesn't irritate my throat",
+  [{ cat: "IGN", word: "doesn't irritate my throat" }]
+);
+
+assertMatches(
+  "middle * still does not cross spaces",
+  cfg([cat("a", "PRF", "#f00", ["sh*t"])]),
+  "What a pile of sh t here",
+  []
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
