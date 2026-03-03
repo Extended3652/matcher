@@ -24,15 +24,22 @@
   let categoryStyleByName = new Map();
 
   // ---------------------------------------------------------------------------
-  // Route guard
+  // Route guard — result cached per navigation to avoid repeated string ops
+  // on every text node. Invalidated on hashchange (SPA navigations).
   // ---------------------------------------------------------------------------
+  let _blockedRouteCache = null;
+
   function isBlockedRoute() {
-    return (
+    if (_blockedRouteCache !== null) return _blockedRouteCache;
+    _blockedRouteCache = (
       location.hostname === "cms.bazaarvoice.com" &&
-      location.hash &&
+      !!location.hash &&
       (location.hash.includes("/modstatus") || location.hash.includes("/guidelinesMod"))
     );
+    return _blockedRouteCache;
   }
+
+  window.addEventListener("hashchange", () => { _blockedRouteCache = null; });
 
   // ---------------------------------------------------------------------------
   // Dictionary helpers
@@ -277,6 +284,10 @@
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
 
+    // Skip text nodes that are shorter than the shortest pattern in the
+    // compiled matcher — they cannot possibly contain any match.
+    if (compiledMatcher.minPatternLen > 1 && text.length < compiledMatcher.minPatternLen) return;
+
     const matches = sanitizeMatches(findMatchesForText(text), text.length);
     if (matches.length === 0) return;
 
@@ -324,6 +335,47 @@
   let debounceTimer = null;
   let pendingNodes = [];
 
+  // Remove redundant entries from the pending batch before processing:
+  // - If an element node is an ancestor of another element node in the batch,
+  //   drop the descendant (the ancestor walk covers it).
+  // - Drop text-node entries whose parent element is already covered by an
+  //   element node in the batch.
+  function prunePendingNodes(pending) {
+    const elementItems = [];
+    const textItems = [];
+
+    for (const item of pending) {
+      if (item.type === "element") elementItems.push(item);
+      else textItems.push(item);
+    }
+
+    // Fast path — nothing to prune
+    if (elementItems.length <= 1 && textItems.length === 0) return pending;
+
+    // If body/documentElement is in the list, everything else is covered
+    for (const item of elementItems) {
+      if (item.node === document.body || item.node === document.documentElement) {
+        return [{ type: "element", node: document.body }];
+      }
+    }
+
+    // Drop element nodes that are proper descendants of another element in the batch
+    const elementNodes = elementItems.map(i => i.node);
+    const keptElements = elementItems.filter(item =>
+      !elementNodes.some(other => other !== item.node && other.contains(item.node))
+    );
+
+    // Drop text items whose parent is covered by a kept element node
+    const keptTexts = textItems.filter(item => {
+      const parent = item.node.parentElement || item.node.parentNode;
+      return !keptElements.some(ei => ei.node.contains(parent));
+    });
+
+    return keptElements.length + keptTexts.length < pending.length
+      ? [...keptElements, ...keptTexts]
+      : pending;
+  }
+
   function startObserver() {
     if (observer) return;
 
@@ -359,7 +411,7 @@
 
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        const batch = pendingNodes;
+        const batch = prunePendingNodes(pendingNodes);
         pendingNodes = [];
 
         for (const item of batch) {
@@ -494,6 +546,17 @@
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
+        });
+        break;
+
+      // Combined message: saves one round-trip vs. separate getStats + getClientName
+      case "getStatsAndClient":
+        sendResponse({
+          highlights: document.querySelectorAll("." + HL_CLASS).length,
+          enabled: globalEnabled,
+          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
+          clients: clientRules.length,
+          clientName: getCmsClientName()
         });
         break;
 

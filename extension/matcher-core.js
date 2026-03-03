@@ -234,7 +234,26 @@
       if (compiled) compiledCategories.push(compiled);
     }
 
-    return { ignoreCompiled, compiledCategories };
+    // Compute the shortest non-wildcard pattern length across all categories.
+    // Used by the content script to pre-filter text nodes that can't possibly
+    // match any pattern (text shorter than the shortest literal pattern).
+    // Wildcard patterns use 1 as their effective length (they can match very
+    // short text), so we only apply the optimization for literal patterns.
+    let minPatternLen = 0;
+    let found = false;
+    for (const cat of compiledCategories) {
+      for (const rx of cat.regexes) {
+        for (const meta of rx.metas) {
+          const effective = meta.hasWildcard ? 1 : meta.patternLen;
+          if (!found || effective < minPatternLen) {
+            minPatternLen = effective;
+            found = true;
+          }
+        }
+      }
+    }
+
+    return { ignoreCompiled, compiledCategories, minPatternLen };
   }
 
   function pickBetterOverlap(a, b) {
