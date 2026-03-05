@@ -30,6 +30,10 @@
   let currentDict = null;
   let detectedClientName = ""; // client name read from the active CMS tab
 
+  // Cache for compiled client glob regexes — keyed by pattern string.
+  // Avoids re-compiling the same regex on every findMatchedClient() call.
+  const clientRegexCache = new Map();
+
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
 
@@ -98,7 +102,12 @@
     if (!name || !currentDict) return null;
     const clients = currentDict.clients || [];
     for (const c of clients) {
-      const rx = clientGlobToRegex(c.pattern);
+      const p = String(c.pattern || "");
+      let rx = clientRegexCache.get(p);
+      if (rx === undefined) {
+        rx = clientGlobToRegex(p);
+        clientRegexCache.set(p, rx);
+      }
       if (rx && rx.test(name)) return c;
     }
     return null;
@@ -489,7 +498,8 @@
         return;
       }
 
-      chrome.tabs.sendMessage(tabs[0].id, { action: "getStats" }, (response) => {
+      // Single round-trip to get stats + client name together
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getStatsAndClient" }, (response) => {
         if (chrome.runtime.lastError || !response) {
           statsEl.textContent = "Not running on this page";
           clientBannerEl.style.display = "none";
@@ -500,12 +510,8 @@
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
 
-        // Query the client name separately so the banner can show the right state
-        chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
-          detectedClientName = (!chrome.runtime.lastError && nameResp && nameResp.clientName)
-            ? nameResp.clientName : "";
-          renderClientBanner();
-        });
+        detectedClientName = response.clientName || "";
+        renderClientBanner();
       });
     });
   }

@@ -501,6 +501,16 @@
         sendResponse({ clientName: getCmsClientName() });
         break;
 
+      case "getStatsAndClient":
+        sendResponse({
+          highlights: document.querySelectorAll("." + HL_CLASS).length,
+          enabled: globalEnabled,
+          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
+          clients: clientRules.length,
+          clientName: getCmsClientName()
+        });
+        break;
+
       default:
         sendResponse({ error: "unknown action" });
     }
