@@ -396,6 +396,30 @@
         </div>
       </div>
 
+      <div class="client-add-grid" style="margin-top: 10px;">
+        <div class="field">
+          <label>Mentions category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)">
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" style="min-height: 72px; width: 100%; font-family: monospace; font-size: 12px; resize: vertical;" spellcheck="false" placeholder="Alternate names or patterns for this client"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Also treat the main Client Name as a mention in content (in addition to aliases)
+          </label>
+        </div>
+      </div>
+
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>

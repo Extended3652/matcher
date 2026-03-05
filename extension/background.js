@@ -357,11 +357,36 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Rebuild context menu when dictionary or menu toggles change
+// Rebuild context menu when dictionary or menu toggles change.
+// Also push a "refresh" to all CMS content scripts so that client-name
+// highlights (including overrides) apply immediately without a page reload.
 // ---------------------------------------------------------------------------
+const CMS_TAB_URL_PATTERNS = [
+  "https://cms.bazaarvoice.com/*",
+  "https://workbench.bazaarvoice.com/*",
+  "http://minotaur:8124/*"
+];
+
+function refreshCmsTabs() {
+  chrome.tabs.query({ url: CMS_TAB_URL_PATTERNS }, (tabs) => {
+    if (chrome.runtime.lastError || !tabs) return;
+    for (const tab of tabs) {
+      if (tab && tab.id) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          // Ignore errors (tab may not have content script yet).
+          void chrome.runtime.lastError;
+        });
+      }
+    }
+  });
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+  if (changes.dictionary || changes.enabled) {
+    refreshCmsTabs();
   }
 });

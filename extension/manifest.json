@@ -5,7 +5,8 @@
   "description": "Highlight words and phrases by category on CMS sites",
   "permissions": [
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "tabs"
   ],
   "host_permissions": [
     "https://cms.bazaarvoice.com/*",

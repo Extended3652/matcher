@@ -101,13 +101,31 @@
     return clients.find(c => patternKey(c && c.pattern) === key) || null;
   }
 
+  const CMS_URL_PATTERNS = [
+    "https://cms.bazaarvoice.com/*",
+    "https://workbench.bazaarvoice.com/*",
+    "http://minotaur:8124/*"
+  ];
+
   function guessActiveCmsClientName(cb) {
     if (!chrome.tabs || !chrome.tabs.query || !chrome.tabs.sendMessage) {
       cb("");
       return;
     }
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs && tabs[0];
+    // Query all CMS tabs (not just the active tab, since the options page itself
+    // becomes the active tab when opened).
+    chrome.tabs.query({ url: CMS_URL_PATTERNS }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs || tabs.length === 0) {
+        cb("");
+        return;
+      }
+      // Prefer the most-recently-active CMS tab.
+      const sorted = tabs.slice().sort((a, b) => {
+        const la = a.lastAccessed || 0;
+        const lb = b.lastAccessed || 0;
+        return lb - la;
+      });
+      const tab = sorted[0];
       if (!tab || !tab.id) {
         cb("");
         return;
