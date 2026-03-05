@@ -226,6 +226,13 @@ assertMatches(
   [{ cat:"SI", word:"shot" }]
 );
 
+assertMatches(
+  "middle wildcard matches through apostrophe (d*t matches didn't)",
+  cfg([cat("a", "PRF", "#f00", ["d*t"])]),
+  "didn't upset my stomach",
+  [{ cat:"PRF", word:"didn't" }]
+);
+
 // =============================================================================
 // 5. Case-sensitive (CS: prefix)
 // =============================================================================

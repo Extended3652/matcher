@@ -115,7 +115,7 @@
           } else if (isFirst || isLast) {
             result += "[^\\s\\p{P}]*";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            result += "\\S*?";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
