@@ -442,6 +442,48 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Phrase whitespace normalization
+//     Any whitespace between words in a pattern (tab, newline, multiple spaces)
+//     should match any whitespace in text (the \s+ fix).
+// =============================================================================
+section("12. Phrase whitespace normalization");
+
+assertMatches(
+  "tab between words in entry matches space in text",
+  cfg([cat("a", "FIT", "#f0f", ["how\tlarge", "large*"])]),
+  "how large is this",
+  [{ cat:"FIT", word:"how large" }]
+);
+
+assertMatches(
+  "newline between words in entry matches space in text",
+  cfg([cat("a", "FIT", "#f0f", ["how\nlarge", "large*"])]),
+  "how large is this",
+  [{ cat:"FIT", word:"how large" }]
+);
+
+assertMatches(
+  "double space in entry matches single space in text",
+  cfg([cat("a", "FIT", "#f0f", ["how  large", "large*"])]),
+  "how large is this",
+  [{ cat:"FIT", word:"how large" }]
+);
+
+assertMatches(
+  "triple space in entry still matches single space in text",
+  cfg([cat("a", "FIT", "#f0f", ["how   large", "large*"])]),
+  "how large is this",
+  [{ cat:"FIT", word:"how large" }]
+);
+
+assertMatches(
+  "mixed whitespace in entry matches space in text",
+  cfg([cat("a", "FIT", "#f0f", ["how \t large", "large*"])]),
+  "how large is this",
+  [{ cat:"FIT", word:"how large" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));

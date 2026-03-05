@@ -115,8 +115,13 @@ function globToRegexFragment(pattern) {
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
-    } else if (ch === " ") {
-      result += "\\s+";
+    } else if (/\s/.test(ch)) {
+      // Treat any whitespace (space, tab, newline, etc.) as \s+
+      // Collapse consecutive whitespace into a single \s+ so that
+      // "how  large" and "how\tlarge" both match "how large" in text.
+      if (!result.endsWith("\\s+")) {
+        result += "\\s+";
+      }
     } else {
       result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
