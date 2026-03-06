@@ -439,6 +439,20 @@
     });
   }
 
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.dictionary) return;
+    const dict = changes.dictionary.newValue;
+    if (!dict || !dict.categories) return;
+
+    categoryStyleByName = buildCategoryStyleMap(dict);
+    clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+    for (const r of clientRules) {
+      r._rx = globToRegex(r.pattern);
+    }
+
+    applyClientHighlight();
+  });
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !message.action) {
       sendResponse({ ok: false });
