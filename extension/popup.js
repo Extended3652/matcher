@@ -30,6 +30,10 @@
   let currentDict = null;
   let detectedClientName = ""; // client name read from the active CMS tab
 
+  // Cache for compiled client glob regexes — keyed by pattern string.
+  // Avoids re-compiling the same regex on every findMatchedClient() call.
+  const clientRegexCache = new Map();
+
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
 
@@ -98,7 +102,12 @@
     if (!name || !currentDict) return null;
     const clients = currentDict.clients || [];
     for (const c of clients) {
-      const rx = clientGlobToRegex(c.pattern);
+      const p = String(c.pattern || "");
+      let rx = clientRegexCache.get(p);
+      if (rx === undefined) {
+        rx = clientGlobToRegex(p);
+        clientRegexCache.set(p, rx);
+      }
       if (rx && rx.test(name)) return c;
     }
     return null;
@@ -398,6 +407,7 @@
 
   function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      refreshActiveTab();
       updateStats();
     });
   }
@@ -489,7 +499,8 @@
         return;
       }
 
-      chrome.tabs.sendMessage(tabs[0].id, { action: "getStats" }, (response) => {
+      // Single round-trip to get stats + client name together
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getStatsAndClient" }, (response) => {
         if (chrome.runtime.lastError || !response) {
           statsEl.textContent = "Not running on this page";
           clientBannerEl.style.display = "none";
@@ -500,12 +511,8 @@
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
 
-        // Query the client name separately so the banner can show the right state
-        chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
-          detectedClientName = (!chrome.runtime.lastError && nameResp && nameResp.clientName)
-            ? nameResp.clientName : "";
-          renderClientBanner();
-        });
+        detectedClientName = response.clientName || "";
+        renderClientBanner();
       });
     });
   }
@@ -882,19 +889,16 @@
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
                 // do nothing, keep original
                 renderAll();
-                setOpenEditor("ignore");
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
               saveDictionary();
               renderAll();
-              setOpenEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
               saveDictionary();
               renderAll();
-              setOpenEditor("ignore");
             }
           );
         });
@@ -921,12 +925,7 @@
         addInput.value = "";
         saveDictionary();
 
-        addBtn.textContent = "Added";
-        setTimeout(() => { addBtn.textContent = "Add"; }, 700);
-
-        renderIgnoreWords();
         renderAll();
-        setOpenEditor("ignore");
       }
 
       addBtn.addEventListener("click", (e) => {
@@ -1129,19 +1128,16 @@
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
                 renderAll();
-                setOpenEditor(key);
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
               saveDictionary();
               renderAll();
-              setOpenEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
               saveDictionary();
               renderAll();
-              setOpenEditor(key);
             }
           );
         });
@@ -1168,12 +1164,7 @@
         addInput.value = "";
         saveDictionary();
 
-        addBtn.textContent = "Added";
-        setTimeout(() => { addBtn.textContent = "Add"; }, 700);
-
-        renderWordList();
         renderAll();
-        setOpenEditor(key);
       }
 
       addBtn.addEventListener("click", (e) => {

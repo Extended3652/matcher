@@ -350,7 +350,8 @@
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
             pendingNodes.push({ type: "element", node });
           } else if (node.nodeType === Node.TEXT_NODE) {
-            if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
+            const par = node.parentElement;
+            if (par && !par.classList.contains(HL_CLASS) && !par.hasAttribute(MARKER_ATTR)) {
               pendingNodes.push({ type: "text", node });
             }
           }
@@ -494,6 +495,16 @@
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
+        });
+        break;
+
+      case "getStatsAndClient":
+        sendResponse({
+          highlights: document.querySelectorAll("." + HL_CLASS).length,
+          enabled: globalEnabled,
+          cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
+          clients: clientRules.length,
+          clientName: getCmsClientName()
         });
         break;
 
