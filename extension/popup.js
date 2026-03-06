@@ -146,8 +146,9 @@
     const matched = findMatchedClient(detectedClientName);
 
     // Remove previous listeners by cloning
-    const newSel = bannerCatSelEl.cloneNode(false);
-    bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
+    const currentSel = document.getElementById("bannerCatSelect");
+    const newSel = currentSel.cloneNode(false);
+    currentSel.parentNode.replaceChild(newSel, currentSel);
     // (re-assign the const-declared alias via the outer-scope var approach — we
     //  work around the const by operating on the DOM id instead)
     const selEl = document.getElementById("bannerCatSelect");
