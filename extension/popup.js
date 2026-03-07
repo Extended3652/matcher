@@ -145,9 +145,13 @@
     clientBannerEl.style.display = "block";
     const matched = findMatchedClient(detectedClientName);
 
-    // Remove previous listeners by cloning
-    const newSel = bannerCatSelEl.cloneNode(false);
-    bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
+    // Remove previous listeners by cloning.
+    // bannerCatSelEl is a module-scope const pointing to the original element;
+    // after the first call it is detached from the DOM, so we must re-query
+    // the live element before cloning to avoid a "parentNode is null" crash.
+    const liveSel = document.getElementById("bannerCatSelect");
+    const newSel = liveSel.cloneNode(false);
+    liveSel.parentNode.replaceChild(newSel, liveSel);
     // (re-assign the const-declared alias via the outer-scope var approach — we
     //  work around the const by operating on the DOM id instead)
     const selEl = document.getElementById("bannerCatSelect");
@@ -398,6 +402,7 @@
 
   function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      refreshActiveTab();
       updateStats();
     });
   }
