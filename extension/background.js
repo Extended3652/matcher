@@ -364,4 +364,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
   }
+  // Notify all content scripts to reload the dictionary.
+  // This ensures that changes saved from the options page (which does not
+  // send a refresh itself) take effect immediately without a page reload.
+  if (changes.dictionary) {
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          // Ignore errors — most tabs will not have the content script.
+          if (chrome.runtime.lastError) {}
+        });
+      }
+    });
+  }
 });
