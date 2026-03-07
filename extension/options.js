@@ -257,8 +257,18 @@
     });
   }
 
+  function refreshActiveTab() {
+    if (!chrome.tabs || !chrome.tabs.query || !chrome.tabs.sendMessage) return;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs && tabs[0] && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
+      }
+    });
+  }
+
   function saveDictionary(msg) {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
+      refreshActiveTab();
       if (msg) showMsg(msg, "success");
     });
   }
