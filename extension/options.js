@@ -214,7 +214,7 @@
 
     let extra = "";
     if (mentionCat !== "-" || aliases.length > 0 || !incPat || note) {
-      extra += " | Mentions: " + mentionCat + " (" + aliases.length + ")";
+      extra += " | Text Mentions: " + mentionCat + " (" + aliases.length + ")";
       if (!incPat) extra += " [no pattern]";
       if (note) extra += " [note]";
     }
@@ -323,7 +323,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
-      btnAddClient.textContent = "Add Client";
+      btnAddClient.textContent = "Save Client";
       return;
     }
 
@@ -360,7 +360,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
-      btnAddClient.textContent = "Add Client";
+      btnAddClient.textContent = "Save Client";
     }
   }
 
@@ -560,7 +560,7 @@
       const fMCat = document.createElement("div");
       fMCat.className = "field";
       const lMCat = document.createElement("label");
-      lMCat.textContent = "Mentions: Category";
+      lMCat.textContent = "Text Mentions";
       const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
       fMCat.appendChild(lMCat);
       fMCat.appendChild(sMCat);

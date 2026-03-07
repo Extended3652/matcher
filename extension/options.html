@@ -363,17 +363,19 @@
     </div>
 
     <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
+      <h3 style="margin: 0 0 8px; color: #444;">Add / Modify Client</h3>
       <div class="client-add-grid">
         <div class="field">
-          <label>Pattern</label>
-          <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
+          <label>Client Name (as in CMS)</label>
+          <input type="text" id="newClientPattern" placeholder="Client name (supports * and ?)">
         </div>
 
         <div class="field">
           <label>Review (Default)</label>
           <select id="newClientReview"></select>
         </div>
+
+        <hr style="grid-column: 1 / -1; margin: 4px 0; border: none; border-top: 1px solid #ddd;">
 
         <div class="field">
           <label>Image override</label>
@@ -394,10 +396,12 @@
           <label>Comment override</label>
           <select id="newClientComment"></select>
         </div>
+
+        <hr style="grid-column: 1 / -1; margin: 4px 0; border: none; border-top: 1px solid #ddd;">
       </div>
 
       <div class="client-add-actions">
-        <button class="primary" id="btnAddClient">Add Client</button>
+        <button class="primary" id="btnAddClient">Save Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
       </div>
     </div>
