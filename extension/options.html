@@ -357,11 +357,6 @@
       <span class="pill">No highlight</span> uses grey.
     </p>
 
-    <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
-      <span id="clientShowing" class="muted"></span>
-    </div>
-
     <div class="client-add-box">
       <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
       <div class="client-add-grid">
@@ -394,12 +389,40 @@
           <label>Comment override</label>
           <select id="newClientComment"></select>
         </div>
+
+        <div class="field">
+          <label>Mentions: Category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Mentions: Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" class="word-list" spellcheck="false" style="min-height: 70px;"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Also treat the Client Name as a mention in content (in addition to aliases)
+          </label>
+          <div class="muted" style="margin-top: 4px;">If Mentions category is set, this adds the Client Name as an extra mention matcher unless unchecked.</div>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note (not used for matching)" style="width: 100%;">
+        </div>
       </div>
 
       <div class="client-add-actions">
         <button class="primary" id="btnAddClient">Add Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
       </div>
+    </div>
+
+    <div class="clients-topbar">
+      <input type="text" id="clientSearch" placeholder="Search clients (pattern, alias, or note...)">
+      <span id="clientShowing" class="muted"></span>
     </div>
 
     <div class="client-list">
