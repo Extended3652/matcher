@@ -358,10 +358,20 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // ---------------------------------------------------------------------------
 // Rebuild context menu when dictionary or menu toggles change
+// Also notify all content scripts to reload when the dictionary changes
 // ---------------------------------------------------------------------------
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+  if (changes.dictionary) {
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          void chrome.runtime.lastError; // swallow — non-CMS tabs have no content script
+        });
+      }
+    });
   }
 });

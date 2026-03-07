@@ -337,9 +337,13 @@
           if (
             node.nodeType === Node.TEXT_NODE &&
             node.parentElement &&
-            !node.parentElement.classList.contains(HL_CLASS) &&
-            !node.parentElement.hasAttribute(MARKER_ATTR)
+            !node.parentElement.classList.contains(HL_CLASS)
           ) {
+            // If the parent was previously marked as processed, clear it so
+            // the changed text gets re-evaluated (SPA reuse/update case)
+            if (node.parentElement.hasAttribute(MARKER_ATTR)) {
+              node.parentElement.removeAttribute(MARKER_ATTR);
+            }
             pendingNodes.push({ type: "text", node });
           }
           continue;
