@@ -115,11 +115,11 @@ function globToRegexFragment(pattern) {
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
-    } else if (ch === " ") {
-      result += "\\s+";
-    } else {
-      result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
+      } else if (ch === " ") {
+        result += "\\s+";
+      } else {
+        result += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
   }
   return result;
 }

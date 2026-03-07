@@ -399,6 +399,7 @@
   function saveDictionary() {
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       updateStats();
+      refreshActiveTab();
     });
   }
 

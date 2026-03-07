@@ -104,21 +104,21 @@
         continue;
       }
 
-        if (ch === "*") {
-          const prev = chars[i - 1];
-          const next = chars[i + 1];
+      if (ch === "*") {
+        const prev = chars[i - 1];
+        const next = chars[i + 1];
 
-          // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
-          // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
-          if (prev === " " && next === " ") {
-            result += "[^\\s]+";
-          } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
-          } else {
-            result += "[^\\s\\p{P}]*?";
-          }
-        } else if (ch === "?") {
-          result += "[\\s\\S]";
+        // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
+        // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
+        if (prev === " " && next === " ") {
+          result += "[^\\s]+";
+        } else if (isFirst || isLast) {
+          result += "[^\\s\\p{P}]*";
+        } else {
+          result += "[^\\s\\p{P}]*?";
+        }
+      } else if (ch === "?") {
+        result += "[\\s\\S]";
       } else if (ch === " ") {
         result += "\\s+";
       } else {
