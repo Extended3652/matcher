@@ -259,7 +259,7 @@ function addWordToCategory(text, catIndex, tab) {
         `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
       );
       if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
       }
       buildContextMenu();
     });
@@ -287,7 +287,7 @@ function addWordToIgnoreList(text, tab) {
     chrome.storage.local.set({ dictionary: dict }, () => {
       notifyTab(tab, `Added "${text}" to Ignore List`);
       if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
       }
       buildContextMenu();
     });
@@ -299,11 +299,7 @@ function addWordToIgnoreList(text, tab) {
 // ---------------------------------------------------------------------------
 function notifyTab(tab, message) {
   if (tab && tab.id) {
-    try {
-      chrome.tabs.sendMessage(tab.id, { action: "notify", message: message });
-    } catch (e) {
-      // ignore
-    }
+    chrome.tabs.sendMessage(tab.id, { action: "notify", message: message }).catch(() => {});
   }
   console.log("CMS Highlighter:", message);
 }
