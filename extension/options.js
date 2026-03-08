@@ -106,12 +106,16 @@
       cb("");
       return;
     }
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs && tabs[0];
-      if (!tab || !tab.id) {
-        cb("");
-        return;
-      }
+    const CMS_URL_PATTERNS = [
+      "https://cms.bazaarvoice.com/*",
+      "https://workbench.bazaarvoice.com/*",
+      "http://minotaur:8124/*"
+    ];
+    chrome.tabs.query({ url: CMS_URL_PATTERNS }, (tabs) => {
+      if (!tabs || tabs.length === 0) { cb(""); return; }
+      // Pick the most recently active CMS tab
+      const tab = tabs.slice().sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+      if (!tab || !tab.id) { cb(""); return; }
       chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (res) => {
         if (chrome.runtime.lastError || !res || !res.clientName) {
           cb("");

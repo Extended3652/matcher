@@ -397,6 +397,28 @@
           <select id="newClientComment"></select>
         </div>
 
+        <div class="field">
+          <label>Text Mentions</label>
+          <select id="newClientMentionCategory" style="width:100%;"></select>
+        </div>
+
+        <div class="field">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note" style="width:100%;">
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Aliases <span style="font-weight:400; color:#888;">(one per line — alternate names that also match this client)</span></label>
+          <textarea id="newClientAliases" style="width:100%; min-height:60px; font-family:monospace; font-size:12px;" placeholder="alias one&#10;alias two"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display:flex; align-items:center; gap:6px; font-weight:400;">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            Include client name pattern when matching content
+          </label>
+        </div>
+
         <hr style="grid-column: 1 / -1; margin: 4px 0; border: none; border-top: 1px solid #ddd;">
       </div>
 
