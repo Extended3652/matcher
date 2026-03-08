@@ -64,10 +64,16 @@
   }
 
   function getCmsContentType() {
-    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    // Try multiple known selectors for the content-type label
+    const el =
+      document.querySelector(".navbar-inner .decisionAreaLabel") ||
+      document.querySelector(".navbar-inner .content-type") ||
+      document.querySelector(".navbar-inner .contentType") ||
+      document.querySelector("[class*='decisionArea'] [class*='label']") ||
+      document.querySelector("[class*='contentType']");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
-    if (raw.includes("image")) return "Image";
+    if (raw.includes("image") || raw.includes("photo")) return "Image";
     if (raw.includes("profile")) return "Profile";
     if (raw.includes("question")) return "Question";
     if (raw.includes("comment")) return "Comment";
@@ -506,6 +512,13 @@
     }
 
     return true;
+  });
+
+  // Re-apply client highlight on SPA hash navigation (content type may change)
+  window.addEventListener("hashchange", () => {
+    // Two passes: one quick (catches fast renders), one delayed (catches async renders)
+    setTimeout(applyClientHighlight, 150);
+    setTimeout(applyClientHighlight, 600);
   });
 
   if (document.readyState === "loading") {
