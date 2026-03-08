@@ -498,7 +498,7 @@
         break;
 
       case "getClientName":
-        sendResponse({ clientName: getCmsClientName() });
+        sendResponse({ clientName: getCmsClientName(), contentType: getCmsContentType() });
         break;
 
       default:

@@ -29,6 +29,7 @@
 
   let currentDict = null;
   let detectedClientName = ""; // client name read from the active CMS tab
+  let detectedContentType = "Default"; // content type read from the active CMS tab
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -104,6 +105,16 @@
     return null;
   }
 
+  function pickClientCategory(client, contentType) {
+    if (!client) return null;
+    const overrides = client.overrides || {};
+    if (contentType === "Image"    && overrides.Image)    return overrides.Image;
+    if (contentType === "Profile"  && overrides.Profile)  return overrides.Profile;
+    if (contentType === "Question" && overrides.Question) return overrides.Question;
+    if (contentType === "Comment"  && overrides.Comment)  return overrides.Comment;
+    return client.defaultCategory || null;
+  }
+
   function applyBannerSelectColor() {
     const val = bannerCatSelEl.value;
     const cat = (currentDict.categories || []).find(c => c.name === val);
@@ -145,11 +156,13 @@
     clientBannerEl.style.display = "block";
     const matched = findMatchedClient(detectedClientName);
 
-    // Remove previous listeners by cloning
-    const newSel = bannerCatSelEl.cloneNode(false);
-    bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
-    // (re-assign the const-declared alias via the outer-scope var approach — we
-    //  work around the const by operating on the DOM id instead)
+    // Remove previous listeners by cloning.
+    // bannerCatSelEl (the module-scope const) is detached from the DOM after the
+    // first call, so we must re-query the live element by id to avoid a
+    // "Cannot read properties of null (reading 'replaceChild')" crash.
+    const liveSel = document.getElementById("bannerCatSelect");
+    const newSel = liveSel.cloneNode(false);
+    liveSel.parentNode.replaceChild(newSel, liveSel);
     const selEl = document.getElementById("bannerCatSelect");
     const addBtn = document.getElementById("bannerAddBtn");
 
@@ -173,7 +186,7 @@
         if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
         selEl.appendChild(opt);
       }
-      selEl.value = matched.defaultCategory || "";
+      selEl.value = pickClientCategory(matched, detectedContentType) || "";
 
       const applyColor = () => {
         const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
@@ -183,7 +196,15 @@
       applyColor();
 
       selEl.addEventListener("change", () => {
-        matched.defaultCategory = selEl.value || null;
+        const val = selEl.value || null;
+        const overrideTypes = ["Image", "Profile", "Question", "Comment"];
+        if (overrideTypes.includes(detectedContentType)) {
+          if (!matched.overrides) matched.overrides = {};
+          if (val) matched.overrides[detectedContentType] = val;
+          else delete matched.overrides[detectedContentType];
+        } else {
+          matched.defaultCategory = val;
+        }
         saveDictionary();
         applyColor();
       });
@@ -500,10 +521,12 @@
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
 
-        // Query the client name separately so the banner can show the right state
+        // Query the client name (and content type) so the banner shows the right override
         chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
           detectedClientName = (!chrome.runtime.lastError && nameResp && nameResp.clientName)
             ? nameResp.clientName : "";
+          detectedContentType = (!chrome.runtime.lastError && nameResp && nameResp.contentType)
+            ? nameResp.contentType : "Default";
           renderClientBanner();
         });
       });
