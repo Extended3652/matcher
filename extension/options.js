@@ -214,7 +214,7 @@
 
     let extra = "";
     if (mentionCat !== "-" || aliases.length > 0 || !incPat || note) {
-      extra += " | Mentions: " + mentionCat + " (" + aliases.length + ")";
+      extra += " | Text Mentions: " + mentionCat + " (" + aliases.length + ")";
       if (!incPat) extra += " [no pattern]";
       if (note) extra += " [note]";
     }
@@ -323,7 +323,7 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
-      btnAddClient.textContent = "Add Client";
+      btnAddClient.textContent = "Save Client";
       return;
     }
 
@@ -348,7 +348,6 @@
       if (newClientNote) {
         newClientNote.value = existing.note ? String(existing.note) : "";
       }
-      btnAddClient.textContent = "Save Client";
     } else {
       // New client: keep pattern, reset the rest
       newClientReview.value = "";
@@ -360,8 +359,8 @@
       if (newClientAliases) newClientAliases.value = "";
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
-      btnAddClient.textContent = "Add Client";
     }
+    btnAddClient.textContent = "Save Client";
   }
 
   function getClientFilter() {
@@ -512,6 +511,10 @@
       fReview.appendChild(sReview);
       grid.appendChild(fReview);
 
+      const sep1 = document.createElement("hr");
+      sep1.style.cssText = "grid-column: 1 / -1; border: none; border-top: 1px solid #e0e0e0; margin: 4px 0;";
+      grid.appendChild(sep1);
+
       const fImg = document.createElement("div");
       fImg.className = "field";
       const lImg = document.createElement("label");
@@ -548,6 +551,10 @@
       fCmt.appendChild(sCmt);
       grid.appendChild(fCmt);
 
+      const sep2 = document.createElement("hr");
+      sep2.style.cssText = "grid-column: 1 / -1; border: none; border-top: 1px solid #e0e0e0; margin: 4px 0;";
+      grid.appendChild(sep2);
+
       body.appendChild(grid);
 
       // Mentions editor block (only if your HTML/CSS supports it visually, but functionally safe)
@@ -560,7 +567,7 @@
       const fMCat = document.createElement("div");
       fMCat.className = "field";
       const lMCat = document.createElement("label");
-      lMCat.textContent = "Mentions: Category";
+      lMCat.textContent = "Text Mentions";
       const sMCat = makeCategorySelect({ mode: "override", value: entry.mentionCategory || "" }, styleByName);
       fMCat.appendChild(lMCat);
       fMCat.appendChild(sMCat);
@@ -570,7 +577,7 @@
       fAliases.className = "field";
       fAliases.style.gridColumn = "1 / -1";
       const lAliases = document.createElement("label");
-      lAliases.textContent = "Mentions: Aliases (one per line, supports * and ?)";
+      lAliases.textContent = "Mention Aliases (one per line, supports * and ?)";
       const tAliases = document.createElement("textarea");
       tAliases.className = "word-list";
       tAliases.spellcheck = false;
