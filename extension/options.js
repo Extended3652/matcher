@@ -34,11 +34,16 @@
   const newClientQuestion = document.getElementById("newClientQuestion");
   const newClientComment  = document.getElementById("newClientComment");
 
-  // Newer "Mentions" fields (must exist in options.html)
+  // Mentions / extra fields (now present in options.html)
   const newClientMentionCategory = document.getElementById("newClientMentionCategory");
   const newClientAliases = document.getElementById("newClientAliases");
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
+
+  // Current-client banner
+  const currentClientBannerEl   = document.getElementById("currentClientBanner");
+  const currentClientBannerName = document.getElementById("currentClientBannerName");
+  const btnClearClientForm       = document.getElementById("btnClearClientForm");
 
   // ---------------------------------------------------------------------------
   // State
@@ -135,6 +140,30 @@
       map.set(c.name, { color: c.color || "#FFFF00", fColor: c.fColor || "#000000" });
     }
     return map;
+  }
+
+  // Apply category colour styling directly to a <select> element.
+  // Pass the current stMap (or null to build it fresh).
+  function applySelectStyle(selectEl, stMap) {
+    if (!selectEl) return;
+    const v = selectEl.value;
+    if (!v) {
+      selectEl.style.backgroundColor = "";
+      selectEl.style.color = "";
+      selectEl.style.borderColor = "";
+      return;
+    }
+    const map = stMap || getCategoryStyleByName();
+    const st = map.get(v);
+    if (st) {
+      selectEl.style.backgroundColor = st.color || "";
+      selectEl.style.color = st.fColor || "";
+      selectEl.style.borderColor = "rgba(0,0,0,0.25)";
+    } else {
+      selectEl.style.backgroundColor = "";
+      selectEl.style.color = "";
+      selectEl.style.borderColor = "";
+    }
   }
 
   function makeCategorySelect(opts, stMapArg) {
@@ -252,6 +281,9 @@
           if (!name) return;
           newClientPattern.value = name;
           syncAddClientFormFromPattern();
+          // Scroll the add/edit form into view so it's immediately visible.
+          const box = document.querySelector(".client-add-box");
+          if (box) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
         });
       }
     });
@@ -272,46 +304,72 @@
   // ---------------------------------------------------------------------------
   // Clients
   // ---------------------------------------------------------------------------
+  // Helper: repopulate a single add-form <select> from a temp select built via
+  // makeCategorySelect, then attach a live colour-update listener (once).
+  function _refillAddFormSelect(realSel, mode, stMap) {
+    if (!realSel) return;
+    const tmp = makeCategorySelect({ mode, value: "" }, stMap);
+    realSel.innerHTML = "";
+    while (tmp.firstChild) realSel.appendChild(tmp.firstChild);
+    realSel.value = "";
+    // Attach live colour listener only once (guard via dataset flag).
+    if (!realSel.dataset.colourListenerAttached) {
+      realSel.dataset.colourListenerAttached = "1";
+      realSel.addEventListener("change", () => applySelectStyle(realSel, getCategoryStyleByName()));
+    }
+  }
+
   function populateAddClientDropdowns(stMap) {
-    // We build temp <select>s so we inherit the same options + styling logic
-    // then move options into the real DOM selects.
-    newClientReview.innerHTML = "";
-    newClientImage.innerHTML = "";
-    newClientProfile.innerHTML = "";
-    newClientQuestion.innerHTML = "";
-    if (newClientComment) newClientComment.innerHTML = "";
+    _refillAddFormSelect(newClientReview, "review", stMap);
+    _refillAddFormSelect(newClientImage, "override", stMap);
+    _refillAddFormSelect(newClientProfile, "override", stMap);
+    _refillAddFormSelect(newClientQuestion, "override", stMap);
+    _refillAddFormSelect(newClientComment, "override", stMap);
+    _refillAddFormSelect(newClientMentionCategory, "override", stMap);
+  }
 
-    const reviewSel = makeCategorySelect({ mode: "review", value: "" }, stMap);
-    const imgSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const proSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const qSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-    const cSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
+  function _applyAddFormSelectStyles(stMap) {
+    const m = stMap || getCategoryStyleByName();
+    applySelectStyle(newClientReview, m);
+    applySelectStyle(newClientImage, m);
+    applySelectStyle(newClientProfile, m);
+    applySelectStyle(newClientQuestion, m);
+    applySelectStyle(newClientComment, m);
+    applySelectStyle(newClientMentionCategory, m);
+  }
 
-    while (reviewSel.firstChild) newClientReview.appendChild(reviewSel.firstChild);
-    while (imgSel.firstChild) newClientImage.appendChild(imgSel.firstChild);
-    while (proSel.firstChild) newClientProfile.appendChild(proSel.firstChild);
-    while (qSel.firstChild) newClientQuestion.appendChild(qSel.firstChild);
-    if (newClientComment) { while (cSel.firstChild) newClientComment.appendChild(cSel.firstChild); }
+  function _showClientBanner(pattern) {
+    if (!currentClientBannerEl) return;
+    if (pattern) {
+      currentClientBannerEl.style.display = "";
+      if (currentClientBannerName) currentClientBannerName.textContent = pattern;
+    } else {
+      currentClientBannerEl.style.display = "none";
+    }
+  }
 
+  function clearAddClientForm() {
+    newClientPattern.value = "";
     newClientReview.value = "";
     newClientImage.value = "";
     newClientProfile.value = "";
     newClientQuestion.value = "";
     if (newClientComment) newClientComment.value = "";
-
-    // Mentions category select, if present in HTML
-    if (newClientMentionCategory) {
-      newClientMentionCategory.innerHTML = "";
-      const mentionSel = makeCategorySelect({ mode: "override", value: "" }, stMap);
-      while (mentionSel.firstChild) newClientMentionCategory.appendChild(mentionSel.firstChild);
-      newClientMentionCategory.value = "";
-    }
+    if (newClientMentionCategory) newClientMentionCategory.value = "";
+    if (newClientAliases) newClientAliases.value = "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+    if (newClientNote) newClientNote.value = "";
+    btnAddClient.textContent = "Add Client";
+    btnAddClient.dataset.mode = "add";
+    _applyAddFormSelectStyles();
+    _showClientBanner(null);
   }
 
   function syncAddClientFormFromPattern() {
     const pattern = normalizePattern(newClientPattern.value);
     const key = patternKey(pattern);
     const existing = pattern ? findClientByKey(key) : null;
+    const stMap = getCategoryStyleByName();
 
     if (!pattern) {
       newClientReview.value = "";
@@ -324,6 +382,9 @@
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
       btnAddClient.textContent = "Add Client";
+      btnAddClient.dataset.mode = "add";
+      _applyAddFormSelectStyles(stMap);
+      _showClientBanner(null);
       return;
     }
 
@@ -349,6 +410,9 @@
         newClientNote.value = existing.note ? String(existing.note) : "";
       }
       btnAddClient.textContent = "Save Client";
+      btnAddClient.dataset.mode = "save";
+      _applyAddFormSelectStyles(stMap);
+      _showClientBanner(pattern);
     } else {
       // New client: keep pattern, reset the rest
       newClientReview.value = "";
@@ -361,6 +425,9 @@
       if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
       if (newClientNote) newClientNote.value = "";
       btnAddClient.textContent = "Add Client";
+      btnAddClient.dataset.mode = "add";
+      _applyAddFormSelectStyles(stMap);
+      _showClientBanner(null);
     }
   }
 
@@ -760,6 +827,13 @@
   if (newClientPattern) {
     newClientPattern.addEventListener("input", () => {
       syncAddClientFormFromPattern();
+    });
+  }
+
+  if (btnClearClientForm) {
+    btnClearClientForm.addEventListener("click", () => {
+      clearAddClientForm();
+      newClientPattern.focus();
     });
   }
 
