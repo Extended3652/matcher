@@ -393,6 +393,28 @@
         </div>
 
         <hr style="grid-column: 1 / -1; border: none; border-top: 1px solid #e0e0e0; margin: 4px 0;">
+
+        <div class="field">
+          <label>Text Mentions</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Mention Aliases (one per line, supports * and ?)</label>
+          <textarea id="newClientAliases" style="min-height: 80px;"></textarea>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: normal;">
+            <input type="checkbox" id="newClientIncludePatternInContent">
+            Also treat main Client Name as a mention
+          </label>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Note</label>
+          <input type="text" id="newClientNote" placeholder="Optional note" style="width: 100%;">
+        </div>
       </div>
 
       <div class="client-add-actions">
