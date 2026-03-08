@@ -500,12 +500,9 @@
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
           `${response.enabled ? "ON" : "OFF"}`;
 
-        // Query the client name separately so the banner can show the right state
-        chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
-          detectedClientName = (!chrome.runtime.lastError && nameResp && nameResp.clientName)
-            ? nameResp.clientName : "";
-          renderClientBanner();
-        });
+        // clientName is now included in the getStats response — no second round-trip needed
+        detectedClientName = response.clientName || "";
+        renderClientBanner();
       });
     });
   }
@@ -513,8 +510,10 @@
   // ---------------------------------------------------------------------------
   // Search filters (top)
   // ---------------------------------------------------------------------------
+  let searchDebounceTimer = null;
   popupSearch.addEventListener("input", () => {
-    renderAll();
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(renderAll, 80);
   });
 
   function matchesGlobalSearchForIgnore(q) {

@@ -397,8 +397,6 @@
   function renderClients() {
     if (!currentDict) return;
 
-    ensureClientsSorted();
-
     const all = currentDict.clients || [];
     const list = filteredClients();
 

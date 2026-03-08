@@ -16,6 +16,9 @@
 
   let globalEnabled = true;
 
+  // Running count of active highlight spans (avoids querySelectorAll on every stats request)
+  let highlightCount = 0;
+
   // Compiled matcher
   let compiledMatcher = null;
 
@@ -229,6 +232,8 @@
     const text = textNode.textContent || "";
     if (!text) return;
 
+    highlightCount += matches.length;
+
     const frag = document.createDocumentFragment();
     let lastIndex = 0;
 
@@ -283,6 +288,18 @@
     renderMatchesIntoNode(textNode, matches);
   }
 
+  // Inner-loop variant: skips the top-level guards already checked by highlightAll.
+  function _highlightTextNodeUnchecked(textNode) {
+    if (!textNode || !textNode.parentNode) return;
+    const text = textNode.textContent;
+    if (!text || text.trim().length === 0) return;
+    const matches = sanitizeMatches(findMatchesForText(text), text.length);
+    if (matches.length === 0) return;
+    renderMatchesIntoNode(textNode, matches);
+  }
+
+  // Processes text nodes asynchronously in idle-time chunks so the main thread
+  // isn't blocked on large pages. Accuracy is identical — only the timing differs.
   function highlightAll(root) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -290,9 +307,33 @@
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
+    if (textNodes.length === 0) return;
 
-    for (const node of textNodes) {
-      highlightTextNode(node);
+    let i = 0;
+    const CHUNK = 60;
+
+    if (typeof requestIdleCallback !== "undefined") {
+      const tick = (deadline) => {
+        while (i < textNodes.length && deadline.timeRemaining() > 1) {
+          _highlightTextNodeUnchecked(textNodes[i]);
+          i++;
+        }
+        if (i < textNodes.length) {
+          requestIdleCallback(tick, { timeout: 500 });
+        }
+      };
+      requestIdleCallback(tick, { timeout: 500 });
+    } else {
+      // Fallback for environments without requestIdleCallback
+      const tick = () => {
+        const end = Math.min(i + CHUNK, textNodes.length);
+        while (i < end) {
+          _highlightTextNodeUnchecked(textNodes[i]);
+          i++;
+        }
+        if (i < textNodes.length) setTimeout(tick, 0);
+      };
+      setTimeout(tick, 0);
     }
   }
 
@@ -315,6 +356,7 @@
     marked.forEach(el => el.removeAttribute(MARKER_ATTR));
 
     clearClientHighlight();
+    highlightCount = 0;
   }
 
   // ---------------------------------------------------------------------------
@@ -323,6 +365,10 @@
   let observer = null;
   let debounceTimer = null;
   let pendingNodes = [];
+  // Set when we detect that highlighted content was removed from the DOM
+  // (e.g. CMS advances to the next piece of content). Triggers a full clear
+  // before re-highlighting so stale spans never bleed into new content.
+  let pendingReset = false;
 
   function startObserver() {
     if (observer) return;
@@ -345,6 +391,19 @@
           continue;
         }
 
+        // Detect content replacement: if a removed subtree contained highlight
+        // spans, the CMS has advanced to new content and we need a clean sweep.
+        if (!pendingReset && mutation.removedNodes.length > 0) {
+          for (const removed of mutation.removedNodes) {
+            if (pendingReset) break;
+            if (removed.nodeType === Node.ELEMENT_NODE && removed.querySelector) {
+              if (removed.querySelector("." + HL_CLASS)) {
+                pendingReset = true;
+              }
+            }
+          }
+        }
+
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
@@ -362,6 +421,16 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        // If highlighted content was removed (content replaced by CMS), wipe all
+        // stale highlight state before processing the incoming batch.
+        const shouldReset = pendingReset;
+        pendingReset = false;
+
+        if (shouldReset) {
+          stopObserver();
+          removeAllHighlights();
+        }
+
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
@@ -374,6 +443,10 @@
           } else {
             highlightTextNode(item.node);
           }
+        }
+
+        if (shouldReset) {
+          startObserver();
         }
 
         // Also update the client-name highlight when the header changes
@@ -390,6 +463,7 @@
       observer = null;
     }
     pendingNodes = [];
+    pendingReset = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -490,10 +564,11 @@
 
       case "getStats":
         sendResponse({
-          highlights: document.querySelectorAll("." + HL_CLASS).length,
+          highlights: highlightCount,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
-          clients: clientRules.length
+          clients: clientRules.length,
+          clientName: getCmsClientName()
         });
         break;
 
