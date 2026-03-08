@@ -337,58 +337,14 @@
       background: #eaf4fb;
       border: 1px solid #aed6f1;
       border-radius: 4px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       font-size: 13px;
       color: #1a5276;
       flex-wrap: wrap;
     }
-    .current-client-banner strong {
-      font-weight: 600;
-    }
     .current-client-banner .banner-actions {
       display: flex;
       gap: 8px;
-    }
-
-    .client-add-box .section-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin: 10px 0 6px;
-      padding-top: 10px;
-      border-top: 1px solid #eee;
-    }
-    .client-add-box .section-label:first-of-type {
-      margin-top: 0;
-      padding-top: 0;
-      border-top: none;
-    }
-
-    .client-add-aliases {
-      margin-top: 8px;
-    }
-    .client-add-aliases label {
-      display: block;
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 4px;
-    }
-    .client-add-aliases textarea {
-      width: 100%;
-      min-height: 60px;
-      font-family: monospace;
-      font-size: 12px;
-      resize: vertical;
-    }
-    .client-add-check-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      font-size: 12px;
-      color: #555;
     }
 
     /* Save Client button gets a green tint when in edit mode */
@@ -436,29 +392,21 @@
     </div>
 
     <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;" id="addClientBoxTitle">Add / Edit client</h3>
+      <h3 style="margin: 0 0 8px; color: #444;">Add client</h3>
 
       <div id="currentClientBanner" class="current-client-banner" style="display:none;">
-        <span>Editing CMS client: <strong id="currentClientBannerName"></strong></span>
+        <span>Editing: <strong id="currentClientBannerName"></strong></span>
         <div class="banner-actions">
           <button id="btnClearClientForm">+ New client</button>
         </div>
       </div>
 
-      <div class="section-label">Identity</div>
       <div class="client-add-grid">
         <div class="field">
           <label>Pattern</label>
           <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
         </div>
-        <div class="field">
-          <label>Note <span class="muted">(optional, not matched)</span></label>
-          <input type="text" id="newClientNote" placeholder="e.g. Internal name or reminder">
-        </div>
-      </div>
 
-      <div class="section-label">Header overrides</div>
-      <div class="client-add-grid">
         <div class="field">
           <label>Review (Default)</label>
           <select id="newClientReview"></select>
@@ -485,19 +433,23 @@
         </div>
 
         <div class="field">
-          <label>Mentions category <span class="muted">(optional)</span></label>
+          <label>Mentions category</label>
           <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field">
+          <label>Note <span class="muted">(optional)</span></label>
+          <input type="text" id="newClientNote" placeholder="Not used for matching">
         </div>
       </div>
 
-      <div class="section-label">Mentions / Aliases</div>
-      <div class="client-add-aliases">
-        <label>Aliases <span class="muted">(one per line, supports * and ?)</span></label>
-        <textarea id="newClientAliases" spellcheck="false" placeholder="Extra patterns to match as mentions in content"></textarea>
+      <div style="margin-top: 8px;">
+        <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">Aliases <span class="muted">(one per line, supports * and ?)</span></label>
+        <textarea id="newClientAliases" spellcheck="false" style="width:100%; min-height:52px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="Extra mention patterns"></textarea>
       </div>
-      <div class="client-add-check-row">
+      <div style="display:flex; align-items:center; gap:8px; margin-top:6px; font-size:12px; color:#555;">
         <input type="checkbox" id="newClientIncludePatternInContent" checked>
-        <label for="newClientIncludePatternInContent">Also treat the client name (pattern) as a mention in content</label>
+        <label for="newClientIncludePatternInContent">Also treat the client name as a mention in content</label>
       </div>
 
       <div class="client-add-actions">
