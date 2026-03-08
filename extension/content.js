@@ -64,12 +64,9 @@
   }
 
   function getCmsContentType() {
-    // Try multiple known selectors for the content-type label
+    // The CMS renders .decisionAreaLabel outside .navbar-inner, so no parent constraint
     const el =
-      document.querySelector(".navbar-inner .decisionAreaLabel") ||
-      document.querySelector(".navbar-inner .content-type") ||
-      document.querySelector(".navbar-inner .contentType") ||
-      document.querySelector("[class*='decisionArea'] [class*='label']") ||
+      document.querySelector(".decisionAreaLabel") ||
       document.querySelector("[class*='contentType']");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
