@@ -178,8 +178,28 @@
     }
 
     .client-add-grid .field input[type="text"],
-    .client-add-grid .field select {
+    .client-add-grid .field select,
+    .client-add-grid .field textarea {
       width: 100%;
+    }
+
+    .client-add-grid .field.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .client-add-grid .field textarea {
+      resize: vertical;
+      min-height: 60px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .client-add-grid .field.checkbox-row {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
     }
 
     .client-add-actions {
@@ -393,6 +413,26 @@
         <div class="field">
           <label>Comment override</label>
           <select id="newClientComment"></select>
+        </div>
+
+        <div class="field">
+          <label>Mentions category</label>
+          <select id="newClientMentionCategory"></select>
+        </div>
+
+        <div class="field">
+          <label>Note <span class="muted">(optional)</span></label>
+          <input type="text" id="newClientNote" placeholder="Not used for matching">
+        </div>
+
+        <div class="field full-width">
+          <label>Aliases <span class="muted">(one per line, supports * and ?)</span></label>
+          <textarea id="newClientAliases" placeholder="Extra mention patterns"></textarea>
+        </div>
+
+        <div class="field checkbox-row">
+          <input type="checkbox" id="newClientIncludePatternInContent" checked>
+          <label for="newClientIncludePatternInContent">Also treat the client name as a mention <strong>in content</strong></label>
         </div>
       </div>
 
