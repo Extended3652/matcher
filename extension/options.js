@@ -227,6 +227,7 @@
     if (o.Image) return o.Image;
     if (o.Profile) return o.Profile;
     if (o.Question) return o.Question;
+    if (o.Comment) return o.Comment;
     if (entry.defaultCategory) return entry.defaultCategory;
     return null;
   }

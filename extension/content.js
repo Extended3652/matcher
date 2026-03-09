@@ -24,6 +24,56 @@
   let categoryStyleByName = new Map();
 
   // ---------------------------------------------------------------------------
+  // Mention matching helpers
+  // ---------------------------------------------------------------------------
+
+  // Build synthetic category entries from client rules that have a mentionCategory.
+  // These are appended to the regular categories before compileAll so that client
+  // name / alias occurrences in the page text are highlighted automatically.
+  function buildMentionCategories(rules, styleMap) {
+    const result = [];
+    for (const r of rules) {
+      if (!r || !r.mentionCategory) continue;
+      const style = styleMap.get(r.mentionCategory);
+      if (!style) continue; // referenced category not in dict
+
+      const words = [];
+      if (Array.isArray(r.aliases)) {
+        for (const a of r.aliases) {
+          const s = String(a || "").trim();
+          if (s) words.push(s);
+        }
+      }
+      // Include the client pattern itself unless the user opted out
+      if (r.includePatternInContent !== false && r.pattern) {
+        words.push(r.pattern);
+      }
+
+      if (words.length === 0) continue;
+
+      result.push({
+        id: "__client_mention__" + r.pattern,
+        name: r.mentionCategory,
+        color: style.color,
+        fColor: style.fColor,
+        enabled: true,
+        words: words,
+      });
+    }
+    return result;
+  }
+
+  // Return a config suitable for compileAll that includes mention synthetic categories.
+  function buildCompileConfig(dict, rules, styleMap) {
+    const mentionCats = buildMentionCategories(rules, styleMap);
+    if (mentionCats.length === 0) return dict;
+    return {
+      ignoreList: dict.ignoreList || [],
+      categories: (dict.categories || []).concat(mentionCats),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Route guard
   // ---------------------------------------------------------------------------
   function isBlockedRoute() {
@@ -415,15 +465,15 @@
         return;
       }
 
-      // Compile matcher
-      compiledMatcher = MatcherEngine.compileAll(dict);
-
-      // Build client highlight maps
+      // Build client highlight maps first (needed for mention categories)
       categoryStyleByName = buildCategoryStyleMap(dict);
       clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
       for (const r of clientRules) {
         r._rx = globToRegex(r.pattern);
       }
+
+      // Compile matcher (includes synthetic mention categories if configured)
+      compiledMatcher = MatcherEngine.compileAll(buildCompileConfig(dict, clientRules, categoryStyleByName));
 
       console.log(
         "CMS Highlighter: compiled " +
@@ -466,13 +516,13 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
-
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
             for (const r of clientRules) {
               r._rx = globToRegex(r.pattern);
             }
+
+            compiledMatcher = MatcherEngine.compileAll(buildCompileConfig(dict, clientRules, categoryStyleByName));
           }
 
           removeAllHighlights();
