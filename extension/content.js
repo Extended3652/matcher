@@ -69,7 +69,7 @@
 
     if (raw.includes("image")) return "Image";
     if (raw.includes("profile")) return "Profile";
-    if (raw.includes("question")) return "Question";
+    if (raw.includes("question") || raw.includes("answer")) return "Question";
     if (raw.includes("comment")) return "Comment";
     return "Default";
   }
