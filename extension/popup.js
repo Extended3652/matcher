@@ -498,7 +498,8 @@
 
         statsEl.textContent =
           `${response.highlights} highlights | ${response.cats || 0} categories | ` +
-          `${response.enabled ? "ON" : "OFF"}`;
+          `${response.enabled ? "ON" : "OFF"}` +
+          (response.contentType ? ` | type: ${response.contentType}` : "");
 
         // Query the client name separately so the banner can show the right state
         chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
