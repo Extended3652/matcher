@@ -19,6 +19,14 @@
   // Compiled matcher
   let compiledMatcher = null;
 
+  // Generation counter — incremented whenever highlights are cleared, so any
+  // in-flight async chunk loop can detect it has been superseded and abort.
+  let highlightGeneration = 0;
+
+  // Running count of live highlight spans — maintained incrementally to avoid
+  // a full querySelectorAll every time the popup requests stats.
+  let highlightCount = 0;
+
   // Client highlight config
   let clientRules = [];
   let categoryStyleByName = new Map();
@@ -256,6 +264,7 @@
     if (parent) {
       parent.setAttribute(MARKER_ATTR, "1");
       parent.replaceChild(frag, textNode);
+      highlightCount += matches.length;
     }
   }
 
@@ -290,16 +299,36 @@
 
     const target = root || document.body;
     const textNodes = getTextNodes(target);
+    if (textNodes.length === 0) return;
 
-    for (const node of textNodes) {
-      highlightTextNode(node);
+    const CHUNK_SIZE = 50;
+    const generation = highlightGeneration;
+    let index = 0;
+
+    function processChunk() {
+      if (highlightGeneration !== generation) return; // cancelled by removeAllHighlights
+
+      const end = Math.min(index + CHUNK_SIZE, textNodes.length);
+      for (let i = index; i < end; i++) {
+        highlightTextNode(textNodes[i]);
+      }
+      index = end;
+
+      if (index < textNodes.length) {
+        setTimeout(processChunk, 0);
+      }
     }
+
+    processChunk(); // first chunk runs synchronously for immediate top-of-page highlights
   }
 
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    highlightGeneration++;
+    highlightCount = 0;
+
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
     spans.forEach(span => {
@@ -432,8 +461,10 @@
       );
 
       if (globalEnabled) {
-        highlightAll(document.body);
-        applyClientHighlight();
+        requestAnimationFrame(() => {
+          highlightAll(document.body);
+          applyClientHighlight();
+        });
         startObserver();
       }
     });
@@ -490,7 +521,7 @@
 
       case "getStats":
         sendResponse({
-          highlights: document.querySelectorAll("." + HL_CLASS).length,
+          highlights: highlightCount,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
