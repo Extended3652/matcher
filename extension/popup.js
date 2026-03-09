@@ -38,14 +38,19 @@
   let editing = null;
 
   // ---------------------------------------------------------------------------
-  // Alphabetical insert helper
+  // Natural-sort insert helper
   // ---------------------------------------------------------------------------
   // Strips CS: and // prefixes so that "CS://HP" sorts by "hp", not the prefix.
+  // Pads digit runs with leading zeros so numbered entries sort numerically:
+  //   "2. item" < "10. item"  (not "10. item" < "2. item" as pure string sort gives).
   function sortKey(raw) {
-    return String(raw || "").replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
+    return String(raw || "")
+      .replace(/^(CS:)?(\/\/)?/, "")
+      .toLowerCase()
+      .replace(/\d+/g, n => n.padStart(10, "0"));
   }
 
-  // Inserts word into arr at the correct alphabetical position (by bare word).
+  // Inserts word into arr at the correct natural-sort position (by bare word).
   // Binary search: O(log n) comparisons instead of O(n).
   function insertAlphabetically(arr, word) {
     const key = sortKey(word);

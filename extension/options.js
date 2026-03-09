@@ -72,8 +72,12 @@
       .filter(s => s.length > 0);
   }
 
+  // Pads digit runs so numbered entries sort numerically ("2. x" < "10. x").
   function sortKey(raw) {
-    return safeStr(raw).replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
+    return safeStr(raw)
+      .replace(/^(CS:)?(\/\/)?/, "")
+      .toLowerCase()
+      .replace(/\d+/g, n => n.padStart(10, "0"));
   }
 
   // Binary search: O(log n) comparisons instead of O(n).
