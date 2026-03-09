@@ -106,19 +106,25 @@
       cb("");
       return;
     }
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs && tabs[0];
-      if (!tab || !tab.id) {
-        cb("");
-        return;
+    // Query all tabs: when the options page is open it IS the active tab in the
+    // current window, so restricting to {active, currentWindow} would return the
+    // options page itself (which has no content script).  Instead we broadcast to
+    // every tab and use the first CMS tab that responds.
+    chrome.tabs.query({}, (tabs) => {
+      if (!tabs || !tabs.length) { cb(""); return; }
+      let answered = false;
+      let remaining = tabs.length;
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (res) => {
+          remaining--;
+          if (!answered && !chrome.runtime.lastError && res && res.clientName) {
+            answered = true;
+            cb(normalizePattern(res.clientName));
+          } else if (remaining === 0 && !answered) {
+            cb("");
+          }
+        });
       }
-      chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (res) => {
-        if (chrome.runtime.lastError || !res || !res.clientName) {
-          cb("");
-          return;
-        }
-        cb(normalizePattern(res.clientName));
-      });
     });
   }
 
@@ -251,6 +257,12 @@
         guessActiveCmsClientName((name) => {
           if (!name) return;
           newClientPattern.value = name;
+          // If this client is already in the list, open its card by default.
+          const key = patternKey(name);
+          if (findClientByKey(key)) {
+            openClientKey = key;
+            renderClients();
+          }
           syncAddClientFormFromPattern();
         });
       }

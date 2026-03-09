@@ -357,11 +357,20 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Rebuild context menu when dictionary or menu toggles change
+// Rebuild context menu when dictionary or menu toggles change.
+// Also broadcast a refresh to all CMS tabs so live edits (from the options
+// page or any other source) take effect without a manual page reload.
 // ---------------------------------------------------------------------------
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+  if (changes.dictionary) {
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of (tabs || [])) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
+      }
+    });
   }
 });
