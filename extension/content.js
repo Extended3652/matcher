@@ -296,6 +296,43 @@
     }
   }
 
+  // Processes text nodes in idle-time chunks so the initial full-page scan
+  // does not block the main thread and cause jank during page load.
+  function highlightAllBatched(root) {
+    if (isBlockedRoute()) return;
+    if (!globalEnabled) return;
+    if (!compiledMatcher) return;
+
+    const target = root || document.body;
+    const textNodes = getTextNodes(target);
+    if (textNodes.length === 0) return;
+
+    let i = 0;
+
+    function processChunk(deadline) {
+      while (i < textNodes.length) {
+        // Yield to the browser when idle time runs out.
+        if (deadline && deadline.timeRemaining() <= 0) break;
+        highlightTextNode(textNodes[i]);
+        i++;
+      }
+
+      if (i < textNodes.length) {
+        if (typeof requestIdleCallback !== "undefined") {
+          requestIdleCallback(processChunk, { timeout: 500 });
+        } else {
+          setTimeout(processChunk, 0);
+        }
+      }
+    }
+
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(processChunk, { timeout: 500 });
+    } else {
+      setTimeout(processChunk, 0);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
@@ -432,7 +469,7 @@
       );
 
       if (globalEnabled) {
-        highlightAll(document.body);
+        highlightAllBatched(document.body);
         applyClientHighlight();
         startObserver();
       }
@@ -477,7 +514,7 @@
 
           removeAllHighlights();
           if (globalEnabled) {
-            highlightAll(document.body);
+            highlightAllBatched(document.body);
             applyClientHighlight();
             startObserver();
           } else {
@@ -493,7 +530,8 @@
           highlights: document.querySelectorAll("." + HL_CLASS).length,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
-          clients: clientRules.length
+          clients: clientRules.length,
+          clientName: getCmsClientName()
         });
         break;
 
