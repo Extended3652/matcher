@@ -24,7 +24,7 @@
   const popupSearch     = document.getElementById("popupSearch");
   const clientBannerEl  = document.getElementById("clientBanner");
   const bannerNameEl    = document.getElementById("bannerClientName");
-  const bannerCatSelEl  = document.getElementById("bannerCatSelect");
+  let bannerCatSelEl    = document.getElementById("bannerCatSelect");
   const bannerAddBtnEl  = document.getElementById("bannerAddBtn");
 
   let currentDict = null;
@@ -148,9 +148,8 @@
     // Remove previous listeners by cloning
     const newSel = bannerCatSelEl.cloneNode(false);
     bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
-    // (re-assign the const-declared alias via the outer-scope var approach — we
-    //  work around the const by operating on the DOM id instead)
-    const selEl = document.getElementById("bannerCatSelect");
+    bannerCatSelEl = newSel;
+    const selEl = bannerCatSelEl;
     const addBtn = document.getElementById("bannerAddBtn");
 
     if (matched) {
