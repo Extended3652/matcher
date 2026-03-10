@@ -258,9 +258,6 @@ function addWordToCategory(text, catIndex, tab) {
         tab,
         `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
       );
-      if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
-      }
       buildContextMenu();
     });
   });
@@ -286,9 +283,6 @@ function addWordToIgnoreList(text, tab) {
 
     chrome.storage.local.set({ dictionary: dict }, () => {
       notifyTab(tab, `Added "${text}" to Ignore List`);
-      if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
-      }
       buildContextMenu();
     });
   });
@@ -363,5 +357,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
     buildContextMenu();
+  }
+  if (changes.dictionary) {
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
+      }
+    });
   }
 });

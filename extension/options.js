@@ -674,7 +674,7 @@
       sReview.addEventListener("change", () => {
         entry.defaultCategory = sReview.value ? sReview.value : null;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Saved");
       });
 
       sImg.addEventListener("change", () => {
@@ -682,7 +682,7 @@
         if (sImg.value) entry.overrides.Image = sImg.value;
         else delete entry.overrides.Image;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Saved");
       });
 
       sPro.addEventListener("change", () => {
@@ -690,7 +690,7 @@
         if (sPro.value) entry.overrides.Profile = sPro.value;
         else delete entry.overrides.Profile;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Saved");
       });
 
       sQ.addEventListener("change", () => {
@@ -698,7 +698,7 @@
         if (sQ.value) entry.overrides.Question = sQ.value;
         else delete entry.overrides.Question;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Saved");
       });
 
       sCmt.addEventListener("change", () => {
@@ -706,30 +706,30 @@
         if (sCmt.value) entry.overrides.Comment = sCmt.value;
         else delete entry.overrides.Comment;
         refreshHeaderVisuals();
-        saveDictionary();
+        saveDictionary("Saved");
       });
 
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
-        saveDictionary();
+        saveDictionary("Saved");
         summary.textContent = formatSummary(entry);
       });
 
       tAliases.addEventListener("change", () => {
         entry.aliases = normalizeAliasesFromTextarea(tAliases.value);
-        saveDictionary();
+        saveDictionary("Saved");
         summary.textContent = formatSummary(entry);
       });
 
       cbInc.addEventListener("change", () => {
         entry.includePatternInContent = !!cbInc.checked;
-        saveDictionary();
+        saveDictionary("Saved");
         summary.textContent = formatSummary(entry);
       });
 
       iNote.addEventListener("change", () => {
         entry.note = (iNote.value || "").trim();
-        saveDictionary();
+        saveDictionary("Saved");
         summary.textContent = formatSummary(entry);
       });
 

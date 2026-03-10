@@ -449,6 +449,7 @@
       case "toggle":
         globalEnabled = !!message.enabled;
         if (globalEnabled) {
+          stopObserver();
           removeAllHighlights();
           highlightAll(document.body);
           applyClientHighlight();
@@ -475,6 +476,7 @@
             }
           }
 
+          stopObserver();
           removeAllHighlights();
           if (globalEnabled) {
             highlightAll(document.body);
