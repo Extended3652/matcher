@@ -350,13 +350,15 @@
     if (filtered.length === 0) return [];
 
     // Sort by start, then longer first (helps reduce churn)
-    filtered.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start;
-      const aLen = a.end - a.start;
-      const bLen = b.end - b.start;
-      if (aLen !== bLen) return bLen - aLen;
-      return a.priority - b.priority;
-    });
+    if (filtered.length > 1) {
+      filtered.sort((a, b) => {
+        if (a.start !== b.start) return a.start - b.start;
+        const aLen = a.end - a.start;
+        const bLen = b.end - b.start;
+        if (aLen !== bLen) return bLen - aLen;
+        return a.priority - b.priority;
+      });
+    }
 
     // Overlap resolver:
     // Keep a "current winner". When an overlapping match appears, choose the better.

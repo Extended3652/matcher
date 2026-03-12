@@ -23,6 +23,11 @@
   let clientRules = [];
   let categoryStyleByName = new Map();
 
+  // Cache for applyClientHighlight: avoid re-running findClientRule() when name hasn't changed
+  let _lastClientName = null;
+  let _lastClientRule = null;
+  let _lastClientNameSet = false;
+
   // ---------------------------------------------------------------------------
   // Route guard
   // ---------------------------------------------------------------------------
@@ -74,17 +79,23 @@
     return "Default";
   }
 
+  const _globCache = new Map();
+
   function globToRegex(pattern) {
     const p = String(pattern || "").trim();
     if (!p) return null;
+    if (_globCache.has(p)) return _globCache.get(p);
 
     // Escape regex specials, then convert * and ? to wildcards
     const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
     const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
 
     try {
-      return new RegExp(rx, "i");
+      const re = new RegExp(rx, "i");
+      _globCache.set(p, re);
+      return re;
     } catch (e) {
+      _globCache.set(p, null);
       return null;
     }
   }
@@ -114,29 +125,43 @@
     return rule.defaultCategory || null;
   }
 
-  function clearClientHighlight() {
-    const el = getCmsClientNameEl();
-    if (!el) return;
+  function clearClientHighlight(el) {
+    const target = el || getCmsClientNameEl();
+    if (!target) return;
 
-    if (el.hasAttribute("data-client-hl")) {
-      el.style.backgroundColor = "";
-      el.style.color = "";
-      el.style.borderRadius = "";
-      el.style.padding = "";
-      el.removeAttribute("data-client-hl");
+    if (target.hasAttribute("data-client-hl")) {
+      target.style.backgroundColor = "";
+      target.style.color = "";
+      target.style.borderRadius = "";
+      target.style.padding = "";
+      target.removeAttribute("data-client-hl");
     }
   }
 
   function applyClientHighlight() {
-    clearClientHighlight();
+    const el = getCmsClientNameEl();
+    clearClientHighlight(el);
 
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
 
     const clientName = getCmsClientName();
-    if (!clientName) return;
+    if (!clientName) {
+      _lastClientNameSet = false;
+      return;
+    }
 
-    const rule = findClientRule(clientName);
+    // Avoid re-running findClientRule() when the client name hasn't changed
+    let rule;
+    if (_lastClientNameSet && clientName === _lastClientName) {
+      rule = _lastClientRule;
+    } else {
+      rule = findClientRule(clientName);
+      _lastClientName = clientName;
+      _lastClientRule = rule;
+      _lastClientNameSet = true;
+    }
+
     if (!rule) return;
 
     const type = getCmsContentType();
@@ -148,7 +173,6 @@
     const style = categoryStyleByName.get(catName);
     if (!style) return;
 
-    const el = getCmsClientNameEl();
     if (!el) return;
 
     el.style.backgroundColor = style.color;
@@ -320,9 +344,30 @@
   // ---------------------------------------------------------------------------
   // Observer
   // ---------------------------------------------------------------------------
+  const MAX_PENDING = 300;
+
   let observer = null;
   let debounceTimer = null;
   let pendingNodes = [];
+
+  function processBatch(batch) {
+    for (const item of batch) {
+      if (!item.node || !item.node.parentNode) continue;
+
+      if (item.type === "element") {
+        if (item.node === document.body || item.node === document.documentElement) {
+          highlightAll(document.body);
+        } else {
+          highlightAll(item.node);
+        }
+      } else {
+        highlightTextNode(item.node);
+      }
+    }
+
+    // Also update the client-name highlight when the header changes
+    applyClientHighlight();
+  }
 
   function startObserver() {
     if (observer) return;
@@ -357,27 +402,21 @@
         }
       }
 
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      // Flush immediately if the queue has grown too large to prevent unbounded growth
+      if (pendingNodes.length >= MAX_PENDING) {
+        if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
         const batch = pendingNodes;
         pendingNodes = [];
+        processBatch(batch);
+        return;
+      }
 
-        for (const item of batch) {
-          if (!item.node || !item.node.parentNode) continue;
-
-          if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
-              highlightAll(item.node);
-            }
-          } else {
-            highlightTextNode(item.node);
-          }
-        }
-
-        // Also update the client-name highlight when the header changes
-        applyClientHighlight();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        const batch = pendingNodes;
+        pendingNodes = [];
+        processBatch(batch);
       }, 80);
     });
 
@@ -388,6 +427,10 @@
     if (observer) {
       observer.disconnect();
       observer = null;
+    }
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
     }
     pendingNodes = [];
   }
@@ -473,6 +516,7 @@
             for (const r of clientRules) {
               r._rx = globToRegex(r.pattern);
             }
+            _lastClientNameSet = false;
           }
 
           removeAllHighlights();

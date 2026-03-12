@@ -359,9 +359,16 @@ chrome.runtime.onInstalled.addListener(() => {
 // ---------------------------------------------------------------------------
 // Rebuild context menu when dictionary or menu toggles change
 // ---------------------------------------------------------------------------
+let menuRebuildTimer = null;
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.dictionary || changes.contextExact || changes.contextCaseSensitive) {
-    buildContextMenu();
+    // Debounce to coalesce rapid changes (e.g. bulk import) into one rebuild
+    if (menuRebuildTimer) clearTimeout(menuRebuildTimer);
+    menuRebuildTimer = setTimeout(() => {
+      menuRebuildTimer = null;
+      buildContextMenu();
+    }, 200);
   }
 });
