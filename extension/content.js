@@ -422,7 +422,8 @@
       categoryStyleByName = buildCategoryStyleMap(dict);
       clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
       for (const r of clientRules) {
-        r._rx = globToRegex(r.pattern);
+        // Compile once; keep cached regex across re-inits for the same pattern.
+        if (!r._rx) r._rx = globToRegex(r.pattern);
       }
 
       console.log(
@@ -471,7 +472,8 @@
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
             for (const r of clientRules) {
-              r._rx = globToRegex(r.pattern);
+              // Compile once; keep cached regex across refreshes for the same pattern.
+              if (!r._rx) r._rx = globToRegex(r.pattern);
             }
           }
 

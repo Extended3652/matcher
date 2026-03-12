@@ -342,8 +342,24 @@
     // --- Remove matches that overlap with any Ignore range ---
     let filtered = allMatches;
     if (ignoreRanges.length > 0) {
+      // Sort once by start so we can binary-search per match (O(M log M + N log M))
+      // instead of the naive O(N*M) .some() scan.
+      ignoreRanges.sort((a, b) => a.start - b.start);
+
       filtered = allMatches.filter(match => {
-        return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
+        // Binary search: find first ignore range whose .end > match.start
+        let lo = 0, hi = ignoreRanges.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if (ignoreRanges[mid].end <= match.start) lo = mid + 1;
+          else hi = mid;
+        }
+        // Scan forward while ig.start < match.end; any such range overlaps.
+        for (let i = lo; i < ignoreRanges.length; i++) {
+          if (ignoreRanges[i].start >= match.end) break;
+          return false;
+        }
+        return true;
       });
     }
 

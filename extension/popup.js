@@ -98,8 +98,9 @@
     if (!name || !currentDict) return null;
     const clients = currentDict.clients || [];
     for (const c of clients) {
-      const rx = clientGlobToRegex(c.pattern);
-      if (rx && rx.test(name)) return c;
+      // Compile once and cache on the object; avoids re-compiling on every call.
+      if (!c._rx) c._rx = clientGlobToRegex(c.pattern);
+      if (c._rx && c._rx.test(name)) return c;
     }
     return null;
   }

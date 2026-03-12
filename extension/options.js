@@ -48,6 +48,20 @@
   let openClientKey = null; // keeps one client expanded
   let addFormAutofilled = false; // only auto-fill from CMS once per load
 
+  // ---------------------------------------------------------------------------
+  // Per-render caches (invalidated on every dict mutation)
+  // ---------------------------------------------------------------------------
+  let _catStyleMap  = null; // Map<catName, {color, fColor}>  — rebuilt on demand
+  let _clientKeyMap = null; // Map<normalizedPattern, client> — rebuilt on demand
+
+  function invalidateCaches() {
+    _catStyleMap  = null;
+    _clientKeyMap = null;
+    // Clear per-client lowercase caches so filteredClients() stays accurate.
+    const clients = currentDict && currentDict.clients;
+    if (clients) clients.forEach(c => { delete c._lower; });
+  }
+
   // Use the same "no highlight" grey concept you want
   const NO_HL_BG = "#e0e0e0";
   const NO_HL_FG = "#555555";
@@ -96,9 +110,19 @@
     return normalizePattern(p).toLowerCase();
   }
 
-  function findClientByKey(key) {
+  function getClientKeyMap() {
+    if (_clientKeyMap) return _clientKeyMap;
+    const map = new Map();
     const clients = currentDict && Array.isArray(currentDict.clients) ? currentDict.clients : [];
-    return clients.find(c => patternKey(c && c.pattern) === key) || null;
+    for (const c of clients) {
+      map.set(patternKey(c && c.pattern), c);
+    }
+    _clientKeyMap = map;
+    return map;
+  }
+
+  function findClientByKey(key) {
+    return getClientKeyMap().get(key) || null;
   }
 
   function guessActiveCmsClientName(cb) {
@@ -128,13 +152,49 @@
   }
 
   function getCategoryStyleByName() {
+    if (_catStyleMap) return _catStyleMap;
     const map = new Map();
-    if (!currentDict || !Array.isArray(currentDict.categories)) return map;
+    if (!currentDict || !Array.isArray(currentDict.categories)) {
+      _catStyleMap = map;
+      return map;
+    }
     for (const c of currentDict.categories) {
       if (!c || !c.name) continue;
       map.set(c.name, { color: c.color || "#FFFF00", fColor: c.fColor || "#000000" });
     }
+    _catStyleMap = map;
     return map;
+  }
+
+  // Cached option-list HTML for the two select modes, rebuilt once per render cycle.
+  // Keys: "review" and "override".
+  let _selectOptionsHtml = {};
+
+  function getSelectOptionsHtml(mode, stMap) {
+    if (_selectOptionsHtml[mode]) return _selectOptionsHtml[mode];
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    let html = mode === "override"
+      ? '<option value="">-</option>'
+      : '<option value="">(no highlight)</option>';
+
+    for (const name of getCategoryNames()) {
+      const st = stMap.get(name);
+      const bg = st ? esc(st.color || "") : "";
+      const fg = st ? esc(st.fColor || "") : "";
+      const n  = esc(name);
+      html += `<option value="${n}" style="background:${bg};color:${fg}">${n}</option>`;
+    }
+
+    _selectOptionsHtml[mode] = html;
+    return html;
   }
 
   function makeCategorySelect(opts, stMapArg) {
@@ -168,29 +228,9 @@
       sel.style.borderColor = "rgba(0,0,0,0.25)";
     }
 
-    function makeOption(value, label, st) {
-      const opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = label;
-
-      // Some Chrome builds will apply these option styles, some will not.
-      // Even if options do not style, the select styling still gives you color context.
-      if (st && value) {
-        opt.style.backgroundColor = st.color || "";
-        opt.style.color = st.fColor || "";
-      }
-      return opt;
-    }
-
-    if (opts.mode === "override") {
-      sel.appendChild(makeOption("", "-", null));
-    } else {
-      sel.appendChild(makeOption("", "(no highlight)", null));
-    }
-
-    for (const name of getCategoryNames()) {
-      sel.appendChild(makeOption(name, name, stMap.get(name) || null));
-    }
+    // Stamp the pre-built option list HTML in one shot instead of building
+    // individual DOM nodes for every select element.
+    sel.innerHTML = getSelectOptionsHtml(opts.mode, stMap);
 
     sel.value = opts.value || "";
     applySelectVisualForValue(sel.value);
@@ -240,6 +280,7 @@
       if (!Array.isArray(currentDict.ignoreList)) currentDict.ignoreList = [];
       if (!Array.isArray(currentDict.categories)) currentDict.categories = [];
       if (!Array.isArray(currentDict.clients)) currentDict.clients = [];
+      invalidateCaches();
 
       renderIgnoreList();
       renderClients();
@@ -258,6 +299,7 @@
   }
 
   function saveDictionary(msg) {
+    invalidateCaches();
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
     });
@@ -368,21 +410,30 @@
     return safeStr(clientSearchEl.value).trim().toLowerCase();
   }
 
+  // Lazily build and cache the lowercased fields on each client object.
+  // Cleared by invalidateCaches() whenever the dict is mutated.
+  function getClientLower(c) {
+    if (!c._lower) {
+      c._lower = {
+        pattern: safeStr(c.pattern).toLowerCase(),
+        note:    safeStr(c.note).toLowerCase(),
+        aliases: Array.isArray(c.aliases) ? c.aliases.map(a => safeStr(a).toLowerCase()) : [],
+      };
+    }
+    return c._lower;
+  }
+
   function filteredClients() {
     const all = currentDict.clients || [];
     const f = getClientFilter();
     if (!f) return all.slice();
 
     return all.filter(c => {
-      const p = safeStr(c && c.pattern).toLowerCase();
-      if (p.includes(f)) return true;
-
-      const note = safeStr(c && c.note).toLowerCase();
-      if (note.includes(f)) return true;
-
-      const aliases = Array.isArray(c && c.aliases) ? c.aliases : [];
-      for (const a of aliases) {
-        if (safeStr(a).toLowerCase().includes(f)) return true;
+      const lc = getClientLower(c);
+      if (lc.pattern.includes(f)) return true;
+      if (lc.note.includes(f)) return true;
+      for (const a of lc.aliases) {
+        if (a.includes(f)) return true;
       }
       return false;
     });
@@ -396,6 +447,9 @@
 
   function renderClients() {
     if (!currentDict) return;
+
+    // Reset per-render option-HTML cache so selects reflect current categories.
+    _selectOptionsHtml = {};
 
     ensureClientsSorted();
 
@@ -753,8 +807,10 @@
     });
   }
 
+  let _clientSearchTimer = null;
   clientSearchEl.addEventListener("input", () => {
-    renderClients();
+    clearTimeout(_clientSearchTimer);
+    _clientSearchTimer = setTimeout(renderClients, 80);
   });
 
   if (newClientPattern) {
