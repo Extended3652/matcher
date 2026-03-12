@@ -55,8 +55,9 @@
   let _clientKeyMap = null; // Map<normalizedPattern, client> — rebuilt on demand
 
   function invalidateCaches() {
-    _catStyleMap  = null;
-    _clientKeyMap = null;
+    _catStyleMap        = null;
+    _clientKeyMap       = null;
+    _selectOptionsHtml  = {};  // colour changes must not be served from stale cache
     // Clear per-client lowercase caches so filteredClients() stays accurate.
     const clients = currentDict && currentDict.clients;
     if (clients) clients.forEach(c => { delete c._lower; });
@@ -86,21 +87,7 @@
       .filter(s => s.length > 0);
   }
 
-  function sortKey(raw) {
-    return safeStr(raw).replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
-  }
-
-  // Binary search: O(log n) comparisons instead of O(n).
-  function insertAlphabetically(arr, word) {
-    const key = sortKey(word);
-    let lo = 0, hi = arr.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (sortKey(arr[mid]) < key) lo = mid + 1;
-      else hi = mid;
-    }
-    arr.splice(lo, 0, word);
-  }
+  // sortKey and insertAlphabetically are provided by utils.js (loaded first).
 
   function normalizePattern(p) {
     return safeStr(p).trim();
@@ -1010,14 +997,21 @@
       const body = document.createElement("div");
       body.className = "cat-body";
 
+      // Sanitise colour values before injecting into HTML — only allow valid
+      // CSS hex colours (#xxx or #xxxxxx) to prevent attribute injection.
+      const safeHexColor = (v, fallback) =>
+        /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v) ? v : fallback;
+      const safeBg = safeHexColor(cat.color, "#FFFF00");
+      const safeFg = safeHexColor(cat.fColor, "#FFFFFF");
+
       const colorRow = document.createElement("div");
       colorRow.className = "color-picker-row";
       colorRow.innerHTML =
         "<label>BG Color:</label>" +
-        '<input type="color" class="bg-color" value="' + (cat.color || "#FFFF00") + '">' +
+        '<input type="color" class="bg-color" value="' + safeBg + '">' +
         "<label>Text Color:</label>" +
-        '<input type="color" class="fg-color" value="' + (cat.fColor || "#FFFFFF") + '">' +
-        '<span class="preview" style="padding:2px 8px; border-radius:3px; background:' + (cat.color || "#FFFF00") + "; color:" + (cat.fColor || "#FFFFFF") + '">Preview</span>';
+        '<input type="color" class="fg-color" value="' + safeFg + '">' +
+        '<span class="preview" style="padding:2px 8px; border-radius:3px; background:' + safeBg + "; color:" + safeFg + '">Preview</span>';
 
       body.appendChild(colorRow);
 

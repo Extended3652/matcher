@@ -417,6 +417,9 @@
 
       // Compile matcher
       compiledMatcher = MatcherEngine.compileAll(dict);
+      if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
+        console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
+      }
 
       // Build client highlight maps
       categoryStyleByName = buildCategoryStyleMap(dict);
@@ -468,6 +471,9 @@
           const dict = result.dictionary;
           if (dict && dict.categories) {
             compiledMatcher = MatcherEngine.compileAll(dict);
+            if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
+              console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
+            }
 
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];

@@ -113,9 +113,11 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            result += "[^\\s\\p{P}]*";
+            // Bound match length to MAX_SPAN_LEN to prevent worst-case backtracking.
+            result += "[^\\s\\p{P}]{0,120}";
           } else {
-            result += "[^\\s\\p{P}]*?";
+            // Middle wildcard: greedy bounded to avoid catastrophic backtracking.
+            result += "[^\\s\\p{P}]{0,120}";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
@@ -197,6 +199,9 @@
           regexes.push({ re: new RegExp(combined, flags), metas });
         } catch (e) {
           console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
+          if (Array.isArray(category._warnings)) {
+            category._warnings.push(`"${category.name}" (${key}): ${e.message}`);
+          }
         }
       }
     }
@@ -214,27 +219,36 @@
 
   // ---------------------------------------------------------------------------
   // STEP 5: Compile everything — categories + ignore list.
+  // Returns { ignoreCompiled, compiledCategories, warnings }.
+  // warnings is an array of human-readable strings for any patterns that failed
+  // to compile (so callers can surface them to the user rather than losing data silently).
   // ---------------------------------------------------------------------------
   function compileAll(config) {
+    const warnings = [];
+
     let ignoreCompiled = null;
     if (config.ignoreList && config.ignoreList.length > 0) {
-      ignoreCompiled = compileCategory({
+      const ignoreProxy = {
         id: "__ignore__",
         name: "Ignore List",
         color: null,
         fColor: null,
         words: config.ignoreList,
-      });
+        _warnings: warnings,
+      };
+      ignoreCompiled = compileCategory(ignoreProxy);
     }
 
     const compiledCategories = [];
     for (const cat of config.categories) {
       if (cat.enabled === false) continue;
+      cat._warnings = warnings; // let compileCategory append failures here
       const compiled = compileCategory(cat);
+      delete cat._warnings;     // clean up temp property
       if (compiled) compiledCategories.push(compiled);
     }
 
-    return { ignoreCompiled, compiledCategories };
+    return { ignoreCompiled, compiledCategories, warnings };
   }
 
   function pickBetterOverlap(a, b) {
