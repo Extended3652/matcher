@@ -127,6 +127,13 @@
     const selEl = bannerCatSelEl;
     const addBtn = document.getElementById("bannerAddBtn");
 
+    // Shared helper: apply the selected category's colour to the select element.
+    const applyColor = () => {
+      const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
+      if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
+      else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
+    };
+
     if (matched) {
       // Known client — show current defaultCategory, allow changing
       clientBannerEl.style.background = "#e8f4fd";
@@ -148,12 +155,6 @@
         selEl.appendChild(opt);
       }
       selEl.value = matched.defaultCategory || "";
-
-      const applyColor = () => {
-        const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
-        if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
-        else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
-      };
       applyColor();
 
       selEl.addEventListener("change", () => {
@@ -185,12 +186,6 @@
       // Pre-select first category
       const firstCat = (currentDict.categories || [])[0];
       selEl.value = firstCat ? firstCat.name : "";
-
-      const applyColor = () => {
-        const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
-        if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
-        else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
-      };
       applyColor();
       selEl.addEventListener("change", applyColor);
 

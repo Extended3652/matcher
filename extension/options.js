@@ -337,22 +337,26 @@
     }
   }
 
+  function resetAddClientForm() {
+    newClientReview.value = "";
+    newClientImage.value = "";
+    newClientProfile.value = "";
+    newClientQuestion.value = "";
+    if (newClientComment) newClientComment.value = "";
+    if (newClientMentionCategory) newClientMentionCategory.value = "";
+    if (newClientAliases) newClientAliases.value = "";
+    if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
+    if (newClientNote) newClientNote.value = "";
+    btnAddClient.textContent = "Add Client";
+  }
+
   function syncAddClientFormFromPattern() {
     const pattern = normalizePattern(newClientPattern.value);
     const key = patternKey(pattern);
     const existing = pattern ? findClientByKey(key) : null;
 
     if (!pattern) {
-      newClientReview.value = "";
-      newClientImage.value = "";
-      newClientProfile.value = "";
-      newClientQuestion.value = "";
-      if (newClientComment) newClientComment.value = "";
-      if (newClientMentionCategory) newClientMentionCategory.value = "";
-      if (newClientAliases) newClientAliases.value = "";
-      if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
-      if (newClientNote) newClientNote.value = "";
-      btnAddClient.textContent = "Add Client";
+      resetAddClientForm();
       return;
     }
 
@@ -380,16 +384,7 @@
       btnAddClient.textContent = "Save Client";
     } else {
       // New client: keep pattern, reset the rest
-      newClientReview.value = "";
-      newClientImage.value = "";
-      newClientProfile.value = "";
-      newClientQuestion.value = "";
-      if (newClientComment) newClientComment.value = "";
-      if (newClientMentionCategory) newClientMentionCategory.value = "";
-      if (newClientAliases) newClientAliases.value = "";
-      if (newClientIncludePatternInContent) newClientIncludePatternInContent.checked = true;
-      if (newClientNote) newClientNote.value = "";
-      btnAddClient.textContent = "Add Client";
+      resetAddClientForm();
     }
   }
 
@@ -1225,6 +1220,10 @@
       } catch (err) {
         showMsg("Invalid JSON file: " + err.message, "error");
       }
+      importFileEl.value = "";
+    };
+    reader.onerror = () => {
+      showMsg("Could not read file", "error");
       importFileEl.value = "";
     };
     reader.readAsText(file);

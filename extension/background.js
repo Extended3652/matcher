@@ -281,11 +281,18 @@ function addWordToIgnoreList(text, tab) {
 // ---------------------------------------------------------------------------
 function notifyTab(tab, message) {
   if (tab && tab.id) {
-    try {
-      chrome.tabs.sendMessage(tab.id, { action: "notify", message: message });
-    } catch (e) {
-      // ignore
-    }
+    chrome.tabs.sendMessage(tab.id, { action: "notify", message: message })
+      .catch((e) => {
+        // Ignore expected errors when a tab is closed or has no content script.
+        const msg = String(e && e.message || "").toLowerCase();
+        if (
+          !msg.includes("could not establish connection") &&
+          !msg.includes("no tab with id") &&
+          !msg.includes("receiving end does not exist")
+        ) {
+          console.warn("CMS Highlighter: notifyTab error:", e && e.message);
+        }
+      });
   }
   console.log("CMS Highlighter:", message);
 }
