@@ -337,10 +337,15 @@
           if (
             node.nodeType === Node.TEXT_NODE &&
             node.parentElement &&
-            !node.parentElement.classList.contains(HL_CLASS) &&
-            !node.parentElement.hasAttribute(MARKER_ATTR)
+            !node.parentElement.classList.contains(HL_CLASS)
           ) {
-            pendingNodes.push({ type: "text", node });
+            if (node.parentElement.hasAttribute(MARKER_ATTR)) {
+              // Parent was previously processed; stale highlight spans may exist.
+              // Queue it for a full re-process pass (handled in the debounce below).
+              pendingNodes.push({ type: "reprocess", node: node.parentElement });
+            } else {
+              pendingNodes.push({ type: "text", node });
+            }
           }
           continue;
         }
@@ -371,6 +376,16 @@
             } else {
               highlightAll(item.node);
             }
+          } else if (item.type === "reprocess") {
+            // characterData fired inside an already-processed parent.
+            // Remove stale highlight spans, reset the marker, then re-highlight.
+            const el = item.node;
+            el.querySelectorAll("." + HL_CLASS).forEach(span => {
+              el.replaceChild(document.createTextNode(span.textContent), span);
+            });
+            el.normalize();
+            el.removeAttribute(MARKER_ATTR);
+            highlightAll(el);
           } else {
             highlightTextNode(item.node);
           }

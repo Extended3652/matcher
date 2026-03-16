@@ -302,6 +302,12 @@
     invalidateCaches();
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
+      // Notify all tabs so CMS client highlights and word highlights update immediately.
+      chrome.tabs.query({}, (tabs) => {
+        for (const tab of tabs) {
+          chrome.tabs.sendMessage(tab.id, { action: "refresh" }).catch(() => {});
+        }
+      });
     });
   }
 
