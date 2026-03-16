@@ -24,8 +24,9 @@
   const popupSearch     = document.getElementById("popupSearch");
   const clientBannerEl  = document.getElementById("clientBanner");
   const bannerNameEl    = document.getElementById("bannerClientName");
-  let bannerCatSelEl    = document.getElementById("bannerCatSelect");
-  const bannerAddBtnEl  = document.getElementById("bannerAddBtn");
+  let bannerCatSelEl     = document.getElementById("bannerCatSelect");
+  let bannerNameCatSelEl = document.getElementById("bannerNameCatSelect");
+  const bannerAddBtnEl   = document.getElementById("bannerAddBtn");
 
   let currentDict = null;
   let detectedClientName = ""; // client name read from the active CMS tab
@@ -120,46 +121,64 @@
     clientBannerEl.style.display = "block";
     const matched = findMatchedClient(detectedClientName);
 
-    // Remove previous listeners by cloning
+    // Remove previous listeners by cloning both selects
     const newSel = bannerCatSelEl.cloneNode(false);
     bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
     bannerCatSelEl = newSel;
     const selEl = bannerCatSelEl;
+
+    const newNameSel = bannerNameCatSelEl.cloneNode(false);
+    bannerNameCatSelEl.parentNode.replaceChild(newNameSel, bannerNameCatSelEl);
+    bannerNameCatSelEl = newNameSel;
+    const nameSelEl = bannerNameCatSelEl;
+
     const addBtn = document.getElementById("bannerAddBtn");
 
-    if (matched) {
-      // Known client — show current defaultCategory, allow changing
-      clientBannerEl.style.background = "#e8f4fd";
-      clientBannerEl.style.borderBottom = "1px solid #bee3f8";
-      bannerNameEl.textContent = detectedClientName;
-      addBtn.style.display = "none";
-
-      // Re-populate
-      selEl.innerHTML = "";
+    // Helper to build <option> list into a select element
+    function fillCatOptions(sel, noHlText, selectedValue) {
+      sel.innerHTML = "";
       const defOpt = document.createElement("option");
       defOpt.value = "";
-      defOpt.textContent = "(no highlight)";
-      selEl.appendChild(defOpt);
+      defOpt.textContent = noHlText;
+      sel.appendChild(defOpt);
       for (const cat of (currentDict.categories || [])) {
         const opt = document.createElement("option");
         opt.value = cat.name;
         opt.textContent = cat.name;
         if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
-        selEl.appendChild(opt);
+        sel.appendChild(opt);
       }
-      selEl.value = matched.defaultCategory || "";
+      sel.value = selectedValue || "";
+    }
 
-      const applyColor = () => {
-        const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
-        if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
-        else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
-      };
-      applyColor();
+    function applySelectColor(sel) {
+      const cat = (currentDict.categories || []).find(c => c.name === sel.value);
+      if (cat) { sel.style.backgroundColor = cat.color || ""; sel.style.color = cat.fColor || "#000"; }
+      else { sel.style.backgroundColor = ""; sel.style.color = ""; }
+    }
 
+    if (matched) {
+      // Known client — show current defaultCategory and mentionCategory, allow changing
+      clientBannerEl.style.background = "#e8f4fd";
+      clientBannerEl.style.borderBottom = "1px solid #bee3f8";
+      bannerNameEl.textContent = detectedClientName;
+      addBtn.style.display = "none";
+
+      fillCatOptions(selEl, "(header: no highlight)", matched.defaultCategory || "");
+      applySelectColor(selEl);
       selEl.addEventListener("change", () => {
         matched.defaultCategory = selEl.value || null;
         saveDictionary();
-        applyColor();
+        applySelectColor(selEl);
+      });
+
+      fillCatOptions(nameSelEl, "(name: no highlight)", matched.mentionCategory || "");
+      applySelectColor(nameSelEl);
+      nameSelEl.style.display = "";
+      nameSelEl.addEventListener("change", () => {
+        matched.mentionCategory = nameSelEl.value || null;
+        saveDictionary();
+        applySelectColor(nameSelEl);
       });
 
     } else {
@@ -169,30 +188,15 @@
       bannerNameEl.textContent = "\u26a0 " + detectedClientName;
       addBtn.style.display = "";
 
-      // Re-populate
-      selEl.innerHTML = "";
-      const defOpt = document.createElement("option");
-      defOpt.value = "";
-      defOpt.textContent = "(no highlight)";
-      selEl.appendChild(defOpt);
-      for (const cat of (currentDict.categories || [])) {
-        const opt = document.createElement("option");
-        opt.value = cat.name;
-        opt.textContent = cat.name;
-        if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
-        selEl.appendChild(opt);
-      }
-      // Pre-select first category
+      // Pre-select first category as a suggested default
       const firstCat = (currentDict.categories || [])[0];
-      selEl.value = firstCat ? firstCat.name : "";
+      fillCatOptions(selEl, "(no highlight)", firstCat ? firstCat.name : "");
+      applySelectColor(selEl);
+      selEl.addEventListener("change", () => applySelectColor(selEl));
 
-      const applyColor = () => {
-        const cat = (currentDict.categories || []).find(c => c.name === selEl.value);
-        if (cat) { selEl.style.backgroundColor = cat.color || ""; selEl.style.color = cat.fColor || "#000"; }
-        else { selEl.style.backgroundColor = ""; selEl.style.color = ""; }
-      };
-      applyColor();
-      selEl.addEventListener("change", applyColor);
+      // Hide name-color select for unknown clients
+      nameSelEl.style.display = "none";
+      nameSelEl.innerHTML = "";
 
       // Clone add button to clear old listener
       const newAdd = addBtn.cloneNode(true);
@@ -478,6 +482,11 @@
         chrome.tabs.sendMessage(tabs[0].id, { action: "getClientName" }, (nameResp) => {
           detectedClientName = (!chrome.runtime.lastError && nameResp && nameResp.clientName)
             ? nameResp.clientName : "";
+          // Store for options-page auto-fill (options tab becomes active, so
+          // options.js cannot query the CMS tab directly).
+          if (detectedClientName) {
+            chrome.storage.local.set({ _lastCmsClientName: detectedClientName });
+          }
           renderClientBanner();
         });
       });

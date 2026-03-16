@@ -113,19 +113,28 @@
   }
 
   function guessActiveCmsClientName(cb) {
+    // Fallback: read the name cached by popup.js (popup stores it before opening
+    // options, because the options tab becomes active and the CMS tab is no
+    // longer queryable as the "active" tab).
+    function fallbackToStorage() {
+      chrome.storage.local.get(["_lastCmsClientName"], (r) => {
+        cb(normalizePattern((r && r._lastCmsClientName) || ""));
+      });
+    }
+
     if (!chrome.tabs || !chrome.tabs.query || !chrome.tabs.sendMessage) {
-      cb("");
+      fallbackToStorage();
       return;
     }
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs && tabs[0];
       if (!tab || !tab.id) {
-        cb("");
+        fallbackToStorage();
         return;
       }
       chrome.tabs.sendMessage(tab.id, { action: "getClientName" }, (res) => {
         if (chrome.runtime.lastError || !res || !res.clientName) {
-          cb("");
+          fallbackToStorage();
           return;
         }
         cb(normalizePattern(res.clientName));
