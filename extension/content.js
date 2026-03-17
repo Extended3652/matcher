@@ -181,6 +181,11 @@
             return NodeFilter.FILTER_REJECT;
           }
 
+          // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body)
+          if (node.parentElement.isContentEditable) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
           // Skip already-processed parents
           if (node.parentElement.hasAttribute(MARKER_ATTR)) {
             return NodeFilter.FILTER_REJECT;
