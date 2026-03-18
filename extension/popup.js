@@ -194,9 +194,11 @@
       applySelectColor(selEl);
       selEl.addEventListener("change", () => applySelectColor(selEl));
 
-      // Hide name-color select for unknown clients
-      nameSelEl.style.display = "none";
-      nameSelEl.innerHTML = "";
+      // Show name-color select for unknown clients too
+      fillCatOptions(nameSelEl, "(name: no highlight)", "");
+      applySelectColor(nameSelEl);
+      nameSelEl.style.display = "";
+      nameSelEl.addEventListener("change", () => applySelectColor(nameSelEl));
 
       // Clone add button to clear old listener
       const newAdd = addBtn.cloneNode(true);
@@ -206,6 +208,7 @@
         const entry = {
           pattern: detectedClientName,
           defaultCategory: selEl.value || null,
+          mentionCategory: nameSelEl.value || null,
           overrides: {}
         };
         currentDict.clients.push(entry);
