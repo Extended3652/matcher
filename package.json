@@ -1,0 +1,12 @@
+{
+  "name": "cms-highlighter",
+  "version": "1.0.0",
+  "description": "CMS Highlighter Chrome extension — matcher engine and tools",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node tools/test_assertions.js && node tools/test_real.js"
+  }
+}

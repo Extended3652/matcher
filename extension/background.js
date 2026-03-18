@@ -226,8 +226,14 @@ function addWordToCategory(text, catIndex, tab) {
     if (isExact) word = "//" + word;
     if (isCS) word = "CS:" + word;
 
-    // Check for duplicate
-    if (dict.categories[catIndex].words.includes(word)) {
+    // Check for duplicate. For case-insensitive adds, compare lowercased so
+    // "Amazon" and "amazon" are not stored as separate redundant entries.
+    const dupCheck = isCS ? word : word.toLowerCase();
+    const existing = dict.categories[catIndex].words;
+    const isDup = isCS
+      ? existing.includes(word)
+      : existing.some(w => w.toLowerCase() === dupCheck);
+    if (isDup) {
       notifyTab(tab, `"${text}" already in ${dict.categories[catIndex].name}`);
       return;
     }
@@ -236,6 +242,11 @@ function addWordToCategory(text, catIndex, tab) {
     insertAlphabetically(dict.categories[catIndex].words, word);
 
     chrome.storage.local.set({ dictionary: dict }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("CMS Highlighter: failed to save word:", chrome.runtime.lastError.message);
+        notifyTab(tab, `Failed to save "${text}" — storage error`);
+        return;
+      }
       notifyTab(
         tab,
         `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
@@ -267,6 +278,11 @@ function addWordToIgnoreList(text, tab) {
     insertAlphabetically(dict.ignoreList, text);
 
     chrome.storage.local.set({ dictionary: dict }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("CMS Highlighter: failed to save ignore word:", chrome.runtime.lastError.message);
+        notifyTab(tab, `Failed to save "${text}" — storage error`);
+        return;
+      }
       notifyTab(tab, `Added "${text}" to Ignore List`);
       if (tab && tab.id) {
         chrome.tabs.sendMessage(tab.id, { action: "refresh" });

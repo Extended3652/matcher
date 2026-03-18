@@ -1221,6 +1221,13 @@
     const file = e.target.files[0];
     if (!file) return;
 
+    const MAX_IMPORT_BYTES = 10 * 1024 * 1024; // 10 MB guard
+    if (file.size > MAX_IMPORT_BYTES) {
+      showMsg("File too large to import (max 10 MB)", "error");
+      importFileEl.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       try {

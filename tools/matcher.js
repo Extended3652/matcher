@@ -15,6 +15,7 @@
 //   *etailer          → wildcard (start)
 //   sh*t              → wildcard (middle, stays in-token)
 //   took * days       → wildcard (middle with spaces, spans words)
+//   test\*file        → escaped wildcard (literal *)
 // =============================================================================
 
 "use strict";
@@ -109,9 +110,11 @@ function globToRegexFragment(pattern) {
         if (prev === " " && next === " ") {
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
-          result += "[^\\s\\p{P}]*";
+          // Bound match length to prevent worst-case backtracking.
+          result += "[^\\s\\p{P}]{0,30}";
         } else {
-          result += "[^\\s\\p{P}]*?";
+          // Middle wildcard: bounded.
+          result += "[^\\s\\p{P}]{0,30}";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
@@ -193,6 +196,9 @@ function compileCategory(category) {
         regexes.push({ re: new RegExp(combined, flags), metas });
       } catch (e) {
         console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
+        if (Array.isArray(category._warnings)) {
+          category._warnings.push(`"${category.name}" (${key}): ${e.message}`);
+        }
       }
     }
   }
@@ -210,27 +216,36 @@ function compileCategory(category) {
 
 // ---------------------------------------------------------------------------
 // STEP 5: Compile everything — categories + ignore list.
+// Returns { ignoreCompiled, compiledCategories, warnings }.
+// warnings is an array of human-readable strings for any patterns that failed
+// to compile (so callers can surface them to the user rather than losing data silently).
 // ---------------------------------------------------------------------------
 function compileAll(config) {
+  const warnings = [];
+
   let ignoreCompiled = null;
   if (config.ignoreList && config.ignoreList.length > 0) {
-    ignoreCompiled = compileCategory({
+    const ignoreProxy = {
       id: "__ignore__",
       name: "Ignore List",
       color: null,
       fColor: null,
       words: config.ignoreList,
-    });
+      _warnings: warnings,
+    };
+    ignoreCompiled = compileCategory(ignoreProxy);
   }
 
   const compiledCategories = [];
   for (const cat of config.categories) {
     if (cat.enabled === false) continue;
+    cat._warnings = warnings; // let compileCategory append failures here
     const compiled = compileCategory(cat);
+    delete cat._warnings;     // clean up temp property
     if (compiled) compiledCategories.push(compiled);
   }
 
-  return { ignoreCompiled, compiledCategories };
+  return { ignoreCompiled, compiledCategories, warnings };
 }
 
 function pickBetterOverlap(a, b) {
@@ -338,8 +353,24 @@ function findMatches(text, compiled) {
   // --- Remove matches that overlap with any Ignore range ---
   let filtered = allMatches;
   if (ignoreRanges.length > 0) {
+    // Sort once by start so we can binary-search per match (O(M log M + N log M))
+    // instead of the naive O(N*M) .some() scan.
+    ignoreRanges.sort((a, b) => a.start - b.start);
+
     filtered = allMatches.filter(match => {
-      return !ignoreRanges.some(ig => match.start < ig.end && match.end > ig.start);
+      // Binary search: find first ignore range whose .end > match.start
+      let lo = 0, hi = ignoreRanges.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (ignoreRanges[mid].end <= match.start) lo = mid + 1;
+        else hi = mid;
+      }
+      // Scan forward while ig.start < match.end; any such range overlaps.
+      for (let i = lo; i < ignoreRanges.length; i++) {
+        if (ignoreRanges[i].start >= match.end) break;
+        return false;
+      }
+      return true;
     });
   }
 
@@ -388,10 +419,16 @@ function findMatches(text, compiled) {
 }
 
 // ---------------------------------------------------------------------------
-// Export for Node.js
+// Export (UMD: Node.js or browser)
 // ---------------------------------------------------------------------------
-module.exports = {
+const MatcherEngine = {
   parseWordEntry,
   compileAll,
   findMatches,
 };
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = MatcherEngine;
+} else if (typeof window !== "undefined") {
+  window.MatcherEngine = MatcherEngine;
+}

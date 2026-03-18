@@ -13,11 +13,13 @@
 //   //walmart         → exact (whole-word), case-insensitive
 //   CS:walmart        → substring, case-SENSITIVE
 //   CS://walmart      → exact, case-SENSITIVE
+//   LIT:test*         → literal (treat * and ? as regular characters)
 //   " elf "           → boundary spaces (require whitespace/punctuation around)
 //   amazon*           → wildcard (end)
 //   *etailer          → wildcard (start)
 //   sh*t              → wildcard (middle, stays in-token)
 //   took * days       → wildcard (middle with spaces, spans words)
+//   test\*file        → escaped wildcard (literal *)
 // =============================================================================
 
 (function() {

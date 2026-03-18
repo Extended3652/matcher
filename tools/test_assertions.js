@@ -442,6 +442,46 @@ assertMatches(
 );
 
 // =============================================================================
+// 12. Escaped wildcards (\* and \?)
+// =============================================================================
+section("12. Escaped wildcards");
+
+assertMatches(
+  "\\* matches a literal asterisk in text",
+  cfg([cat("a", "Esc", "#00f", ["test\\*file"])]),
+  "The file is test*file.txt",
+  [{ cat:"Esc", word:"test*file" }]
+);
+
+assertMatches(
+  "\\* does NOT match when literal asterisk is absent",
+  cfg([cat("a", "Esc", "#00f", ["test\\*file"])]),
+  "The file is testfile.txt",
+  []
+);
+
+assertMatches(
+  "\\* does NOT act as a wildcard",
+  cfg([cat("a", "Esc", "#00f", ["test\\*file"])]),
+  "The file is testXfile.txt",
+  []
+);
+
+assertMatches(
+  "\\? matches a literal question mark",
+  cfg([cat("a", "Esc", "#00f", ["what\\?"])]),
+  "He asked what? and left",
+  [{ cat:"Esc", word:"what?" }]
+);
+
+assertMatches(
+  "unescaped * still acts as wildcard",
+  cfg([cat("a", "Wild", "#f80", ["test*file"])]),
+  "The file is testXYZfile",
+  [{ cat:"Wild", word:"testXYZfile" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));

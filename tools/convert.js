@@ -156,9 +156,7 @@ for (const id of backup.order) {
   });
 }
 
-// --- Write output ---
-const outputPath = path.join(path.dirname(path.resolve(__dirname || '.', inputPath)), 'converted_dictionary.json');
-// Actually write next to this script for simplicity
+// --- Write output (next to this script) ---
 const outFile = path.join(__dirname || '.', 'converted_dictionary.json');
 fs.writeFileSync(outFile, JSON.stringify(output, null, 2), 'utf8');
 

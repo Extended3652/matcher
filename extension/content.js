@@ -79,9 +79,26 @@
     const p = String(pattern || "").trim();
     if (!p) return null;
 
-    // Escape regex specials, then convert * and ? to wildcards
-    const escaped = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-    const rx = "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+    // Walk char-by-char to support \* and \? escapes (literal * and ?)
+    // and convert unescaped * / ? to bounded wildcards.
+    let rx = "^";
+    const chars = [...p];
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i];
+      if (ch === "\\" && chars[i + 1] !== undefined) {
+        // Escaped: treat next char literally
+        rx += chars[i + 1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        i++;
+      } else if (ch === "*") {
+        // Bound to 60 chars to prevent worst-case backtracking on client names
+        rx += "[\\s\\S]{0,60}";
+      } else if (ch === "?") {
+        rx += "[\\s\\S]";
+      } else {
+        rx += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+    }
+    rx += "$";
 
     try {
       return new RegExp(rx, "i");
