@@ -114,10 +114,10 @@
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
             // Bound match length to MAX_SPAN_LEN to prevent worst-case backtracking.
-            result += "[^\\s\\p{P}]{0,120}";
+            result += "[^\\s\\p{P}]{0,30}";
           } else {
             // Middle wildcard: greedy bounded to avoid catastrophic backtracking.
-            result += "[^\\s\\p{P}]{0,120}";
+            result += "[^\\s\\p{P}]{0,30}";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
