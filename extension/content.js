@@ -23,6 +23,7 @@
   let clientRules = [];
   let categoryStyleByName = new Map();
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
+  let _cachedMentionKey = null;     // "<clientName>|<contentType>" — skip recompile when unchanged
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -185,22 +186,53 @@
   }
 
   function applyClientHighlight() {
-    clearClientHighlight();
-    currentMentionMatcher = null; // reset on every call
+    // Single querySelector for the whole function — used for both clearing and styling.
+    const el = getCmsClientNameEl();
 
-    if (isBlockedRoute()) return;
-    if (!globalEnabled) return;
+    // Clear any existing client highlight inline (avoids a second querySelector).
+    if (el && el.hasAttribute("data-client-hl")) {
+      el.style.backgroundColor = "";
+      el.style.color = "";
+      el.style.borderRadius = "";
+      el.style.padding = "";
+      el.removeAttribute("data-client-hl");
+    }
 
-    const clientName = getCmsClientName();
-    if (!clientName) return;
+    if (isBlockedRoute() || !globalEnabled) {
+      currentMentionMatcher = null;
+      _cachedMentionKey = null;
+      return;
+    }
+
+    if (!el) {
+      currentMentionMatcher = null;
+      _cachedMentionKey = null;
+      return;
+    }
+
+    const clientName = String(el.textContent || "").trim();
+    if (!clientName) {
+      currentMentionMatcher = null;
+      _cachedMentionKey = null;
+      return;
+    }
 
     const rule = findClientRule(clientName);
-    if (!rule) return;
-
-    // Build mention matcher regardless of whether a header colour applies.
-    currentMentionMatcher = buildMentionMatcher(rule);
+    if (!rule) {
+      currentMentionMatcher = null;
+      _cachedMentionKey = null;
+      return;
+    }
 
     const type = getCmsContentType();
+
+    // Only recompile the mention matcher when the client or content type has changed.
+    const mentionKey = clientName + "|" + type;
+    if (mentionKey !== _cachedMentionKey) {
+      currentMentionMatcher = buildMentionMatcher(rule);
+      _cachedMentionKey = mentionKey;
+    }
+
     const catName = pickClientCategory(rule, type);
 
     // blank means no highlight
@@ -208,9 +240,6 @@
 
     const style = categoryStyleByName.get(catName);
     if (!style) return;
-
-    const el = getCmsClientNameEl();
-    if (!el) return;
 
     el.style.backgroundColor = style.color;
     el.style.color = style.fColor;
@@ -373,6 +402,34 @@
     }
   }
 
+  // Chunked variant for the initial full-page scan.
+  // Yields between 200-node batches via requestIdleCallback (or setTimeout) so
+  // the browser can render and respond to input between chunks.
+  function highlightAllChunked(root) {
+    if (isBlockedRoute()) return;
+    if (!globalEnabled) return;
+    if (!compiledMatcher) return;
+
+    const nodes = getTextNodes(root || document.body);
+    if (nodes.length === 0) return;
+
+    let i = 0;
+    function next() {
+      const end = Math.min(i + 200, nodes.length);
+      while (i < end) {
+        highlightTextNode(nodes[i++]);
+      }
+      if (i < nodes.length) {
+        if (typeof requestIdleCallback !== "undefined") {
+          requestIdleCallback(next, { timeout: 500 });
+        } else {
+          setTimeout(next, 0);
+        }
+      }
+    }
+    next();
+  }
+
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
@@ -515,7 +572,7 @@
 
       if (globalEnabled) {
         applyClientHighlight(); // sets currentMentionMatcher before highlighting
-        highlightAll(document.body);
+        highlightAllChunked(document.body);
         startObserver();
       }
     });
@@ -530,6 +587,7 @@
     switch (message.action) {
       case "toggle":
         globalEnabled = !!message.enabled;
+        _cachedMentionKey = null; // force mention matcher rebuild with new enabled state
         if (globalEnabled) {
           removeAllHighlights();
           applyClientHighlight(); // sets currentMentionMatcher before highlighting
@@ -543,6 +601,7 @@
         break;
 
       case "refresh":
+        _cachedMentionKey = null; // force mention matcher rebuild after dictionary change
         chrome.storage.local.get(["dictionary", "enabled"], (result) => {
           globalEnabled = result.enabled !== false;
 
@@ -564,7 +623,7 @@
           removeAllHighlights();
           if (globalEnabled) {
             applyClientHighlight(); // sets currentMentionMatcher before highlighting
-            highlightAll(document.body);
+            highlightAllChunked(document.body);
             startObserver();
           } else {
             stopObserver();

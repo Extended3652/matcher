@@ -381,6 +381,12 @@
 
     if (filtered.length === 0) return [];
 
+    // Fast path: single match needs no sort or overlap resolution.
+    if (filtered.length === 1) {
+      const m = filtered[0];
+      return [{ start: m.start, end: m.end, categoryName: m.name, color: m.color, fColor: m.fColor }];
+    }
+
     // Sort by start, then longer first (helps reduce churn)
     filtered.sort((a, b) => {
       if (a.start !== b.start) return a.start - b.start;
