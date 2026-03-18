@@ -289,6 +289,18 @@
           if (!name) return;
           newClientPattern.value = name;
           syncAddClientFormFromPattern();
+
+          // If the client is already known, expand its card in the list
+          const key = patternKey(name);
+          const existing = findClientByKey(key);
+          if (existing) {
+            openClientKey = key;
+            renderClients();
+            setTimeout(() => {
+              const el = clientListBodyEl.querySelector(".client-body.open");
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }, 50);
+          }
         });
       }
     });
