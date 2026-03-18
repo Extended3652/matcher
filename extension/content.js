@@ -22,6 +22,7 @@
   // Client highlight config
   let clientRules = [];
   let categoryStyleByName = new Map();
+  let currentMentionMatcher = null; // compiled mention patterns for the current page's client
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -94,7 +95,7 @@
     if (!name) return null;
 
     for (const r of clientRules) {
-      if (!r || !r._rx) continue;
+      if (!r || !(r._rx instanceof RegExp)) continue;
       if (r._rx.test(name)) return r;
     }
     return null;
@@ -114,6 +115,45 @@
     return rule.defaultCategory || null;
   }
 
+  function buildMentionMatcher(rule) {
+    if (!rule || !rule.mentionCategory) return null;
+    const catStyle = categoryStyleByName.get(rule.mentionCategory);
+    if (!catStyle) return null;
+
+    const patterns = [];
+    if (rule.includePatternInContent !== false && rule.pattern) {
+      patterns.push(rule.pattern);
+    }
+    (rule.aliases || []).forEach(a => {
+      const s = String(a || "").trim();
+      if (s) patterns.push(s);
+    });
+    if (!patterns.length) return null;
+
+    // Compile aliases as category words via MatcherEngine so wildcards + exact syntax work.
+    const fakeCat = {
+      id: "__mention__",
+      name: rule.mentionCategory,
+      color: catStyle.color,
+      fColor: catStyle.fColor,
+      words: patterns,
+      enabled: true,
+    };
+    const compiled = MatcherEngine.compileAll({ categories: [fakeCat], ignoreList: [] });
+    return (compiled.compiledCategories.length > 0) ? compiled : null;
+  }
+
+  // Merge category matches and mention matches into one sorted array.
+  // Category matches take priority — mention matches that overlap are dropped.
+  function mergeMatches(catMatches, mentionMatches) {
+    if (!mentionMatches || !mentionMatches.length) return catMatches;
+    if (!catMatches || !catMatches.length) return mentionMatches;
+    const filtered = mentionMatches.filter(mm =>
+      !catMatches.some(cm => cm.start < mm.end && cm.end > mm.start)
+    );
+    return [...catMatches, ...filtered].sort((a, b) => a.start - b.start);
+  }
+
   function clearClientHighlight() {
     const el = getCmsClientNameEl();
     if (!el) return;
@@ -129,6 +169,7 @@
 
   function applyClientHighlight() {
     clearClientHighlight();
+    currentMentionMatcher = null; // reset on every call
 
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -138,6 +179,9 @@
 
     const rule = findClientRule(clientName);
     if (!rule) return;
+
+    // Build mention matcher regardless of whether a header colour applies.
+    currentMentionMatcher = buildMentionMatcher(rule);
 
     const type = getCmsContentType();
     const catName = pickClientCategory(rule, type);
@@ -172,6 +216,12 @@
 
           // Skip nodes inside our own highlights
           if (node.parentElement.classList.contains(HL_CLASS)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // Skip the navbar — highlighted exclusively by applyClientHighlight()
+          // so that category spans don't override the block-level background colour.
+          if (node.parentElement.closest(".navbar-inner")) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -282,7 +332,12 @@
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
 
-    const matches = sanitizeMatches(findMatchesForText(text), text.length);
+    const catMatches = sanitizeMatches(findMatchesForText(text), text.length);
+    const mentionMatches = currentMentionMatcher
+      ? sanitizeMatches(MatcherEngine.findMatches(text, currentMentionMatcher) || [], text.length)
+      : [];
+
+    const matches = mergeMatches(catMatches, mentionMatches);
     if (matches.length === 0) return;
 
     renderMatchesIntoNode(textNode, matches);
@@ -367,6 +422,10 @@
         const batch = pendingNodes;
         pendingNodes = [];
 
+        // Update client highlight + mention matcher FIRST so new nodes are
+        // highlighted with the correct patterns for the current client.
+        applyClientHighlight();
+
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
@@ -380,9 +439,6 @@
             highlightTextNode(item.node);
           }
         }
-
-        // Also update the client-name highlight when the header changes
-        applyClientHighlight();
       }, 80);
     });
 
@@ -430,8 +486,8 @@
       categoryStyleByName = buildCategoryStyleMap(dict);
       clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
       for (const r of clientRules) {
-        // Compile once; keep cached regex across re-inits for the same pattern.
-        if (!r._rx) r._rx = globToRegex(r.pattern);
+        // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
+        r._rx = globToRegex(r.pattern);
       }
 
       console.log(
@@ -441,8 +497,8 @@
       );
 
       if (globalEnabled) {
+        applyClientHighlight(); // sets currentMentionMatcher before highlighting
         highlightAll(document.body);
-        applyClientHighlight();
         startObserver();
       }
     });
@@ -459,8 +515,8 @@
         globalEnabled = !!message.enabled;
         if (globalEnabled) {
           removeAllHighlights();
+          applyClientHighlight(); // sets currentMentionMatcher before highlighting
           highlightAll(document.body);
-          applyClientHighlight();
           startObserver();
         } else {
           stopObserver();
@@ -483,15 +539,15 @@
             categoryStyleByName = buildCategoryStyleMap(dict);
             clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
             for (const r of clientRules) {
-              // Compile once; keep cached regex across refreshes for the same pattern.
-              if (!r._rx) r._rx = globToRegex(r.pattern);
+              // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
+              r._rx = globToRegex(r.pattern);
             }
           }
 
           removeAllHighlights();
           if (globalEnabled) {
+            applyClientHighlight(); // sets currentMentionMatcher before highlighting
             highlightAll(document.body);
-            applyClientHighlight();
             startObserver();
           } else {
             stopObserver();

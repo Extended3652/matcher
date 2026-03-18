@@ -375,7 +375,15 @@
   }
 
   function saveDictionary() {
-    chrome.storage.local.set({ dictionary: currentDict }, () => {
+    // Strip cached _rx (RegExp) from client objects before persisting.
+    // Chrome serialises RegExp as {}, which breaks the instanceof check in content.js.
+    const clients = (currentDict.clients || []).map(c => {
+      const copy = Object.assign({}, c);
+      delete copy._rx;
+      return copy;
+    });
+    const dict = Object.assign({}, currentDict, { clients });
+    chrome.storage.local.set({ dictionary: dict }, () => {
       updateStats();
     });
   }
