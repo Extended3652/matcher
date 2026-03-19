@@ -37,7 +37,7 @@
       font-size: 13px;
       font-family: inherit;
     }
-    input[type="text"] { width: 300px; }
+    input[type="text"] { width: 100%; max-width: 300px; }
     textarea { width: 100%; min-height: 200px; font-family: monospace; font-size: 12px; resize: vertical; }
 
     button {
@@ -49,6 +49,10 @@
       font-size: 13px;
     }
     button:hover { background: #f0f0f0; }
+    input[type="text"]:focus, textarea:focus, select:focus, button:focus-visible {
+      outline: 2px solid #3498db;
+      outline-offset: 1px;
+    }
     button.primary { background: #3498db; color: #fff; border-color: #2980b9; }
     button.primary:hover { background: #2980b9; }
     button.danger { background: #e74c3c; color: #fff; border-color: #c0392b; }
@@ -77,7 +81,7 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
-    .new-cat-form input[type="text"] { width: 200px; }
+    .new-cat-form input[type="text"] { width: 100%; max-width: 200px; }
 
     #importFile { display: none; }
 
@@ -152,7 +156,8 @@
     }
 
     .clients-topbar input[type="text"] {
-      width: 320px;
+      width: 100%;
+      max-width: 320px;
     }
 
     .client-add-box {
@@ -258,15 +263,7 @@
       white-space: nowrap;
     }
 
-    .client-summary {
-      font-size: 12px;
-      color: #777;
-      flex: 0 0 auto;
-      max-width: 360px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    /* .client-summary moved to end of stylesheet (Change 2: Summary pills) */
 
     .client-actions {
       display: flex;
@@ -398,8 +395,150 @@
     .col-arrow  { width: 14px; flex: 0 0 auto; }
     .col-swatch { width: 14px; flex: 0 0 auto; }
     .col-pattern { flex: 1; }
-    .col-summary { flex: 0 0 auto; max-width: 360px; }
+    .col-summary { flex: 1 1 auto; }
     .col-actions { flex: 0 0 auto; width: 90px; text-align: right; }
+
+    /* Change 9: Category section scroll */
+    #catEditors { max-height: 600px; overflow-y: auto; }
+
+    /* Change 3: Search input wrapper */
+    .search-input-wrap {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-width: 320px;
+    }
+    .search-input-wrap .search-icon {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #999;
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .search-input-wrap input[type="text"] {
+      padding-left: 28px;
+      width: 100%;
+      max-width: none;
+    }
+
+    /* Change 4: Drag handles */
+    .cat-drag-handle {
+      cursor: grab;
+      color: #bbb;
+      font-size: 14px;
+      letter-spacing: 2px;
+      padding: 0 2px;
+      user-select: none;
+      flex: 0 0 auto;
+    }
+    .cat-drag-handle:hover { color: #888; }
+    .cat-drag-handle:active { cursor: grabbing; }
+
+    /* Change 5: Empty states */
+    .empty-state {
+      padding: 32px 16px;
+      text-align: center;
+    }
+    .empty-state-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+    .empty-state-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    .empty-state-hint {
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* Change 1: Collapsible form sections */
+    .client-add-grid .form-section-toggle {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #aaa;
+      padding: 6px 0 2px;
+      border-top: 1px solid #e8e8e8;
+      margin-top: 2px;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .client-add-grid .form-section-toggle:hover { color: #777; }
+    .form-section-arrow {
+      font-size: 10px;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .form-section-toggle:not(.collapsed) .form-section-arrow {
+      transform: rotate(90deg);
+    }
+    .client-add-grid .form-section-body {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: end;
+    }
+    .client-add-grid .form-section-body .field.full {
+      grid-column: 1 / -1;
+    }
+    .client-add-grid .form-section-body .field.checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .client-add-grid .form-section-body .field.checkbox-field label {
+      margin-bottom: 0;
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* Change 2: Summary pills */
+    .client-summary {
+      font-size: 12px;
+      flex: 1 1 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      align-items: center;
+    }
+    .summary-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid rgba(0,0,0,0.15);
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    /* Change 7: Alias chips */
+    .alias-chips-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .alias-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #e8f4fd;
+      color: #2980b9;
+      border: 1px solid #bee5eb;
+    }
   </style>
 </head>
 <body>
@@ -447,48 +586,51 @@
           <select id="newClientReview"></select>
         </div>
 
-        <div class="form-section-label">Per-type overrides</div>
-
-        <div class="field">
-          <label>Image override</label>
-          <select id="newClientImage"></select>
+        <div class="form-section-toggle collapsed" data-section="overrides">
+          <span class="form-section-arrow">&#9654;</span>
+          Per-type overrides
+        </div>
+        <div class="form-section-body" data-section="overrides" style="display:none;">
+          <div class="field">
+            <label>Image override</label>
+            <select id="newClientImage"></select>
+          </div>
+          <div class="field">
+            <label>Profile override</label>
+            <select id="newClientProfile"></select>
+          </div>
+          <div class="field">
+            <label>Question override</label>
+            <select id="newClientQuestion"></select>
+          </div>
+          <div class="field">
+            <label>Comment override</label>
+            <select id="newClientComment"></select>
+          </div>
         </div>
 
-        <div class="field">
-          <label>Profile override</label>
-          <select id="newClientProfile"></select>
+        <div class="form-section-toggle collapsed" data-section="mentions">
+          <span class="form-section-arrow">&#9654;</span>
+          Mentions &amp; metadata
         </div>
-
-        <div class="field">
-          <label>Question override</label>
-          <select id="newClientQuestion"></select>
-        </div>
-
-        <div class="field">
-          <label>Comment override</label>
-          <select id="newClientComment"></select>
-        </div>
-
-        <div class="form-section-label">Mentions &amp; metadata</div>
-
-        <div class="field">
-          <label>Text mentions</label>
-          <select id="newClientMentionCategory"></select>
-        </div>
-
-        <div class="field">
-          <label>Notes</label>
-          <input type="text" id="newClientNote" placeholder="Internal note">
-        </div>
-
-        <div class="field full">
-          <label>Aliases (one per line)</label>
-          <textarea id="newClientAliases" placeholder="Enter aliases, one per line"></textarea>
-        </div>
-
-        <div class="field full checkbox-field">
-          <input type="checkbox" id="newClientIncludePatternInContent" checked>
-          <label for="newClientIncludePatternInContent">Also treat the client name as a mention in content (in addition to aliases)</label>
+        <div class="form-section-body" data-section="mentions" style="display:none;">
+          <div class="field">
+            <label>Text mentions</label>
+            <select id="newClientMentionCategory"></select>
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <input type="text" id="newClientNote" placeholder="Internal note">
+          </div>
+          <div class="field full">
+            <label>Aliases (one per line)</label>
+            <textarea id="newClientAliases" placeholder="Enter aliases, one per line"></textarea>
+            <div id="aliasChipsPreview" class="alias-chips-preview"></div>
+          </div>
+          <div class="field full checkbox-field">
+            <input type="checkbox" id="newClientIncludePatternInContent" checked>
+            <label for="newClientIncludePatternInContent">Also treat the client name as a mention in content (in addition to aliases)</label>
+          </div>
         </div>
       </div>
 
@@ -500,7 +642,10 @@
     </div>
 
     <div class="clients-topbar">
-      <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
+      <div class="search-input-wrap">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
+      </div>
       <span id="clientShowing" class="muted"></span>
     </div>
 

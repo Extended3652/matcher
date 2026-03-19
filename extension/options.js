@@ -60,6 +60,42 @@
     clientAddToggleEl.addEventListener("click", () => toggleAddBox());
   }
 
+  // Form section collapsible toggles (Change 1)
+  document.querySelectorAll(".form-section-toggle").forEach(function(toggle) {
+    toggle.addEventListener("click", function() {
+      var section = toggle.getAttribute("data-section");
+      var body = document.querySelector('.form-section-body[data-section="' + section + '"]');
+      if (!body) return;
+      var isCollapsed = toggle.classList.contains("collapsed");
+      if (isCollapsed) {
+        toggle.classList.remove("collapsed");
+        body.style.display = "";
+      } else {
+        toggle.classList.add("collapsed");
+        body.style.display = "none";
+      }
+    });
+  });
+
+  // Alias chips preview (Change 7)
+  const aliasChipsPreviewEl = document.getElementById("aliasChipsPreview");
+
+  function renderAliasChips() {
+    if (!aliasChipsPreviewEl || !newClientAliases) return;
+    var aliases = normalizeAliasesFromTextarea(newClientAliases.value);
+    if (aliases.length === 0) {
+      aliasChipsPreviewEl.innerHTML = "";
+      return;
+    }
+    aliasChipsPreviewEl.innerHTML = aliases.map(function(a) {
+      return '<span class="alias-chip">' + escHtml(a) + '</span>';
+    }).join("");
+  }
+
+  if (newClientAliases) {
+    newClientAliases.addEventListener("input", renderAliasChips);
+  }
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -99,6 +135,10 @@
 
   function safeStr(v) {
     return String(v || "");
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   function normalizeAliasesFromTextarea(txt) {
@@ -280,6 +320,45 @@
     return "Review: " + def + " | Img: " + img + " | Pro: " + pro + " | Q: " + q + " | Cmt: " + cmt + extra;
   }
 
+  function formatSummaryHtml(entry) {
+    var stMap = getCategoryStyleByName();
+    var pills = [];
+
+    function pill(label, catName) {
+      var st = catName ? stMap.get(catName) : null;
+      var bg = st ? (st.color || "#e0e0e0") : "#f0f0f0";
+      var fg = st ? (st.fColor || "#333") : "#777";
+      var border = st ? "rgba(0,0,0,0.15)" : "#ddd";
+      return '<span class="summary-pill" style="background:' + bg + ";color:" + fg + ";border-color:" + border + '">' + escHtml(label) + "</span>";
+    }
+
+    if (entry.defaultCategory) pills.push(pill("Review: " + entry.defaultCategory, entry.defaultCategory));
+    var o = entry.overrides || {};
+    if (o.Image) pills.push(pill("Img: " + o.Image, o.Image));
+    if (o.Profile) pills.push(pill("Pro: " + o.Profile, o.Profile));
+    if (o.Question) pills.push(pill("Q: " + o.Question, o.Question));
+    if (o.Comment) pills.push(pill("Cmt: " + o.Comment, o.Comment));
+
+    var aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
+    var mCat = entry.mentionCategory || null;
+    if (mCat || aliases.length > 0) {
+      var mLabel = "Mentions: " + (mCat || "-") + " (" + aliases.length + ")";
+      pills.push(pill(mLabel, mCat));
+    }
+    if (entry.includePatternInContent === false) {
+      pills.push(pill("no pattern", null));
+    }
+    if (entry.note && String(entry.note).trim()) {
+      pills.push(pill("note", null));
+    }
+
+    if (pills.length === 0) {
+      return '<span class="summary-pill" style="background:#f0f0f0;color:#999;border-color:#ddd">no config</span>';
+    }
+
+    return pills.join(" ");
+  }
+
   function pickHeaderSwatchCategory(entry) {
     const o = entry.overrides || {};
     if (o.Image) return o.Image;
@@ -435,6 +514,8 @@
       if (newClientNote) newClientNote.value = "";
       btnAddClient.textContent = "Add Client";
     }
+
+    renderAliasChips();
   }
 
   function getClientFilter() {
@@ -502,18 +583,22 @@
 
     if (all.length === 0) {
       const div = document.createElement("div");
-      div.style.padding = "12px";
-      div.style.color = "#888";
-      div.textContent = "No client entries yet. Add one above.";
+      div.className = "empty-state";
+      div.innerHTML =
+        '<div class="empty-state-icon">&#128203;</div>' +
+        '<div class="empty-state-text">No client entries yet</div>' +
+        '<div class="empty-state-hint">Use the "Add / Edit Client" form above to create your first entry.</div>';
       clientListBodyEl.appendChild(div);
       return;
     }
 
     if (list.length === 0) {
       const div = document.createElement("div");
-      div.style.padding = "12px";
-      div.style.color = "#888";
-      div.textContent = "No matches. Clear the search box to see all clients.";
+      div.className = "empty-state";
+      div.innerHTML =
+        '<div class="empty-state-icon">&#128270;</div>' +
+        '<div class="empty-state-text">No matches found</div>' +
+        '<div class="empty-state-hint">Clear the search box to see all clients.</div>';
       clientListBodyEl.appendChild(div);
       return;
     }
@@ -544,7 +629,7 @@
 
       const summary = document.createElement("span");
       summary.className = "client-summary";
-      summary.textContent = formatSummary(entry);
+      summary.innerHTML = formatSummaryHtml(entry);
       header.appendChild(summary);
 
       const actions = document.createElement("div");
@@ -704,7 +789,7 @@
       body.appendChild(mentionsWrap);
 
       function refreshHeaderVisuals() {
-        summary.textContent = formatSummary(entry);
+        summary.innerHTML = formatSummaryHtml(entry);
 
         const catName = pickHeaderSwatchCategory(entry);
         if (!catName) {
@@ -797,25 +882,25 @@
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
         saveDictionary();
-        summary.textContent = formatSummary(entry);
+        summary.innerHTML = formatSummaryHtml(entry);
       });
 
       tAliases.addEventListener("change", () => {
         entry.aliases = normalizeAliasesFromTextarea(tAliases.value);
         saveDictionary();
-        summary.textContent = formatSummary(entry);
+        summary.innerHTML = formatSummaryHtml(entry);
       });
 
       cbInc.addEventListener("change", () => {
         entry.includePatternInContent = !!cbInc.checked;
         saveDictionary();
-        summary.textContent = formatSummary(entry);
+        summary.innerHTML = formatSummaryHtml(entry);
       });
 
       iNote.addEventListener("change", () => {
         entry.note = (iNote.value || "").trim();
         saveDictionary();
-        summary.textContent = formatSummary(entry);
+        summary.innerHTML = formatSummaryHtml(entry);
       });
 
       header.addEventListener("click", () => {
@@ -920,6 +1005,11 @@
       const igArrow = document.createElement("span");
       igArrow.className = "cat-arrow";
       igArrow.textContent = "\u25b6";
+      const igDragHandle = document.createElement("span");
+      igDragHandle.className = "cat-drag-handle";
+      igDragHandle.textContent = "\u22EE\u22EE";
+      igHeader.appendChild(igDragHandle);
+
       igHeader.appendChild(igArrow);
 
       const igSwatch = document.createElement("span");
@@ -997,6 +1087,11 @@
       // Header
       const header = document.createElement("div");
       header.className = "cat-header";
+
+      const catDragHandle = document.createElement("span");
+      catDragHandle.className = "cat-drag-handle";
+      catDragHandle.textContent = "\u22EE\u22EE";
+      header.appendChild(catDragHandle);
 
       const arrow = document.createElement("span");
       arrow.className = "cat-arrow";
