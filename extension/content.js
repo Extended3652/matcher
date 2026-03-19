@@ -66,14 +66,23 @@
   }
 
   function getCmsContentType() {
-    const el = document.querySelector(".navbar-inner .decisionAreaLabel");
+    const el = document.querySelector("span.decisionAreaLabel");
     const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
 
     if (raw.includes("image")) return "Image";
     if (raw.includes("profile")) return "Profile";
-    if (raw.includes("question")) return "Question";
+    if (raw.includes("question") || raw.includes("answer")) return "Question";
     if (raw.includes("comment")) return "Comment";
     return "Default";
+  }
+
+  function getCmsContentRoot() {
+    return (
+      document.querySelector("div.ugcAndDetails") ||
+      document.querySelector("dd.moderatable") ||
+      document.querySelector("div.read") ||
+      document.body
+    );
   }
 
   function globToRegex(pattern) {
@@ -509,7 +518,7 @@
 
           if (item.type === "element") {
             if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
+              highlightAll(getCmsContentRoot());
             } else {
               highlightAll(item.node);
             }
@@ -576,7 +585,7 @@
 
       if (globalEnabled) {
         applyClientHighlight(); // sets currentMentionMatcher before highlighting
-        highlightAllChunked(document.body);
+        highlightAllChunked(getCmsContentRoot());
         startObserver();
       }
     });
@@ -595,7 +604,7 @@
         if (globalEnabled) {
           removeAllHighlights();
           applyClientHighlight(); // sets currentMentionMatcher before highlighting
-          highlightAll(document.body);
+          highlightAll(getCmsContentRoot());
           startObserver();
         } else {
           stopObserver();
@@ -627,7 +636,7 @@
           removeAllHighlights();
           if (globalEnabled) {
             applyClientHighlight(); // sets currentMentionMatcher before highlighting
-            highlightAllChunked(document.body);
+            highlightAllChunked(getCmsContentRoot());
             startObserver();
           } else {
             stopObserver();
@@ -674,7 +683,7 @@
       removeAllHighlights();
       if (globalEnabled) {
         applyClientHighlight();
-        highlightAllChunked(document.body);
+        highlightAllChunked(getCmsContentRoot());
         startObserver();
       } else {
         stopObserver();
