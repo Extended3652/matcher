@@ -509,9 +509,9 @@
 
           if (item.type === "element") {
             if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
+              highlightAllChunked(document.body);
             } else {
-              highlightAll(item.node);
+              highlightAllChunked(item.node);
             }
           } else {
             highlightTextNode(item.node);

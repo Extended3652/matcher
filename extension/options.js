@@ -557,27 +557,22 @@
     currentDict.clients = clients;
   }
 
-  function renderClients() {
+  // Rebuild only the list body (cards + counts). Skips repopulating the Add
+  // Client dropdowns and re-syncing the form — safe to call on every search
+  // keystroke because those elements are unaffected by filtering.
+  function renderClientListBody() {
     if (!currentDict) return;
-
-    // Reset per-render option-HTML cache so selects reflect current categories.
-    _selectOptionsHtml = {};
 
     ensureClientsSorted();
 
     const all = currentDict.clients || [];
     const list = filteredClients();
+    const styleByName = getCategoryStyleByName();
 
     clientCountEl.textContent = "(" + all.length + " entries)";
     clientShowingEl.textContent = (list.length === all.length)
       ? ("Showing " + list.length)
       : ("Showing " + list.length + " of " + all.length);
-
-    const styleByName = getCategoryStyleByName();
-    populateAddClientDropdowns(styleByName);
-
-    // After dropdowns are repopulated, re-sync the add/edit form selection
-    syncAddClientFormFromPattern();
 
     clientListBodyEl.innerHTML = "";
 
@@ -923,10 +918,28 @@
     });
   }
 
+  // Full render: repopulates Add Client dropdowns + rebuilds list body.
+  // Call this whenever the dictionary or category list changes.
+  function renderClients() {
+    if (!currentDict) return;
+
+    // Reset per-render option-HTML cache so selects reflect current categories.
+    _selectOptionsHtml = {};
+
+    const styleByName = getCategoryStyleByName();
+    populateAddClientDropdowns(styleByName);
+
+    // After dropdowns are repopulated, re-sync the add/edit form selection.
+    syncAddClientFormFromPattern();
+
+    renderClientListBody();
+  }
+
   let _clientSearchTimer = null;
   clientSearchEl.addEventListener("input", () => {
     clearTimeout(_clientSearchTimer);
-    _clientSearchTimer = setTimeout(renderClients, 80);
+    // Only rebuild the list body — skip repopulating the Add Client dropdowns.
+    _clientSearchTimer = setTimeout(renderClientListBody, 80);
   });
 
   if (newClientPattern) {
