@@ -115,7 +115,7 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            // Bound match length to MAX_SPAN_LEN to prevent worst-case backtracking.
+            // Bound to 30 chars to prevent worst-case backtracking on leading/trailing wildcards.
             result += "[^\\s\\p{P}]{0,30}";
           } else {
             // Middle wildcard: greedy bounded to avoid catastrophic backtracking.

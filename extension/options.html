@@ -544,7 +544,7 @@
 <body>
   <h1>CMS Highlighter - Dictionary Editor</h1>
 
-  <div id="msg" class="msg"></div>
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
 
   <!-- Import / Export -->
   <div class="section">
@@ -644,9 +644,9 @@
     <div class="clients-topbar">
       <div class="search-input-wrap">
         <span class="search-icon">&#128269;</span>
-        <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)">
+        <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)" aria-label="Search clients by pattern, note, or aliases">
       </div>
-      <span id="clientShowing" class="muted"></span>
+      <span id="clientShowing" class="muted" aria-live="polite"></span>
     </div>
 
     <div class="client-list">
