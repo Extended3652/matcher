@@ -74,7 +74,7 @@
     const clients = currentDict.clients || [];
     for (const c of clients) {
       // Compile once and cache on the object; avoids re-compiling on every call.
-      if (!c._rx) c._rx = clientGlobToRegex(c.pattern);
+      if (!(c._rx instanceof RegExp)) c._rx = clientGlobToRegex(c.pattern);
       if (c._rx && c._rx.test(name)) return c;
     }
     return null;
