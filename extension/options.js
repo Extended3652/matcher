@@ -290,16 +290,21 @@
           newClientPattern.value = name;
           syncAddClientFormFromPattern();
 
-          // If the client is already known, expand its card in the list
+          // If the client is already known, expand its card in-place (no re-render)
           const key = patternKey(name);
           const existing = findClientByKey(key);
           if (existing) {
             openClientKey = key;
-            renderClients();
-            setTimeout(() => {
-              const el = clientListBodyEl.querySelector(".client-body.open");
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            }, 50);
+            const card = clientListBodyEl.querySelector(`[data-client-key="${CSS.escape(key)}"]`);
+            if (card) {
+              const body = card.querySelector(".client-body");
+              const arrow = card.querySelector(".cat-arrow");
+              if (body) body.classList.add("open");
+              if (arrow) arrow.classList.add("open");
+              setTimeout(() => {
+                if (body) body.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }, 50);
+            }
           }
         });
       }
@@ -501,6 +506,7 @@
 
       const card = document.createElement("div");
       card.className = "client-card";
+      card.dataset.clientKey = key;
 
       const header = document.createElement("div");
       header.className = "client-header";
