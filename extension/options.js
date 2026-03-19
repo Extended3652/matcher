@@ -964,12 +964,10 @@
     entry.pattern = pattern;
     entry.defaultCategory = newClientReview.value ? newClientReview.value : null;
     entry.overrides = {};
-    entry.overrides.Image = newClientImage.value || null;
-    entry.overrides.Profile = newClientProfile.value || null;
-    entry.overrides.Question = newClientQuestion.value || null;
-    if (newClientComment) {
-      entry.overrides.Comment = newClientComment.value || null;
-    }
+    if (newClientImage.value) entry.overrides.Image = newClientImage.value;
+    if (newClientProfile.value) entry.overrides.Profile = newClientProfile.value;
+    if (newClientQuestion.value) entry.overrides.Question = newClientQuestion.value;
+    if (newClientComment && newClientComment.value) entry.overrides.Comment = newClientComment.value;
     entry.mentionCategory = (newClientMentionCategory && newClientMentionCategory.value)
       ? newClientMentionCategory.value
       : null;
@@ -1371,6 +1369,10 @@
       } catch (err) {
         showMsg("Invalid JSON file: " + err.message, "error");
       }
+      importFileEl.value = "";
+    };
+    reader.onerror = () => {
+      showMsg("Could not read file — check file permissions", "error");
       importFileEl.value = "";
     };
     reader.readAsText(file);

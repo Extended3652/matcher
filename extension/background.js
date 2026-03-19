@@ -252,7 +252,9 @@ function addWordToCategory(text, catIndex, tab) {
         `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
       );
       if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          void chrome.runtime.lastError; // swallow "no receiver" errors
+        });
       }
       buildContextMenu();
     });
@@ -285,7 +287,9 @@ function addWordToIgnoreList(text, tab) {
       }
       notifyTab(tab, `Added "${text}" to Ignore List`);
       if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" });
+        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+          void chrome.runtime.lastError; // swallow "no receiver" errors
+        });
       }
       buildContextMenu();
     });
