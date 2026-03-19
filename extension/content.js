@@ -427,7 +427,11 @@
         }
       }
     }
-    next();
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(next, { timeout: 500 });
+    } else {
+      setTimeout(next, 0);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -651,6 +655,34 @@
     }
 
     return true;
+  });
+
+  // Re-highlight immediately whenever the dictionary or enabled flag changes in
+  // storage (e.g. user saves from the options page). This mirrors the logic in
+  // the "refresh" message handler so that all storage-write paths are covered.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (!changes.dictionary && !changes.enabled) return;
+
+    _cachedMentionKey = null;
+    chrome.storage.local.get(["dictionary", "enabled"], (result) => {
+      globalEnabled = result.enabled !== false;
+      const dict = result.dictionary;
+      if (dict && dict.categories) {
+        compiledMatcher = MatcherEngine.compileAll(dict);
+        categoryStyleByName = buildCategoryStyleMap(dict);
+        clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+        for (const r of clientRules) r._rx = globToRegex(r.pattern);
+      }
+      removeAllHighlights();
+      if (globalEnabled) {
+        applyClientHighlight();
+        highlightAllChunked(document.body);
+        startObserver();
+      } else {
+        stopObserver();
+      }
+    });
   });
 
   if (document.readyState === "loading") {

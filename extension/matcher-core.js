@@ -113,7 +113,15 @@
           // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
           // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
           if (prev === " " && next === " ") {
+            // Middle "token" wildcard: "took * days" → exactly one non-space run
             result += "[^\\s]+";
+          } else if (isFirst && next === " ") {
+            // Leading wildcard before a space: "* and easy" → must match ≥1 word char
+            // so the pattern can't fire on " and easy" alone (space can't satisfy *)
+            result += "[^\\s\\p{P}]{1,30}";
+          } else if (isLast && prev === " ") {
+            // Trailing wildcard after a space: "easy *" → must match ≥1 word char
+            result += "[^\\s\\p{P}]{1,30}";
           } else if (isFirst || isLast) {
             // Bound match length to MAX_SPAN_LEN to prevent worst-case backtracking.
             result += "[^\\s\\p{P}]{0,30}";
