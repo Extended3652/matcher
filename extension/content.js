@@ -528,6 +528,10 @@
       observer.disconnect();
       observer = null;
     }
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
     pendingNodes = [];
   }
 

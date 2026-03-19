@@ -507,8 +507,10 @@
   // ---------------------------------------------------------------------------
   // Search filters (top)
   // ---------------------------------------------------------------------------
+  let searchDebounce = null;
   popupSearch.addEventListener("input", () => {
-    renderAll();
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(renderAll, 150);
   });
 
   function matchesGlobalSearchForIgnore(q) {

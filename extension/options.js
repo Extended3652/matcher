@@ -878,13 +878,14 @@
 
     entry.pattern = pattern;
     entry.defaultCategory = newClientReview.value ? newClientReview.value : null;
-    entry.overrides = {};
-    entry.overrides.Image = newClientImage.value || null;
-    entry.overrides.Profile = newClientProfile.value || null;
-    entry.overrides.Question = newClientQuestion.value || null;
+    const ov = entry.overrides || {};
+    ov.Image = newClientImage.value || null;
+    ov.Profile = newClientProfile.value || null;
+    ov.Question = newClientQuestion.value || null;
     if (newClientComment) {
-      entry.overrides.Comment = newClientComment.value || null;
+      ov.Comment = newClientComment.value || null;
     }
+    entry.overrides = ov;
     entry.mentionCategory = (newClientMentionCategory && newClientMentionCategory.value)
       ? newClientMentionCategory.value
       : null;
