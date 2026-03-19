@@ -855,12 +855,12 @@
 
     entry.pattern = pattern;
     entry.defaultCategory = newClientReview.value ? newClientReview.value : null;
-    if (!entry.overrides) entry.overrides = {};
-    entry.overrides.Image = newClientImage.value || undefined;
-    entry.overrides.Profile = newClientProfile.value || undefined;
-    entry.overrides.Question = newClientQuestion.value || undefined;
+    entry.overrides = {};
+    entry.overrides.Image = newClientImage.value || null;
+    entry.overrides.Profile = newClientProfile.value || null;
+    entry.overrides.Question = newClientQuestion.value || null;
     if (newClientComment) {
-      entry.overrides.Comment = newClientComment.value || undefined;
+      entry.overrides.Comment = newClientComment.value || null;
     }
     entry.mentionCategory = (newClientMentionCategory && newClientMentionCategory.value)
       ? newClientMentionCategory.value
