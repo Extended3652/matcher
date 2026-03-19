@@ -354,6 +354,52 @@
       color: #888;
       font-size: 12px;
     }
+
+    /* Collapsible Add Client toggle */
+    .client-add-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 4px 0 8px;
+      user-select: none;
+    }
+    .client-add-toggle:hover .client-add-toggle-label { color: #111; }
+    .client-add-arrow {
+      font-size: 12px;
+      color: #999;
+      transition: transform 0.2s;
+      width: 14px;
+      text-align: center;
+    }
+    .client-add-arrow.open { transform: rotate(90deg); }
+    .client-add-toggle-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #444;
+    }
+    .client-add-content { display: none; }
+    .client-add-content.open { display: block; }
+
+    /* Form section labels (replaces bare <hr> dividers) */
+    .client-add-grid .form-section-label {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #aaa;
+      padding: 6px 0 2px;
+      border-top: 1px solid #e8e8e8;
+      margin-top: 2px;
+    }
+
+    /* Client list header column alignment */
+    .col-arrow  { width: 14px; flex: 0 0 auto; }
+    .col-swatch { width: 14px; flex: 0 0 auto; }
+    .col-pattern { flex: 1; }
+    .col-summary { flex: 0 0 auto; max-width: 360px; }
+    .col-actions { flex: 0 0 auto; width: 90px; text-align: right; }
   </style>
 </head>
 <body>
@@ -385,7 +431,11 @@
     </p>
 
     <div class="client-add-box">
-      <h3 style="margin: 0 0 8px; color: #444;">Add Client</h3>
+      <div class="client-add-toggle" id="clientAddToggle">
+        <span class="client-add-arrow" id="clientAddArrow">&#9654;</span>
+        <span class="client-add-toggle-label">Add / Edit Client</span>
+      </div>
+      <div class="client-add-content" id="clientAddContent">
       <div class="client-add-grid">
         <div class="field">
           <label>Client Name (as it appears in the CMS)</label>
@@ -397,7 +447,7 @@
           <select id="newClientReview"></select>
         </div>
 
-        <hr class="form-divider">
+        <div class="form-section-label">Per-type overrides</div>
 
         <div class="field">
           <label>Image override</label>
@@ -419,7 +469,7 @@
           <select id="newClientComment"></select>
         </div>
 
-        <hr class="form-divider">
+        <div class="form-section-label">Mentions &amp; metadata</div>
 
         <div class="field">
           <label>Text mentions</label>
@@ -443,9 +493,10 @@
       </div>
 
       <div class="client-add-actions">
-        <button class="primary" id="btnAddClient">Save Client</button>
+        <button class="primary" id="btnAddClient">Add Client</button>
         <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
       </div>
+      </div><!-- /.client-add-content -->
     </div>
 
     <div class="clients-topbar">
@@ -455,11 +506,11 @@
 
     <div class="client-list">
       <div class="client-list-header">
-        <span style="width:14px;"></span>
-        <span style="width:14px;"></span>
-        <span style="flex: 1;">Client pattern</span>
-        <span style="width: 360px;">Summary</span>
-        <span style="width: 90px; text-align:right;">Remove</span>
+        <span class="col-arrow"></span>
+        <span class="col-swatch"></span>
+        <span class="col-pattern">Client pattern</span>
+        <span class="col-summary">Summary</span>
+        <span class="col-actions">Remove</span>
       </div>
       <div id="clientListBody" class="client-list-body"></div>
     </div>

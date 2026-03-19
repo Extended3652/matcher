@@ -40,6 +40,26 @@
   const newClientIncludePatternInContent = document.getElementById("newClientIncludePatternInContent");
   const newClientNote = document.getElementById("newClientNote");
 
+  // Add Client collapsible toggle elements
+  const clientAddToggleEl  = document.getElementById("clientAddToggle");
+  const clientAddArrowEl   = document.getElementById("clientAddArrow");
+  const clientAddContentEl = document.getElementById("clientAddContent");
+
+  function toggleAddBox(forceOpen) {
+    addBoxOpen = (forceOpen !== undefined) ? forceOpen : !addBoxOpen;
+    if (addBoxOpen) {
+      clientAddContentEl.classList.add("open");
+      clientAddArrowEl.classList.add("open");
+    } else {
+      clientAddContentEl.classList.remove("open");
+      clientAddArrowEl.classList.remove("open");
+    }
+  }
+
+  if (clientAddToggleEl) {
+    clientAddToggleEl.addEventListener("click", () => toggleAddBox());
+  }
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -47,6 +67,7 @@
   let importMode  = null; // "ht" or "json"
   let openClientKey = null; // keeps one client expanded
   let addFormAutofilled = false; // only auto-fill from CMS once per load
+  let addBoxOpen = false; // tracks collapsed state of Add Client form
 
   // ---------------------------------------------------------------------------
   // Per-render caches (invalidated on every dict mutation)
@@ -289,6 +310,7 @@
           if (!name) return;
           newClientPattern.value = name;
           syncAddClientFormFromPattern();
+          toggleAddBox(true);
 
           // If the client is already known, expand its card in the list
           const key = patternKey(name);
@@ -398,7 +420,7 @@
       if (newClientNote) {
         newClientNote.value = existing.note ? String(existing.note) : "";
       }
-      btnAddClient.textContent = "Save Client";
+      btnAddClient.textContent = "Update Client";
     } else {
       // New client: keep pattern, reset the rest
       newClientReview.value = "";
