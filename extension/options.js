@@ -137,9 +137,10 @@
     // Fallback: read the name cached by popup.js (popup stores it before opening
     // options, because the options tab becomes active and the CMS tab is no
     // longer queryable as the "active" tab).
+    // cb(name, fromLive) — fromLive=true only when the active tab responded.
     function fallbackToStorage() {
       chrome.storage.local.get(["_lastCmsClientName"], (r) => {
-        cb(normalizePattern((r && r._lastCmsClientName) || ""));
+        cb(normalizePattern((r && r._lastCmsClientName) || ""), false);
       });
     }
 
@@ -158,7 +159,7 @@
           fallbackToStorage();
           return;
         }
-        cb(normalizePattern(res.clientName));
+        cb(normalizePattern(res.clientName), true);
       });
     });
   }
@@ -306,11 +307,11 @@
       // Auto-fill the Add Client form once from the active CMS tab, if available.
       if (!addFormAutofilled) {
         addFormAutofilled = true;
-        guessActiveCmsClientName((name) => {
+        guessActiveCmsClientName((name, fromLive) => {
           if (!name) return;
           newClientPattern.value = name;
           syncAddClientFormFromPattern();
-          toggleAddBox(true);
+          if (fromLive) toggleAddBox(true);
 
           // If the client is already known, expand its card in the list
           const key = patternKey(name);
