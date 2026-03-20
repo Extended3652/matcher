@@ -301,11 +301,9 @@ function addWordToIgnoreList(text, tab) {
 // ---------------------------------------------------------------------------
 function notifyTab(tab, message) {
   if (tab && tab.id) {
-    try {
-      chrome.tabs.sendMessage(tab.id, { action: "notify", message: message });
-    } catch (e) {
-      // ignore
-    }
+    chrome.tabs.sendMessage(tab.id, { action: "notify", message: message }, () => {
+      void chrome.runtime.lastError; // swallow "no receiver" errors
+    });
   }
 }
 
