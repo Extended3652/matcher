@@ -335,12 +335,8 @@
       modal.appendChild(footer);
 
       function cleanup() {
-        try {
-          document.removeEventListener("keydown", onKeyDown, true);
-        } catch (_) {}
-        try {
-          overlay.remove();
-        } catch (_) {}
+        document.removeEventListener("keydown", onKeyDown, true);
+        overlay.remove();
       }
 
       function onKeyDown(e) {
@@ -372,7 +368,9 @@
   function refreshActiveTab() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch(() => {});
+        chrome.tabs.sendMessage(tabs[0].id, { action: "refresh" }).catch((e) => {
+          console.debug("CMS Highlighter: refresh message failed:", e.message);
+        });
       }
     });
   }
@@ -432,7 +430,8 @@
             }
           );
         })
-        .catch(() => {
+        .catch((e) => {
+          console.debug("CMS Highlighter: failed to load default dictionary:", e.message);
           // Fallback: show empty structure so the UI still works
           currentDict = { ignoreList: [], categories: [], clients: [] };
           renderAll();
@@ -453,7 +452,9 @@
         chrome.tabs.sendMessage(tabs[0].id, {
           action: "toggle",
           enabled: enabled,
-        }).catch(() => {});
+        }).catch((e) => {
+          console.debug("CMS Highlighter: toggle message failed:", e.message);
+        });
       }
     });
 

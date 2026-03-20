@@ -115,10 +115,13 @@
           if (prev === " " && next === " ") {
             result += "[^\\s]+";
           } else if (isFirst || isLast) {
-            // Bound to 30 chars to prevent worst-case backtracking on leading/trailing wildcards.
+            // Bound to 30 chars (non-whitespace, non-punctuation) to prevent
+            // catastrophic backtracking. Tighter than content.js's client-name
+            // globToRegex ({0,60} over [\s\S]) because word wildcards should
+            // stay within token boundaries.
             result += "[^\\s\\p{P}]{0,30}";
           } else {
-            // Middle wildcard: greedy bounded to avoid catastrophic backtracking.
+            // Middle wildcard: same bounded class as leading/trailing.
             result += "[^\\s\\p{P}]{0,30}";
           }
         } else if (ch === "?") {
@@ -245,8 +248,12 @@
     for (const cat of config.categories) {
       if (cat.enabled === false) continue;
       cat._warnings = warnings; // let compileCategory append failures here
-      const compiled = compileCategory(cat);
-      delete cat._warnings;     // clean up temp property
+      let compiled;
+      try {
+        compiled = compileCategory(cat);
+      } finally {
+        delete cat._warnings;   // clean up temp property even if compileCategory throws
+      }
       if (compiled) compiledCategories.push(compiled);
     }
 

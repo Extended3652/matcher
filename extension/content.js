@@ -100,7 +100,9 @@
         rx += chars[i + 1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         i++;
       } else if (ch === "*") {
-        // Bound to 60 chars to prevent worst-case backtracking on client names
+        // Bound to 60 chars: client names can contain spaces and punctuation
+        // (e.g. "Acme Corp — US"), so we use [\s\S] and a wider bound than
+        // matcher-core's word wildcards (which use {0,30} and exclude \s\p{P}).
         rx += "[\\s\\S]{0,60}";
       } else if (ch === "?") {
         rx += "[\\s\\S]";
@@ -528,7 +530,9 @@
 
           if (item.type === "element") {
             if (item.node === document.body || item.node === document.documentElement) {
-highlightAllChunked(getCmsContentRoot())
+              // Body-level mutation: re-highlight from the CMS content root
+              // (not item.node) so we scope to the actual content area.
+              highlightAllChunked(getCmsContentRoot());
             } else {
               highlightAllChunked(item.node);
             }
@@ -555,6 +559,23 @@ highlightAllChunked(getCmsContentRoot())
   }
 
   // ---------------------------------------------------------------------------
+  // Recompile dictionary — single function used by init, message handlers,
+  // and storage.onChanged to avoid duplicating compilation logic.
+  // ---------------------------------------------------------------------------
+  function recompileDictionary(dict) {
+    compiledMatcher = MatcherEngine.compileAll(dict);
+    if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
+      console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
+    }
+    categoryStyleByName = buildCategoryStyleMap(dict);
+    clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
+    for (const r of clientRules) {
+      // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
+      r._rx = globToRegex(r.pattern);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Init + messages
   // ---------------------------------------------------------------------------
   function init() {
@@ -575,19 +596,7 @@ highlightAllChunked(getCmsContentRoot())
         return;
       }
 
-      // Compile matcher
-      compiledMatcher = MatcherEngine.compileAll(dict);
-      if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
-        console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
-      }
-
-      // Build client highlight maps
-      categoryStyleByName = buildCategoryStyleMap(dict);
-      clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-      for (const r of clientRules) {
-        // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
-        r._rx = globToRegex(r.pattern);
-      }
+      recompileDictionary(dict);
 
       if (globalEnabled) {
         applyClientHighlight(); // sets currentMentionMatcher before highlighting
@@ -626,17 +635,7 @@ highlightAllChunked(getCmsContentRoot())
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            compiledMatcher = MatcherEngine.compileAll(dict);
-            if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
-              console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
-            }
-
-            categoryStyleByName = buildCategoryStyleMap(dict);
-            clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-            for (const r of clientRules) {
-              // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
-              r._rx = globToRegex(r.pattern);
-            }
+            recompileDictionary(dict);
           }
 
           removeAllHighlights();
@@ -681,10 +680,7 @@ highlightAllChunked(getCmsContentRoot())
       globalEnabled = result.enabled !== false;
       const dict = result.dictionary;
       if (dict && dict.categories) {
-        compiledMatcher = MatcherEngine.compileAll(dict);
-        categoryStyleByName = buildCategoryStyleMap(dict);
-        clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
-        for (const r of clientRules) r._rx = globToRegex(r.pattern);
+        recompileDictionary(dict);
       }
       removeAllHighlights();
       if (globalEnabled) {

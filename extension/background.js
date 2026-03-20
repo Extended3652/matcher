@@ -145,21 +145,26 @@ function buildContextMenu() {
         contexts: ["selection"],
       });
 
-      // Ignore list
-      safeCreate({
+      // Ignore list — use the callback of the LAST create to clear the
+      // in-progress flag, so a queued rebuild cannot fire removeAll while
+      // earlier safeCreate calls are still being processed.
+      chrome.contextMenus.create({
         id: MENU_IGNORE_ID,
         parentId: MENU_PARENT_ID,
         title: "Add to Ignore List",
         contexts: ["selection"],
+      }, () => {
+        if (chrome.runtime.lastError) {
+          console.debug("CMS Highlighter: last menu item create error:", chrome.runtime.lastError.message);
+        }
+        menuBuildInProgress = false;
+
+        // If another rebuild request came in while we were building, run again once.
+        if (menuBuildQueued) {
+          menuBuildQueued = false;
+          buildContextMenu();
+        }
       });
-
-      menuBuildInProgress = false;
-
-      // If another rebuild request came in while we were building, run again once.
-      if (menuBuildQueued) {
-        menuBuildQueued = false;
-        buildContextMenu();
-      }
     });
   });
 }
