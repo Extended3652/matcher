@@ -482,6 +482,21 @@ assertMatches(
 );
 
 // =============================================================================
+// 13. Plain phrase container beats //exact in lower-priority category
+// =============================================================================
+section("13. Plain phrase container beats //exact (lower-priority cat)");
+
+assertMatches(
+  "//exact in lower-priority cat should NOT beat plain phrase container from higher-priority cat",
+  cfg([
+    cat("ph", "Phrase", "#0f0", ["no longer have receipt for service"]),  // priority 0
+    cat("wd", "Word",   "#f00", ["//service"]),                           // priority 1
+  ]),
+  "I no longer have receipt for service",
+  [{ cat: "Phrase", word: "no longer have receipt for service" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));

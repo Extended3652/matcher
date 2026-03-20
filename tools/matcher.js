@@ -267,14 +267,14 @@ function pickBetterOverlap(a, b) {
   if (aContainsB && !bContainsA) {
     const aExact = !!a.isExact;
     const bExact = !!b.isExact;
-    if (bExact && !aExact) return b;
+    if (bExact && !aExact && !!a.isWildcard) return b;
     return a;
   }
 
   if (bContainsA && !aContainsB) {
     const aExact = !!a.isExact;
     const bExact = !!b.isExact;
-    if (aExact && !bExact) return a;
+    if (aExact && !bExact && !!b.isWildcard) return a;
     return b;
   }
 
