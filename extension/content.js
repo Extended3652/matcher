@@ -536,7 +536,6 @@
   // ---------------------------------------------------------------------------
   function init() {
     if (isBlockedRoute()) {
-      console.log("CMS Highlighter: disabled on this route");
       return;
     }
 
@@ -550,7 +549,6 @@
 
       const dict = result.dictionary;
       if (!dict || !dict.categories) {
-        console.log("CMS Highlighter: no dictionary found in storage.");
         return;
       }
 
@@ -567,12 +565,6 @@
         // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
         r._rx = globToRegex(r.pattern);
       }
-
-      console.log(
-        "CMS Highlighter: compiled " +
-        (compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0) +
-        " categories, " + clientRules.length + " client rules"
-      );
 
       if (globalEnabled) {
         applyClientHighlight(); // sets currentMentionMatcher before highlighting

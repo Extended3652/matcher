@@ -303,7 +303,6 @@ function notifyTab(tab, message) {
       // ignore
     }
   }
-  console.log("CMS Highlighter:", message);
 }
 
 // ---------------------------------------------------------------------------
