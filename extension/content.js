@@ -26,6 +26,30 @@
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
   let _cachedMentionKey = null;     // "<clientName>|<contentType>" — skip recompile when unchanged
   let _highlightCount = 0;          // cached count of highlight spans on the page
+  let _dictFingerprint = null;      // lightweight hash to skip redundant recompilation
+
+  // ---------------------------------------------------------------------------
+  // Lightweight dictionary fingerprint — avoids JSON.stringify on huge dicts.
+  // Captures category count, word counts, ignore-list length, client count,
+  // and first+last word per category so any real edit changes the fingerprint.
+  // ---------------------------------------------------------------------------
+  function computeDictFingerprint(dict) {
+    if (!dict || !dict.categories) return "";
+    const parts = [];
+    for (const cat of dict.categories) {
+      const w = cat.words || [];
+      parts.push(cat.name, cat.color, cat.fColor, cat.enabled, w.length,
+                  w[0] || "", w[w.length - 1] || "");
+    }
+    const ig = dict.ignoreList || [];
+    parts.push("IG", ig.length, ig[0] || "", ig[ig.length - 1] || "");
+    const cl = dict.clients || [];
+    parts.push("CL", cl.length);
+    for (const c of cl) {
+      parts.push(c.pattern, c.mentionCategory, c.note, (c.aliases || []).join(","));
+    }
+    return parts.join("|");
+  }
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -439,7 +463,7 @@
 
     let i = 0;
     function next() {
-      const end = Math.min(i + 200, nodes.length);
+      const end = Math.min(i + 500, nodes.length);
       while (i < end) {
         highlightTextNode(nodes[i++]);
       }
@@ -530,21 +554,34 @@
         // highlighted with the correct patterns for the current client.
         applyClientHighlight();
 
-        // Deduplicate: skip nodes whose ancestor is already in the batch,
-        // since highlightAllChunked on the ancestor covers descendants.
-        const elementRoots = [];
+        // Deduplicate: collect element roots and prune descendants in O(n)
+        // by using a Set for identity checks and a single filter pass.
+        const rootSet = new Set();
         for (const item of batch) {
           if (item.type === "element" && item.node && item.node.parentNode) {
-            elementRoots.push(item.node);
+            rootSet.add(item.node);
           }
         }
+
+        // Remove any root whose ancestor is also in the set (O(n * depth))
+        const filteredRoots = [];
+        for (const node of rootSet) {
+          let dominated = false;
+          let p = node.parentNode;
+          while (p) {
+            if (rootSet.has(p)) { dominated = true; break; }
+            p = p.parentNode;
+          }
+          if (!dominated) filteredRoots.push(node);
+        }
+        const filteredSet = new Set(filteredRoots);
 
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
           if (item.type === "element") {
-            // Skip if a parent element is already queued (it will cover this node)
-            if (elementRoots.some(r => r !== item.node && r.contains(item.node))) continue;
+            // Skip if pruned (a parent element covers it)
+            if (!filteredSet.has(item.node)) continue;
             if (item.node === document.body || item.node === document.documentElement) {
               highlightAllChunked(getCmsContentRoot());
             } else {
@@ -552,7 +589,13 @@
             }
           } else {
             // Skip text nodes inside an element that's already queued
-            if (elementRoots.some(r => r.contains(item.node))) continue;
+            let covered = false;
+            let p = item.node.parentNode;
+            while (p) {
+              if (filteredSet.has(p)) { covered = true; break; }
+              p = p.parentNode;
+            }
+            if (covered) continue;
             highlightTextNode(item.node);
           }
         }
@@ -612,6 +655,7 @@
         return;
       }
 
+      _dictFingerprint = computeDictFingerprint(dict);
       recompileDictionary(dict);
 
       if (globalEnabled) {
@@ -701,12 +745,23 @@
       if (changes.enabled) {
         globalEnabled = changes.enabled.newValue !== false;
       }
+
+      let dictChanged = false;
       if (changes.dictionary) {
         const dict = changes.dictionary.newValue;
         if (dict && dict.categories) {
-          recompileDictionary(dict);
+          const fp = computeDictFingerprint(dict);
+          if (fp !== _dictFingerprint) {
+            _dictFingerprint = fp;
+            recompileDictionary(dict);
+            dictChanged = true;
+          }
         }
       }
+
+      // Only re-highlight if the dictionary actually changed or enabled was toggled
+      if (!dictChanged && !changes.enabled) return;
+
       removeAllHighlights();
       if (globalEnabled) {
         applyClientHighlight();
