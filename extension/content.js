@@ -432,6 +432,13 @@
     const nodes = getTextNodes(root || document.body);
     if (nodes.length === 0) return;
 
+    // Hidden tab: requestIdleCallback never fires and setTimeout is throttled to ≥1 s/chunk
+    // by Chrome. The tab isn't being painted, so running synchronously is free.
+    if (document.hidden) {
+      for (const node of nodes) highlightTextNode(node);
+      return;
+    }
+
     let i = 0;
     function next() {
       const end = Math.min(i + 200, nodes.length);
@@ -610,7 +617,7 @@ highlightAllChunked(getCmsContentRoot())
         if (globalEnabled) {
           removeAllHighlights();
           applyClientHighlight(); // sets currentMentionMatcher before highlighting
-          highlightAllChunked(getCmsContentRoot());
+          highlightAll(getCmsContentRoot());
           startObserver();
         } else {
           stopObserver();
