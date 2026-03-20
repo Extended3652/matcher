@@ -175,9 +175,17 @@
   function mergeMatches(catMatches, mentionMatches) {
     if (!mentionMatches || !mentionMatches.length) return catMatches;
     if (!catMatches || !catMatches.length) return mentionMatches;
-    const filtered = mentionMatches.filter(mm =>
-      !catMatches.some(cm => cm.start < mm.end && cm.end > mm.start)
-    );
+    // Binary search: find first catMatch whose end > mm.start, then check overlap.
+    // O(n log m) instead of O(n*m).
+    const filtered = mentionMatches.filter(mm => {
+      let lo = 0, hi = catMatches.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (catMatches[mid].end <= mm.start) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo >= catMatches.length || catMatches[lo].start >= mm.end;
+    });
     return [...catMatches, ...filtered].sort((a, b) => a.start - b.start);
   }
 
@@ -262,6 +270,8 @@
   // ---------------------------------------------------------------------------
   function getTextNodes(root) {
     const nodes = [];
+    // Cache once per call — avoids repeated .closest() traversal for every text node.
+    const navbarInner = document.querySelector(".navbar-inner");
     const walker = document.createTreeWalker(
       root,
       NodeFilter.SHOW_TEXT,
@@ -276,7 +286,7 @@
 
           // Skip the navbar — highlighted exclusively by applyClientHighlight()
           // so that category spans don't override the block-level background colour.
-          if (node.parentElement.closest(".navbar-inner")) {
+          if (navbarInner && navbarInner.contains(node.parentElement)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -600,7 +610,7 @@ highlightAllChunked(getCmsContentRoot())
         if (globalEnabled) {
           removeAllHighlights();
           applyClientHighlight(); // sets currentMentionMatcher before highlighting
-          highlightAll(getCmsContentRoot());
+          highlightAllChunked(getCmsContentRoot());
           startObserver();
         } else {
           stopObserver();
