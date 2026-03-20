@@ -875,19 +875,16 @@
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
                 // do nothing, keep original
-                renderAll();
                 setOpenEditor("ignore");
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
               saveDictionary();
-              renderAll();
               setOpenEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
               saveDictionary();
-              renderAll();
               setOpenEditor("ignore");
             }
           );
@@ -918,8 +915,6 @@
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
-        renderIgnoreWords();
-        renderAll();
         setOpenEditor("ignore");
       }
 
@@ -1122,19 +1117,16 @@
             (nextRaw) => {
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                renderAll();
                 setOpenEditor(key);
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
               saveDictionary();
-              renderAll();
               setOpenEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
               saveDictionary();
-              renderAll();
               setOpenEditor(key);
             }
           );
@@ -1165,8 +1157,6 @@
         addBtn.textContent = "Added";
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
-        renderWordList();
-        renderAll();
         setOpenEditor(key);
       }
 

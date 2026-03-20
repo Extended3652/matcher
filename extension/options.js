@@ -104,6 +104,7 @@
   let openClientKey = null; // keeps one client expanded
   let addFormAutofilled = false; // only auto-fill from CMS once per load
   let addBoxOpen = false; // tracks collapsed state of Add Client form
+  let _clientsSortDirty = true; // skip re-sort when order hasn't changed
 
   // ---------------------------------------------------------------------------
   // Per-render caches (invalidated on every dict mutation)
@@ -114,6 +115,7 @@
   function invalidateCaches() {
     _catStyleMap        = null;
     _clientKeyMap       = null;
+    _clientsSortDirty   = true;
     _selectOptionsHtml  = {};  // colour changes must not be served from stale cache
     // Clear per-client lowercase caches so filteredClients() stays accurate.
     const clients = currentDict && currentDict.clients;
@@ -552,9 +554,11 @@
   }
 
   function ensureClientsSorted() {
+    if (!_clientsSortDirty) return;
     const clients = currentDict.clients || [];
     clients.sort((a, b) => safeStr(a.pattern).toLowerCase().localeCompare(safeStr(b.pattern).toLowerCase()));
     currentDict.clients = clients;
+    _clientsSortDirty = false;
   }
 
   // Rebuild only the list body (cards + counts). Skips repopulating the Add
@@ -823,6 +827,7 @@
         entry.pattern = newPat;
         patSpan.textContent = newPat;
         openClientKey = patternKey(newPat);
+        _clientsSortDirty = true;
         commitClientListRefresh();
       });
 
@@ -909,8 +914,8 @@
   function renderClients() {
     if (!currentDict) return;
 
-    // Reset per-render option-HTML cache so selects reflect current categories.
-    _selectOptionsHtml = {};
+    // _selectOptionsHtml is already invalidated by invalidateCaches() (called
+    // from saveDictionary and load), so no blanket reset is needed here.
 
     const styleByName = getCategoryStyleByName();
     populateAddClientDropdowns(styleByName);
@@ -925,7 +930,7 @@
   clientSearchEl.addEventListener("input", () => {
     clearTimeout(_clientSearchTimer);
     // Only rebuild the list body — skip repopulating the Add Client dropdowns.
-    _clientSearchTimer = setTimeout(renderClientListBody, 80);
+    _clientSearchTimer = setTimeout(renderClientListBody, 150);
   });
 
   // Delegated click handler for client list (header expand/collapse + delete)
@@ -943,7 +948,8 @@
           currentDict.clients.splice(idx, 1);
           saveDictionary('Removed client "' + safeStr(entry.pattern) + '"');
           if (openClientKey === key) openClientKey = null;
-          renderClients();
+          _clientsSortDirty = true;
+          renderClientListBody();
         }
       }
       return;
@@ -954,8 +960,27 @@
       const key = card && card.getAttribute("data-key");
       if (!key) return;
       const isOpen = (openClientKey === key);
-      openClientKey = isOpen ? null : key;
-      renderClients();
+
+      // Close the currently-open card (if any) via DOM class toggle
+      if (openClientKey) {
+        const prev = clientListBodyEl.querySelector('.client-card[data-key="' + openClientKey + '"]');
+        if (prev) {
+          const prevBody = prev.querySelector(".client-body");
+          const prevArrow = prev.querySelector(".client-arrow");
+          if (prevBody) prevBody.classList.remove("open");
+          if (prevArrow) prevArrow.classList.remove("open");
+        }
+      }
+
+      if (isOpen) {
+        openClientKey = null;
+      } else {
+        openClientKey = key;
+        const body = card.querySelector(".client-body");
+        const arrow = card.querySelector(".client-arrow");
+        if (body) body.classList.add("open");
+        if (arrow) arrow.classList.add("open");
+      }
     }
   });
 
@@ -1007,6 +1032,7 @@
       : true;
     entry.note = newClientNote ? (newClientNote.value || "").trim() : "";
 
+    _clientsSortDirty = true;
     ensureClientsSorted();
     openClientKey = patternKey(pattern);
 

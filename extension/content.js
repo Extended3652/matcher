@@ -10,6 +10,7 @@
 
   const MARKER_ATTR = "data-cms-hl-processed";
   const HL_CLASS = "cms-hl";
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
 
   // Guardrails
   const MAX_SPAN_LEN = 120;
@@ -294,8 +295,7 @@
           }
 
           // Skip script/style/textarea/input/select/noscript
-          const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
+          if (SKIP_TAGS.has(node.parentElement.tagName || "")) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -484,7 +484,7 @@
   // ---------------------------------------------------------------------------
   let observer = null;
   let debounceTimer = null;
-  let pendingNodes = [];
+  let pendingNodes = new Map(); // key: DOM node, value: "element" | "text"
 
   function startObserver() {
     if (observer) return;
@@ -502,7 +502,9 @@
             !node.parentElement.classList.contains(HL_CLASS) &&
             !node.parentElement.hasAttribute(MARKER_ATTR)
           ) {
-            pendingNodes.push({ type: "text", node });
+            // Use Map for deduplication — same node mutated multiple times
+            // before debounce fires is only processed once.
+            pendingNodes.set(node, "text");
           }
           continue;
         }
@@ -510,10 +512,12 @@
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
-            pendingNodes.push({ type: "element", node });
+            // "element" supersedes "text" — element processing covers subtree
+            pendingNodes.set(node, "element");
           } else if (node.nodeType === Node.TEXT_NODE) {
             if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
-              pendingNodes.push({ type: "text", node });
+              // Only set "text" if this node isn't already queued as "element"
+              if (!pendingNodes.has(node)) pendingNodes.set(node, "text");
             }
           }
         }
@@ -522,25 +526,28 @@
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const batch = pendingNodes;
-        pendingNodes = [];
+        pendingNodes = new Map();
 
         // Update client highlight + mention matcher FIRST so new nodes are
         // highlighted with the correct patterns for the current client.
         applyClientHighlight();
 
-        for (const item of batch) {
-          if (!item.node || !item.node.parentNode) continue;
+        for (const [node, type] of batch) {
+          if (!node || !node.parentNode) continue;
 
-          if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
+          if (type === "element") {
+            // Skip elements already fully processed by a prior batch entry
+            if (node.hasAttribute && node.hasAttribute(MARKER_ATTR)) continue;
+
+            if (node === document.body || node === document.documentElement) {
               // Body-level mutation: re-highlight from the CMS content root
-              // (not item.node) so we scope to the actual content area.
+              // (not node) so we scope to the actual content area.
               highlightAllChunked(getCmsContentRoot());
             } else {
-              highlightAllChunked(item.node);
+              highlightAllChunked(node);
             }
           } else {
-            highlightTextNode(item.node);
+            highlightTextNode(node);
           }
         }
       }, 80);

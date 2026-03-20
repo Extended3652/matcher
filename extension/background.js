@@ -231,11 +231,11 @@ function addWordToCategory(text, catIndex, tab) {
 
     // Check for duplicate. For case-insensitive adds, compare lowercased so
     // "Amazon" and "amazon" are not stored as separate redundant entries.
-    const dupCheck = isCS ? word : word.toLowerCase();
     const existing = dict.categories[catIndex].words;
-    const isDup = isCS
-      ? existing.includes(word)
-      : existing.some(w => w.toLowerCase() === dupCheck);
+    const dupSet = isCS
+      ? new Set(existing)
+      : new Set(existing.map(w => w.toLowerCase()));
+    const isDup = dupSet.has(isCS ? word : word.toLowerCase());
     if (isDup) {
       notifyTab(tab, `"${text}" already in ${dict.categories[catIndex].name}`);
       return;
