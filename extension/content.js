@@ -24,6 +24,7 @@
   let categoryStyleByName = new Map();
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
   let _cachedMentionKey = null;     // "<clientName>|<contentType>" — skip recompile when unchanged
+  let _highlightCount = 0;          // cached count of highlight spans on the page
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -366,6 +367,7 @@
       span.setAttribute("data-hl-cat", match.categoryName);
       span.textContent = text.slice(match.start, match.end);
       frag.appendChild(span);
+      _highlightCount++;
 
       lastIndex = match.end;
     }
@@ -459,6 +461,7 @@
   // Clear highlights
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
+    _highlightCount = 0;
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
     spans.forEach(span => {
@@ -653,7 +656,7 @@
 
       case "getStats":
         sendResponse({
-          highlights: document.querySelectorAll("." + HL_CLASS).length,
+          highlights: _highlightCount,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
           clients: clientRules.length
@@ -676,21 +679,24 @@
     if (!changes.dictionary && !changes.enabled) return;
 
     _cachedMentionKey = null;
-    chrome.storage.local.get(["dictionary", "enabled"], (result) => {
-      globalEnabled = result.enabled !== false;
-      const dict = result.dictionary;
+
+    if (changes.enabled) {
+      globalEnabled = changes.enabled.newValue !== false;
+    }
+    if (changes.dictionary) {
+      const dict = changes.dictionary.newValue;
       if (dict && dict.categories) {
         recompileDictionary(dict);
       }
-      removeAllHighlights();
-      if (globalEnabled) {
-        applyClientHighlight();
-        highlightAllChunked(getCmsContentRoot());
-        startObserver();
-      } else {
-        stopObserver();
-      }
-    });
+    }
+    removeAllHighlights();
+    if (globalEnabled) {
+      applyClientHighlight();
+      highlightAllChunked(getCmsContentRoot());
+      startObserver();
+    } else {
+      stopObserver();
+    }
   });
 
   if (document.readyState === "loading") {

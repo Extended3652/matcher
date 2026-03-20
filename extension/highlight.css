@@ -5,8 +5,6 @@
 /* Every highlighted span gets this class. The background-color and color
    are set inline per-match (from the category's color config). */
 .cms-hl {
-  padding: 0 1px;
-  margin: 0 1px;
   border-radius: 3px;
   /* Slight outline so highlights are visible even on colored backgrounds */
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);

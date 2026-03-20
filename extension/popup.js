@@ -28,8 +28,11 @@
   let bannerNameCatSelEl = document.getElementById("bannerNameCatSelect");
   const bannerAddBtnEl   = document.getElementById("bannerAddBtn");
 
+  let _bannerAbort = null; // AbortController for banner event listeners
+
   let currentDict = null;
   let detectedClientName = ""; // client name read from the active CMS tab
+  let _lastWrittenClientName = ""; // avoid redundant storage writes
 
   // Use a string key so we can have "ignore" plus normal categories.
   let openEditorKey = null;
@@ -121,17 +124,13 @@
     clientBannerEl.style.display = "block";
     const matched = findMatchedClient(detectedClientName);
 
-    // Remove previous listeners by cloning both selects
-    const newSel = bannerCatSelEl.cloneNode(false);
-    bannerCatSelEl.parentNode.replaceChild(newSel, bannerCatSelEl);
-    bannerCatSelEl = newSel;
+    // Abort previous listeners cleanly instead of cloning DOM nodes
+    if (_bannerAbort) _bannerAbort.abort();
+    _bannerAbort = new AbortController();
+    const sig = { signal: _bannerAbort.signal };
+
     const selEl = bannerCatSelEl;
-
-    const newNameSel = bannerNameCatSelEl.cloneNode(false);
-    bannerNameCatSelEl.parentNode.replaceChild(newNameSel, bannerNameCatSelEl);
-    bannerNameCatSelEl = newNameSel;
     const nameSelEl = bannerNameCatSelEl;
-
     const addBtn = document.getElementById("bannerAddBtn");
 
     // Helper to build <option> list into a select element
@@ -170,7 +169,7 @@
         matched.defaultCategory = selEl.value || null;
         saveDictionary();
         applySelectColor(selEl);
-      });
+      }, sig);
 
       fillCatOptions(nameSelEl, "(name: no highlight)", matched.mentionCategory || "");
       applySelectColor(nameSelEl);
@@ -179,7 +178,7 @@
         matched.mentionCategory = nameSelEl.value || null;
         saveDictionary();
         applySelectColor(nameSelEl);
-      });
+      }, sig);
 
     } else {
       // Unknown client — amber warning, show add button
@@ -192,18 +191,15 @@
       const firstCat = (currentDict.categories || [])[0];
       fillCatOptions(selEl, "(no highlight)", firstCat ? firstCat.name : "");
       applySelectColor(selEl);
-      selEl.addEventListener("change", () => applySelectColor(selEl));
+      selEl.addEventListener("change", () => applySelectColor(selEl), sig);
 
       // Show name-color select for unknown clients too
       fillCatOptions(nameSelEl, "(name: no highlight)", "");
       applySelectColor(nameSelEl);
       nameSelEl.style.display = "";
-      nameSelEl.addEventListener("change", () => applySelectColor(nameSelEl));
+      nameSelEl.addEventListener("change", () => applySelectColor(nameSelEl), sig);
 
-      // Clone add button to clear old listener
-      const newAdd = addBtn.cloneNode(true);
-      addBtn.parentNode.replaceChild(newAdd, addBtn);
-      newAdd.addEventListener("click", () => {
+      addBtn.addEventListener("click", () => {
         if (!currentDict.clients) currentDict.clients = [];
         const entry = {
           pattern: detectedClientName,
@@ -214,7 +210,7 @@
         currentDict.clients.push(entry);
         saveDictionary();
         renderClientBanner();
-      });
+      }, sig);
     }
   }
 
@@ -496,7 +492,8 @@
             ? nameResp.clientName : "";
           // Store for options-page auto-fill (options tab becomes active, so
           // options.js cannot query the CMS tab directly).
-          if (detectedClientName) {
+          if (detectedClientName && detectedClientName !== _lastWrittenClientName) {
+            _lastWrittenClientName = detectedClientName;
             chrome.storage.local.set({ _lastCmsClientName: detectedClientName });
           }
           renderClientBanner();

@@ -598,12 +598,15 @@
       return;
     }
 
+    const frag = document.createDocumentFragment();
+
     list.forEach((entry) => {
       const pat = safeStr(entry.pattern);
       const key = patternKey(pat);
 
       const card = document.createElement("div");
       card.className = "client-card";
+      card.setAttribute("data-key", key);
 
       const header = document.createElement("div");
       header.className = "client-header";
@@ -634,19 +637,6 @@
       delBtn.className = "btn-del";
       delBtn.textContent = "X";
       delBtn.title = "Delete this client";
-      delBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const p = safeStr(entry.pattern);
-        if (confirm('Remove client "' + p + '"?')) {
-          const idx = (currentDict.clients || []).findIndex(c => patternKey(c.pattern) === patternKey(p));
-          if (idx >= 0) {
-            currentDict.clients.splice(idx, 1);
-            saveDictionary('Removed client "' + p + '"');
-            if (openClientKey === patternKey(p)) openClientKey = null;
-            renderClients();
-          }
-        }
-      });
       actions.appendChild(delBtn);
 
       header.appendChild(actions);
@@ -898,12 +888,6 @@
         summary.innerHTML = formatSummaryHtml(entry);
       });
 
-      header.addEventListener("click", () => {
-        const isOpen = (openClientKey === key);
-        openClientKey = isOpen ? null : key;
-        renderClients();
-      });
-
       if (openClientKey === key) {
         body.classList.add("open");
         arrow.classList.add("open");
@@ -914,8 +898,10 @@
 
       card.appendChild(header);
       card.appendChild(body);
-      clientListBodyEl.appendChild(card);
+      frag.appendChild(card);
     });
+
+    clientListBodyEl.appendChild(frag);
   }
 
   // Full render: repopulates Add Client dropdowns + rebuilds list body.
@@ -940,6 +926,37 @@
     clearTimeout(_clientSearchTimer);
     // Only rebuild the list body — skip repopulating the Add Client dropdowns.
     _clientSearchTimer = setTimeout(renderClientListBody, 80);
+  });
+
+  // Delegated click handler for client list (header expand/collapse + delete)
+  clientListBodyEl.addEventListener("click", (e) => {
+    const delBtn = e.target.closest(".btn-del");
+    if (delBtn) {
+      e.stopPropagation();
+      const card = delBtn.closest(".client-card");
+      const key = card && card.getAttribute("data-key");
+      if (!key) return;
+      const entry = (currentDict.clients || []).find(c => patternKey(c.pattern) === key);
+      if (entry && confirm('Remove client "' + safeStr(entry.pattern) + '"?')) {
+        const idx = (currentDict.clients || []).indexOf(entry);
+        if (idx >= 0) {
+          currentDict.clients.splice(idx, 1);
+          saveDictionary('Removed client "' + safeStr(entry.pattern) + '"');
+          if (openClientKey === key) openClientKey = null;
+          renderClients();
+        }
+      }
+      return;
+    }
+    const header = e.target.closest(".client-header");
+    if (header) {
+      const card = header.closest(".client-card");
+      const key = card && card.getAttribute("data-key");
+      if (!key) return;
+      const isOpen = (openClientKey === key);
+      openClientKey = isOpen ? null : key;
+      renderClients();
+    }
   });
 
   if (newClientPattern) {
@@ -1177,8 +1194,10 @@
       // Persist and refresh client swatches only when picker is released
       bgInput.addEventListener("change", () => {
         cat.color = bgInput.value;
+        _selectOptionsHtml = {};
         saveDictionary();
-        renderClients();
+        populateAddClientDropdowns(getCategoryStyleByName());
+        renderClientListBody();
       });
 
       fgInput.addEventListener("input", () => {
@@ -1186,8 +1205,10 @@
       });
       fgInput.addEventListener("change", () => {
         cat.fColor = fgInput.value;
+        _selectOptionsHtml = {};
         saveDictionary();
-        renderClients();
+        populateAddClientDropdowns(getCategoryStyleByName());
+        renderClientListBody();
       });
 
       const nameRow = document.createElement("div");

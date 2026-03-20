@@ -182,9 +182,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (menuId === MENU_EXACT_ID) {
     chrome.storage.local.get(["contextExact"], (result) => {
       const newVal = !(result.contextExact || false);
-      chrome.storage.local.set({ contextExact: newVal }, () => {
-        buildContextMenu();
-      });
+      chrome.storage.local.set({ contextExact: newVal });
+      // storage.onChanged listener will debounce-rebuild the menu
     });
     return;
   }
@@ -193,9 +192,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (menuId === MENU_CS_ID) {
     chrome.storage.local.get(["contextCaseSensitive"], (result) => {
       const newVal = !(result.contextCaseSensitive || false);
-      chrome.storage.local.set({ contextCaseSensitive: newVal }, () => {
-        buildContextMenu();
-      });
+      chrome.storage.local.set({ contextCaseSensitive: newVal });
+      // storage.onChanged listener will debounce-rebuild the menu
     });
     return;
   }
