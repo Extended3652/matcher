@@ -594,7 +594,7 @@
     });
   }
 
-  function setOpenEditor(nextKey) {
+  function setOpenEditor(nextKey, skipRender) {
     if (openEditorKey === nextKey) {
       openEditorKey = null;
       editing = null;
@@ -602,7 +602,7 @@
       openEditorKey = nextKey;
       editing = null;
     }
-    renderAll();
+    if (!skipRender) renderAll();
   }
 
   function renderEditableRow(listEl, scopeLabel, scope, catIndex, entryIndex, raw, onSave, onRemove) {
@@ -875,19 +875,16 @@
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
                 // do nothing, keep original
-                renderAll();
                 setOpenEditor("ignore");
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
               saveDictionary();
-              renderAll();
               setOpenEditor("ignore");
             },
             () => {
               currentDict.ignoreList.splice(item2.entryIndex, 1);
               saveDictionary();
-              renderAll();
               setOpenEditor("ignore");
             }
           );
@@ -919,7 +916,6 @@
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
         renderIgnoreWords();
-        renderAll();
         setOpenEditor("ignore");
       }
 
@@ -1122,19 +1118,16 @@
             (nextRaw) => {
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                renderAll();
                 setOpenEditor(key);
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
               saveDictionary();
-              renderAll();
               setOpenEditor(key);
             },
             () => {
               cat.words.splice(item2.entryIndex, 1);
               saveDictionary();
-              renderAll();
               setOpenEditor(key);
             }
           );
@@ -1166,7 +1159,6 @@
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
         renderWordList();
-        renderAll();
         setOpenEditor(key);
       }
 

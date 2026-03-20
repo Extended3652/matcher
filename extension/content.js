@@ -13,6 +13,7 @@
 
   // Guardrails
   const MAX_SPAN_LEN = 120;
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
 
   let globalEnabled = true;
 
@@ -295,7 +296,7 @@
 
           // Skip script/style/textarea/input/select/noscript
           const tag = node.parentElement.tagName || "";
-          if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"].includes(tag)) {
+          if (SKIP_TAGS.has(tag)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -485,6 +486,7 @@
   let observer = null;
   let debounceTimer = null;
   let pendingNodes = [];
+  let _storageChangeTimer = null;
 
   function startObserver() {
     if (observer) return;
@@ -528,18 +530,29 @@
         // highlighted with the correct patterns for the current client.
         applyClientHighlight();
 
+        // Deduplicate: skip nodes whose ancestor is already in the batch,
+        // since highlightAllChunked on the ancestor covers descendants.
+        const elementRoots = [];
+        for (const item of batch) {
+          if (item.type === "element" && item.node && item.node.parentNode) {
+            elementRoots.push(item.node);
+          }
+        }
+
         for (const item of batch) {
           if (!item.node || !item.node.parentNode) continue;
 
           if (item.type === "element") {
+            // Skip if a parent element is already queued (it will cover this node)
+            if (elementRoots.some(r => r !== item.node && r.contains(item.node))) continue;
             if (item.node === document.body || item.node === document.documentElement) {
-              // Body-level mutation: re-highlight from the CMS content root
-              // (not item.node) so we scope to the actual content area.
               highlightAllChunked(getCmsContentRoot());
             } else {
               highlightAllChunked(item.node);
             }
           } else {
+            // Skip text nodes inside an element that's already queued
+            if (elementRoots.some(r => r.contains(item.node))) continue;
             highlightTextNode(item.node);
           }
         }
@@ -678,25 +691,31 @@
     if (area !== "local") return;
     if (!changes.dictionary && !changes.enabled) return;
 
-    _cachedMentionKey = null;
+    // Debounce so rapid-fire edits from the options page coalesce into one
+    // re-render instead of thrashing the DOM on every keystroke.
+    if (_storageChangeTimer) clearTimeout(_storageChangeTimer);
+    _storageChangeTimer = setTimeout(() => {
+      _storageChangeTimer = null;
+      _cachedMentionKey = null;
 
-    if (changes.enabled) {
-      globalEnabled = changes.enabled.newValue !== false;
-    }
-    if (changes.dictionary) {
-      const dict = changes.dictionary.newValue;
-      if (dict && dict.categories) {
-        recompileDictionary(dict);
+      if (changes.enabled) {
+        globalEnabled = changes.enabled.newValue !== false;
       }
-    }
-    removeAllHighlights();
-    if (globalEnabled) {
-      applyClientHighlight();
-      highlightAllChunked(getCmsContentRoot());
-      startObserver();
-    } else {
-      stopObserver();
-    }
+      if (changes.dictionary) {
+        const dict = changes.dictionary.newValue;
+        if (dict && dict.categories) {
+          recompileDictionary(dict);
+        }
+      }
+      removeAllHighlights();
+      if (globalEnabled) {
+        applyClientHighlight();
+        highlightAllChunked(getCmsContentRoot());
+        startObserver();
+      } else {
+        stopObserver();
+      }
+    }, 150);
   });
 
   if (document.readyState === "loading") {

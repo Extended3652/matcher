@@ -111,6 +111,8 @@
   let _catStyleMap  = null; // Map<catName, {color, fColor}>  — rebuilt on demand
   let _clientKeyMap = null; // Map<normalizedPattern, client> — rebuilt on demand
 
+  // Full invalidation — use for structural changes (category add/delete/color,
+  // import, client add/delete/rename).
   function invalidateCaches() {
     _catStyleMap        = null;
     _clientKeyMap       = null;
@@ -118,6 +120,12 @@
     // Clear per-client lowercase caches so filteredClients() stays accurate.
     const clients = currentDict && currentDict.clients;
     if (clients) clients.forEach(c => { delete c._lower; });
+  }
+
+  // Light invalidation — use for client field edits (overrides, mentions, notes)
+  // that don't affect category styles or select options.
+  function invalidateClientCaches() {
+    _clientKeyMap = null;
   }
 
   // Use the same "no highlight" grey concept you want
@@ -413,6 +421,18 @@
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
     });
+  }
+
+  // Debounced variant for rapid field edits (dropdowns, text inputs) so we
+  // don't thrash storage on every keystroke / selection change.
+  let _saveDictTimer = null;
+  function debouncedSaveDictionary() {
+    invalidateClientCaches();
+    if (_saveDictTimer) clearTimeout(_saveDictTimer);
+    _saveDictTimer = setTimeout(() => {
+      _saveDictTimer = null;
+      chrome.storage.local.set({ dictionary: currentDict });
+    }, 300);
   }
 
   // ---------------------------------------------------------------------------
@@ -829,7 +849,7 @@
       sReview.addEventListener("change", () => {
         entry.defaultCategory = sReview.value ? sReview.value : null;
         refreshHeaderVisuals();
-        saveDictionary();
+        debouncedSaveDictionary();
       });
 
       sImg.addEventListener("change", () => {
@@ -837,7 +857,7 @@
         if (sImg.value) entry.overrides.Image = sImg.value;
         else delete entry.overrides.Image;
         refreshHeaderVisuals();
-        saveDictionary();
+        debouncedSaveDictionary();
       });
 
       sPro.addEventListener("change", () => {
@@ -845,7 +865,7 @@
         if (sPro.value) entry.overrides.Profile = sPro.value;
         else delete entry.overrides.Profile;
         refreshHeaderVisuals();
-        saveDictionary();
+        debouncedSaveDictionary();
       });
 
       sQ.addEventListener("change", () => {
@@ -853,7 +873,7 @@
         if (sQ.value) entry.overrides.Question = sQ.value;
         else delete entry.overrides.Question;
         refreshHeaderVisuals();
-        saveDictionary();
+        debouncedSaveDictionary();
       });
 
       sCmt.addEventListener("change", () => {
@@ -861,30 +881,30 @@
         if (sCmt.value) entry.overrides.Comment = sCmt.value;
         else delete entry.overrides.Comment;
         refreshHeaderVisuals();
-        saveDictionary();
+        debouncedSaveDictionary();
       });
 
       sMCat.addEventListener("change", () => {
         entry.mentionCategory = sMCat.value ? sMCat.value : null;
-        saveDictionary();
+        debouncedSaveDictionary();
         summary.innerHTML = formatSummaryHtml(entry);
       });
 
       tAliases.addEventListener("change", () => {
         entry.aliases = normalizeAliasesFromTextarea(tAliases.value);
-        saveDictionary();
+        debouncedSaveDictionary();
         summary.innerHTML = formatSummaryHtml(entry);
       });
 
       cbInc.addEventListener("change", () => {
         entry.includePatternInContent = !!cbInc.checked;
-        saveDictionary();
+        debouncedSaveDictionary();
         summary.innerHTML = formatSummaryHtml(entry);
       });
 
       iNote.addEventListener("change", () => {
         entry.note = (iNote.value || "").trim();
-        saveDictionary();
+        debouncedSaveDictionary();
         summary.innerHTML = formatSummaryHtml(entry);
       });
 

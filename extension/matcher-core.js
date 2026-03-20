@@ -406,6 +406,7 @@
     // Overlap resolver:
     // Keep a "current winner". When an overlapping match appears, choose the better.
     // When a non-overlapping match appears, finalize the winner and move on.
+    // Build output objects inline to avoid an extra .map() allocation pass.
     const final = [];
     let winner = null;
 
@@ -417,7 +418,7 @@
 
       const overlaps = (m.start < winner.end) && (m.end > winner.start);
       if (!overlaps) {
-        final.push(winner);
+        final.push({ start: winner.start, end: winner.end, categoryName: winner.name, color: winner.color, fColor: winner.fColor });
         winner = m;
         continue;
       }
@@ -425,15 +426,9 @@
       winner = pickBetterOverlap(winner, m);
     }
 
-    if (winner) final.push(winner);
+    if (winner) final.push({ start: winner.start, end: winner.end, categoryName: winner.name, color: winner.color, fColor: winner.fColor });
 
-    return final.map(m => ({
-      start:        m.start,
-      end:          m.end,
-      categoryName: m.name,
-      color:        m.color,
-      fColor:       m.fColor,
-    }));
+    return final;
   }
 
   // ---------------------------------------------------------------------------
