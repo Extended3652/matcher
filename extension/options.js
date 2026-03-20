@@ -560,9 +560,6 @@
   function renderClients() {
     if (!currentDict) return;
 
-    // Reset per-render option-HTML cache so selects reflect current categories.
-    _selectOptionsHtml = {};
-
     ensureClientsSorted();
 
     const all = currentDict.clients || [];

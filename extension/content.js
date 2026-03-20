@@ -461,6 +461,7 @@
   let observer = null;
   let debounceTimer = null;
   let pendingNodes = [];
+  let _storageRefreshTimer = null;
 
   function startObserver() {
     if (observer) return;
@@ -504,17 +505,26 @@
         // highlighted with the correct patterns for the current client.
         applyClientHighlight();
 
-        for (const item of batch) {
-          if (!item.node || !item.node.parentNode) continue;
+        // If any element in the batch is body/documentElement, one full scan
+        // covers everything — avoid redundant per-element subtree walks.
+        const hasFullPageNode = batch.some(
+          item => item.type === "element" &&
+            (item.node === document.body || item.node === document.documentElement)
+        );
 
-          if (item.type === "element") {
-            if (item.node === document.body || item.node === document.documentElement) {
-              highlightAll(document.body);
-            } else {
+        if (hasFullPageNode) {
+          highlightAll(document.body);
+        } else {
+          const seenElements = new Set();
+          for (const item of batch) {
+            if (!item.node || !item.node.parentNode) continue;
+            if (item.type === "element") {
+              if (seenElements.has(item.node)) continue;
+              seenElements.add(item.node);
               highlightAll(item.node);
+            } else {
+              highlightTextNode(item.node);
             }
-          } else {
-            highlightTextNode(item.node);
           }
         }
       }, 80);
@@ -666,19 +676,25 @@
       globalEnabled = result.enabled !== false;
       const dict = result.dictionary;
       if (dict && dict.categories) {
+        // Recompile data immediately so any in-flight observer work uses fresh rules.
         compiledMatcher = MatcherEngine.compileAll(dict);
         categoryStyleByName = buildCategoryStyleMap(dict);
         clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
         for (const r of clientRules) r._rx = globToRegex(r.pattern);
       }
-      removeAllHighlights();
-      if (globalEnabled) {
-        applyClientHighlight();
-        highlightAllChunked(document.body);
-        startObserver();
-      } else {
-        stopObserver();
-      }
+      // Debounce the expensive DOM work — rapid successive saves (e.g. tabbing
+      // through options fields) collapse into a single re-highlight pass.
+      clearTimeout(_storageRefreshTimer);
+      _storageRefreshTimer = setTimeout(() => {
+        removeAllHighlights();
+        if (globalEnabled) {
+          applyClientHighlight();
+          highlightAllChunked(document.body);
+          startObserver();
+        } else {
+          stopObserver();
+        }
+      }, 300);
     });
   });
 
