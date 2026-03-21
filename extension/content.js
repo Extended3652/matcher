@@ -434,10 +434,44 @@
     if (!globalEnabled) return;
     if (!compiledMatcher) return;
 
-    const nodes = getTextNodes(root || document.body);
+    const target = root || document.body;
+    const nodes = getTextNodes(target);
     if (nodes.length === 0) return;
 
+    // When the content root falls back to document.body, prioritize nodes
+    // visible in the viewport so the user sees highlights appear first.
+    if (target === document.body && nodes.length > 200) {
+      const vpBottom = window.innerHeight;
+      const inView = [];
+      const outView = [];
+      for (const n of nodes) {
+        const el = n.parentElement;
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.bottom >= 0 && rect.top <= vpBottom) {
+            inView.push(n);
+          } else {
+            outView.push(n);
+          }
+        } else {
+          outView.push(n);
+        }
+      }
+      // Replace nodes in-place: viewport nodes first, then the rest
+      nodes.length = 0;
+      nodes.push(...inView, ...outView);
+    }
+
+    // Process the first batch synchronously so highlights appear immediately
+    // instead of waiting for requestIdleCallback (0-50ms idle delay).
     let i = 0;
+    const firstEnd = Math.min(200, nodes.length);
+    while (i < firstEnd) {
+      highlightTextNode(nodes[i++]);
+    }
+
+    if (i >= nodes.length) return;
+
     function next() {
       const end = Math.min(i + 200, nodes.length);
       while (i < end) {
@@ -575,10 +609,54 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Dictionary fingerprint — a fast hash of the parts that affect regex
+  // compilation (category words, ignore list, enabled flags). When only
+  // non-matching fields change (e.g. toggling enabled at the extension level),
+  // we can skip the expensive regex recompilation.
+  // ---------------------------------------------------------------------------
+  let _lastDictFingerprint = null;
+
+  function computeDictFingerprint(dict) {
+    // Build a string that captures everything affecting compiled regexes.
+    // Intentionally lightweight: JSON.stringify of the relevant slices.
+    const parts = [];
+    const cats = Array.isArray(dict.categories) ? dict.categories : [];
+    for (const c of cats) {
+      parts.push(c.enabled === false ? "0" : "1");
+      parts.push(String(c.name || ""));
+      parts.push(String(c.color || ""));
+      parts.push(String(c.fColor || ""));
+      parts.push(Array.isArray(c.words) ? c.words.join("\x01") : "");
+    }
+    parts.push("\x02");
+    const il = Array.isArray(dict.ignoreList) ? dict.ignoreList : [];
+    parts.push(il.join("\x01"));
+    parts.push("\x02");
+    const clients = Array.isArray(dict.clients) ? dict.clients : [];
+    for (const r of clients) {
+      parts.push(String(r.pattern || ""));
+      parts.push(String(r.defaultCategory || ""));
+      parts.push(String(r.mentionCategory || ""));
+      parts.push(r.includePatternInContent === false ? "0" : "1");
+      parts.push(Array.isArray(r.aliases) ? r.aliases.join("\x01") : "");
+      const ov = r.overrides || {};
+      parts.push([ov.Image, ov.Profile, ov.Question, ov.Comment].join("\x01"));
+    }
+    return parts.join("\x03");
+  }
+
+  // ---------------------------------------------------------------------------
   // Recompile dictionary — single function used by init, message handlers,
   // and storage.onChanged to avoid duplicating compilation logic.
+  // Returns true if recompilation was performed, false if skipped.
   // ---------------------------------------------------------------------------
-  function recompileDictionary(dict) {
+  function recompileDictionary(dict, force) {
+    const fp = computeDictFingerprint(dict);
+    if (!force && _lastDictFingerprint !== null && fp === _lastDictFingerprint) {
+      return false; // dictionary hasn't changed in a way that affects matching
+    }
+    _lastDictFingerprint = fp;
+
     compiledMatcher = MatcherEngine.compileAll(dict);
     if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
       console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
@@ -589,6 +667,7 @@
       // Always recompile — storage serialises RegExp as {}, which is truthy but broken.
       r._rx = globToRegex(r.pattern);
     }
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -651,7 +730,7 @@
 
           const dict = result.dictionary;
           if (dict && dict.categories) {
-            recompileDictionary(dict);
+            recompileDictionary(dict, true); // force: explicit user action
           }
 
           removeAllHighlights();
@@ -709,15 +788,22 @@
       _pendingChanges = {};
       _cachedMentionKey = null;
 
+      const prevEnabled = globalEnabled;
       if (merged.enabled) {
         globalEnabled = merged.enabled.newValue !== false;
       }
+
+      let dictChanged = false;
       if (merged.dictionary) {
         const dict = merged.dictionary.newValue;
         if (dict && dict.categories) {
-          recompileDictionary(dict);
+          dictChanged = recompileDictionary(dict);
         }
       }
+
+      // Skip full re-highlight if nothing meaningful changed
+      if (!dictChanged && globalEnabled === prevEnabled) return;
+
       removeAllHighlights();
       if (globalEnabled) {
         applyClientHighlight();
