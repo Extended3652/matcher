@@ -482,9 +482,35 @@ assertMatches(
 );
 
 // =============================================================================
-// 13. Plain phrase container beats //exact in lower-priority category
+// 13. Wildcard spanning apostrophes in contractions
 // =============================================================================
-section("13. Plain phrase container beats //exact (lower-priority cat)");
+section("13. Wildcard spanning apostrophes");
+
+assertMatches(
+  "leading wildcard spans apostrophe: *t mentioned matches isn't mentioned",
+  cfg([cat("a", "Phrase", "#0f0", ["*t mentioned in the description"])]),
+  "It isn't mentioned in the description here",
+  [{ cat: "Phrase", word: "isn't mentioned in the description" }]
+);
+
+assertMatches(
+  "leading wildcard spans curly apostrophe: *t match\u2019s text",
+  cfg([cat("a", "Phrase", "#0f0", ["*t work"])]),
+  "It doesn\u2019t work at all",
+  [{ cat: "Phrase", word: "doesn\u2019t work" }]
+);
+
+assertMatches(
+  "middle wildcard spans apostrophe: do*t matches don't",
+  cfg([cat("a", "W", "#0f0", ["do*t"])]),
+  "I don't know",
+  [{ cat: "W", word: "don't" }]
+);
+
+// =============================================================================
+// 14. Plain phrase container beats //exact in lower-priority category
+// =============================================================================
+section("14. Plain phrase container beats //exact (lower-priority cat)");
 
 assertMatches(
   "//exact in lower-priority cat should NOT beat plain phrase container from higher-priority cat",

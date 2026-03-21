@@ -119,10 +119,10 @@
             // catastrophic backtracking. Tighter than content.js's client-name
             // globToRegex ({0,60} over [\s\S]) because word wildcards should
             // stay within token boundaries.
-            result += "[^\\s\\p{P}]{0,30}";
+            result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
           } else {
             // Middle wildcard: same bounded class as leading/trailing.
-            result += "[^\\s\\p{P}]{0,30}";
+            result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";

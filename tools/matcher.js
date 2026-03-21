@@ -111,10 +111,11 @@ function globToRegexFragment(pattern) {
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
           // Bound match length to prevent worst-case backtracking.
-          result += "[^\\s\\p{P}]{0,30}";
+          // Allow apostrophes so wildcards span contractions (isn't, don't).
+          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
         } else {
-          // Middle wildcard: bounded.
-          result += "[^\\s\\p{P}]{0,30}";
+          // Middle wildcard: bounded. Allow apostrophes for contractions.
+          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
