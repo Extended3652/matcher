@@ -687,22 +687,33 @@
     return true;
   });
 
+  // Accumulate storage changes across rapid-fire events so the debounced
+  // callback has the full picture (dictionary AND enabled), not just the last
+  // event's changes object.
+  let _pendingChanges = {};
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (!changes.dictionary && !changes.enabled) return;
+
+    // Merge into pending: latest value wins per key.
+    if (changes.dictionary) _pendingChanges.dictionary = changes.dictionary;
+    if (changes.enabled)    _pendingChanges.enabled    = changes.enabled;
 
     // Debounce so rapid-fire edits from the options page coalesce into one
     // re-render instead of thrashing the DOM on every keystroke.
     if (_storageChangeTimer) clearTimeout(_storageChangeTimer);
     _storageChangeTimer = setTimeout(() => {
       _storageChangeTimer = null;
+      const merged = _pendingChanges;
+      _pendingChanges = {};
       _cachedMentionKey = null;
 
-      if (changes.enabled) {
-        globalEnabled = changes.enabled.newValue !== false;
+      if (merged.enabled) {
+        globalEnabled = merged.enabled.newValue !== false;
       }
-      if (changes.dictionary) {
-        const dict = changes.dictionary.newValue;
+      if (merged.dictionary) {
+        const dict = merged.dictionary.newValue;
         if (dict && dict.categories) {
           recompileDictionary(dict);
         }

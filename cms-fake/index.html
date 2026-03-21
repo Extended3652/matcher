@@ -257,8 +257,10 @@
           <select id="selType">
             <option>Review</option>
             <option>Image</option>
+            <option>Profile</option>
             <option>Question</option>
             <option>Answer</option>
+            <option>Comment</option>
           </select>
         </label>
 
@@ -401,8 +403,10 @@
     const map = {
       Review: ["One of the best I have tried", "Works great", "Pretty good overall", "Not for me"],
       Image: ["Photo attached", "See image", "Image shows issue", "Picture included"],
+      Profile: ["User profile", "About me", "My bio", "Profile details"],
       Question: ["Quick question", "Question about size", "Does this work?", "Need help"],
-      Answer: ["Answer", "Response", "My experience", "Here is what I found"]
+      Answer: ["Answer", "Response", "My experience", "Here is what I found"],
+      Comment: ["Comment on review", "Reply to question", "Follow-up comment", "Additional feedback"]
     };
     return sample(map[t] || ["Item"]);
   }
@@ -445,15 +449,31 @@
       "Image is blurry and includes a street address in the corner."
     ];
 
+    const profileBits = [
+      "User bio mentions working at a competitor brand.",
+      "Profile contains a personal website URL and phone number.",
+      "Username appears to reference a brand or company name.",
+      "Profile picture shows a product logo instead of a person."
+    ];
+
+    const commentBits = [
+      "Replying to original review with additional details about the product.",
+      "Comment includes a link to an external shopping site.",
+      "User is asking follow-up questions about the reviewer's experience.",
+      "Comment mentions a coupon code and referral link."
+    ];
+
     const bigBlock =
       "Some clients have long guideline text blocks. " +
       "This is here to test performance, range handling, and avoiding full-document scans. " +
       "Lorem ipsum ".repeat(60);
 
     if (t === "Review") return [sample(common), sample(reviewBits), "Long block:\n" + bigBlock].join("\n\n");
+    if (t === "Profile") return [sample(profileBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
     if (t === "Question") return [sample(questionBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
     if (t === "Answer") return [sample(answerBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
     if (t === "Image") return [sample(imageBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
+    if (t === "Comment") return [sample(commentBits), sample(common), "Long block:\n" + bigBlock].join("\n\n");
     return [sample(common), "Long block:\n" + bigBlock].join("\n\n");
   }
 
