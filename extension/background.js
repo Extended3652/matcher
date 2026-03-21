@@ -50,7 +50,7 @@ function safeCreate(item) {
     if (isDuplicateIdError(err)) {
       // Remove the existing item with same ID then retry create.
       chrome.contextMenus.remove(item.id, () => {
-        // Ignore remove errors, then retry create.
+        void chrome.runtime.lastError; // consume – item may already be gone
         chrome.contextMenus.create(item, () => {
           if (chrome.runtime.lastError) {
             console.error(
