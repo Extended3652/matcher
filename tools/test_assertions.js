@@ -523,6 +523,32 @@ assertMatches(
 );
 
 // =============================================================================
+// 15. Ignore list containment: partial overlap should NOT suppress longer match
+// =============================================================================
+section("15. Ignore list containment vs overlap");
+
+assertMatches(
+  "ignore 'switch' does NOT suppress phrase 'bait and switch'",
+  cfg([cat("a", "NLI", "#ff0", ["bait?*?switch"])], ["switch"]),
+  "This is a bait and switch tactic",
+  [{ cat: "NLI", word: "bait and switch" }]
+);
+
+assertMatches(
+  "ignore 'switch' still suppresses standalone 'switch' match",
+  cfg([cat("a", "NLI", "#ff0", ["switch"])], ["switch"]),
+  "They made the switch today",
+  []
+);
+
+assertMatches(
+  "ignore phrase fully containing match still suppresses it",
+  cfg([cat("a", "Ret", "#0f0", ["store"])], ["store front"]),
+  "I went to the store front but the store was open",
+  [{ cat: "Ret", word: "store" }]
+);
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log("\n" + "=".repeat(60));
