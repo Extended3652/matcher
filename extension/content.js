@@ -14,6 +14,11 @@
   // Guardrails
   const MAX_SPAN_LEN = 120;
   const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
+  const BLOCK_TAGS = new Set([
+    "P","DIV","TD","TH","LI","DD","DT","BLOCKQUOTE","ARTICLE","SECTION",
+    "HEADER","FOOTER","ASIDE","MAIN","PRE","TR","BODY",
+    "H1","H2","H3","H4","H5","H6"
+  ]);
 
   let globalEnabled = true;
 
@@ -392,6 +397,45 @@
     return MatcherEngine.findMatches(text, compiledMatcher) || [];
   }
 
+  // ---------------------------------------------------------------------------
+  // Cross-node ignore filtering — helpers
+  // Multi-word ignore phrases (e.g. "absorbed quickly") may span DOM text
+  // node boundaries when inline elements split the text. We detect these by
+  // running ignore matching on the nearest block ancestor's full textContent.
+  // ---------------------------------------------------------------------------
+  let _blockIgnoreCache = new WeakMap();
+
+  function getBlockAncestor(node) {
+    let el = node.parentElement;
+    while (el && !BLOCK_TAGS.has(el.tagName)) {
+      el = el.parentElement;
+    }
+    return el || document.body;
+  }
+
+  function getNodeOffsetInAncestor(textNode, ancestor) {
+    let offset = 0;
+    const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_TEXT, null);
+    while (walker.nextNode()) {
+      if (walker.currentNode === textNode) return offset;
+      offset += (walker.currentNode.textContent || "").length;
+    }
+    return -1;
+  }
+
+  function getBlockIgnoreRanges(blockEl, ignoreCompiled) {
+    let ranges = _blockIgnoreCache.get(blockEl);
+    if (ranges !== undefined) return ranges;
+
+    const blockText = blockEl.textContent || "";
+    ranges = MatcherEngine.collectIgnoreRanges(blockText, ignoreCompiled);
+    if (ranges.length > 0) {
+      ranges.sort((a, b) => a.start - b.start);
+    }
+    _blockIgnoreCache.set(blockEl, ranges);
+    return ranges;
+  }
+
   function highlightTextNode(textNode) {
     if (isBlockedRoute()) return;
     if (!globalEnabled) return;
@@ -402,7 +446,35 @@
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
 
-    const catMatches = sanitizeMatches(findMatchesForText(text), text.length);
+    let catMatches = sanitizeMatches(findMatchesForText(text), text.length);
+
+    // Cross-node ignore filtering: check block ancestor's full text for
+    // multi-word ignore phrases that span across DOM text node boundaries.
+    if (catMatches.length > 0 && compiledMatcher.ignoreCompiled) {
+      const blockEl = getBlockAncestor(textNode);
+      const blockIgnoreRanges = getBlockIgnoreRanges(blockEl, compiledMatcher.ignoreCompiled);
+      if (blockIgnoreRanges.length > 0) {
+        const nodeOffset = getNodeOffsetInAncestor(textNode, blockEl);
+        if (nodeOffset >= 0) {
+          catMatches = catMatches.filter(match => {
+            const absStart = nodeOffset + match.start;
+            const absEnd = nodeOffset + match.end;
+            let lo = 0, hi = blockIgnoreRanges.length;
+            while (lo < hi) {
+              const mid = (lo + hi) >>> 1;
+              if (blockIgnoreRanges[mid].end <= absStart) lo = mid + 1;
+              else hi = mid;
+            }
+            for (let i = lo; i < blockIgnoreRanges.length; i++) {
+              if (blockIgnoreRanges[i].start >= absEnd) break;
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+    }
+
     const mentionMatches = currentMentionMatcher
       ? sanitizeMatches(MatcherEngine.findMatches(text, currentMentionMatcher) || [], text.length)
       : [];
@@ -418,6 +490,7 @@
     if (!globalEnabled) return;
     if (!compiledMatcher) return;
 
+    _blockIgnoreCache = new WeakMap();
     const target = root || document.body;
     const textNodes = getTextNodes(target);
 
@@ -434,6 +507,7 @@
     if (!globalEnabled) return;
     if (!compiledMatcher) return;
 
+    _blockIgnoreCache = new WeakMap();
     const target = root || document.body;
     const nodes = getTextNodes(target);
     if (nodes.length === 0) return;
@@ -497,6 +571,7 @@
   // ---------------------------------------------------------------------------
   function removeAllHighlights() {
     _highlightCount = 0;
+    _blockIgnoreCache = new WeakMap();
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
     spans.forEach(span => {

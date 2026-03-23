@@ -9,7 +9,7 @@
 
 "use strict";
 
-const { compileAll, findMatches, parseWordEntry } = require("./matcher.js");
+const { compileAll, findMatches, parseWordEntry, collectIgnoreRanges } = require("./matcher.js");
 
 // ---------------------------------------------------------------------------
 // Assertion helpers
@@ -495,6 +495,47 @@ assertMatches(
   "I no longer have receipt for service",
   [{ cat: "Phrase", word: "no longer have receipt for service" }]
 );
+
+// =============================================================================
+// 14. collectIgnoreRanges — cross-node ignore support
+// =============================================================================
+section("14. collectIgnoreRanges");
+
+(function() {
+  const config = cfg([cat("a", "Words", "#0f0", ["quickly", "absorbed"])], ["absorbed quickly"]);
+  const compiled = compileAll(config);
+
+  // On full text, the ignore phrase matches
+  const fullText = "The product was absorbed quickly into the skin";
+  const ranges = collectIgnoreRanges(fullText, compiled.ignoreCompiled);
+  assert(ranges.length === 1,
+    "collectIgnoreRanges finds 'absorbed quickly' in full text");
+  assert(ranges[0].start === 16 && ranges[0].end === 32,
+    "ignore range spans correct offsets [16,32]");
+
+  // On a fragment (simulating a split text node), the ignore phrase does NOT match
+  const fragment = "quickly into the skin";
+  const fragRanges = collectIgnoreRanges(fragment, compiled.ignoreCompiled);
+  assert(fragRanges.length === 0,
+    "collectIgnoreRanges finds nothing in fragment 'quickly into the skin'");
+
+  // findMatches on the fragment still returns the match (no cross-node filter at engine level)
+  const fragMatches = findMatches(fragment, compiled);
+  assert(fragMatches.length === 1 && fragMatches[0].categoryName === "Words",
+    "findMatches on fragment returns 'quickly' match (engine has no cross-node awareness)");
+
+  // findMatches on full text correctly suppresses both words
+  const fullMatches = findMatches(fullText, compiled);
+  assert(fullMatches.length === 0,
+    "findMatches on full text suppresses both 'absorbed' and 'quickly'");
+
+  // Returns empty when no ignore list is compiled
+  const noIgnoreConfig = cfg([cat("a", "Words", "#0f0", ["quickly"])]);
+  const noIgnoreCompiled = compileAll(noIgnoreConfig);
+  const emptyRanges = collectIgnoreRanges(fullText, noIgnoreCompiled.ignoreCompiled);
+  assert(emptyRanges.length === 0,
+    "collectIgnoreRanges returns empty when no ignore list compiled");
+})();
 
 // =============================================================================
 // Summary

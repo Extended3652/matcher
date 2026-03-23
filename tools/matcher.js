@@ -419,12 +419,33 @@ function findMatches(text, compiled) {
 }
 
 // ---------------------------------------------------------------------------
+// Collect ignore ranges from a text string.
+// Used by content.js for cross-node ignore filtering (multi-word ignore
+// phrases that span DOM text node boundaries).
+// ---------------------------------------------------------------------------
+function collectIgnoreRanges(text, ignoreCompiled) {
+  const ranges = [];
+  if (!ignoreCompiled) return ranges;
+  for (const rx of ignoreCompiled.regexes) {
+    const re = rx.re;
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      ranges.push({ start: m.index, end: m.index + m[0].length });
+    }
+  }
+  return ranges;
+}
+
+// ---------------------------------------------------------------------------
 // Export (UMD: Node.js or browser)
 // ---------------------------------------------------------------------------
 const MatcherEngine = {
   parseWordEntry,
   compileAll,
   findMatches,
+  collectIgnoreRanges,
 };
 
 if (typeof module !== "undefined" && module.exports) {
