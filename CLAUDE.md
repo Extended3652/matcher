@@ -72,6 +72,41 @@ extension/
   options.js         — dictionary editor logic
   popup.html         — browser-action popup UI
   popup.js           — popup logic
+  utils.js           — shared helpers (sortKey, insertAlphabetically, clientGlobToRegex)
 tools/               — standalone Node scripts (seeding, testing)
 cms-fake/            — local CMS mock for manual testing
 ```
+
+## Session log — 2026-03-26 Comprehensive Code Review
+
+### What was done
+Full code review → 8 fixes implemented, tested (55 unit + 12 integration), merged to `main`:
+
+| # | Fix | Files |
+|---|-----|-------|
+| 1 | Simplified popup client banner to single category select + Save/Update button; added missing client fields (aliases, includePatternInContent, note) | popup.html, popup.js |
+| 2 | Prefix order: `CS:`, `//`, `LIT:` now work in any combination/order via while-loop | matcher-core.js |
+| 3 | Pattern validation via new `MatcherEngine.validatePattern()` — shows error before saving invalid patterns | matcher-core.js, options.js, popup.js, options.html, popup.html |
+| 4 | Context menu escapes `*` and `?` with backslash so selected text is literal | background.js |
+| 5 | CSS color injection fix — `safeHexColor()` now used in `formatSummaryHtml()` | options.js |
+| 7 | Cached `.navbar-inner .client-name` querySelector with `isConnected` invalidation | content.js |
+| 9 | Fixed double render / editor-toggle-off after adding words in popup | popup.js |
+| 10 | Duplicate/invalid edits now flash red border + tooltip instead of silent rejection | popup.js |
+
+### Key architectural changes to remember
+- **`matcher-core.js` is now loaded in options.html and popup.html** (for `MatcherEngine.validatePattern()`)
+- **Popup banner is intentionally simple**: one `#bannerCatSelect` + Save/Update button only (user's explicit preference — no second select for name category)
+- **`#bannerNameCatSelect` was removed** from popup.html
+
+### Outstanding tech debt (not yet addressed)
+- **#8 Storage quota** — dictionary is ~7MB vs 10MB Chrome limit; should warn at 80%
+- **#11** No ESLint/Prettier
+- **#12** Magic numbers (debounce delays, chunk sizes) should be named constants
+- **#13** Callback nesting in background.js could use async/await
+- **#14** options.js (1510 lines) and popup.js (1188 lines) could be split into modules
+- **#15** No integration/e2e tests (only unit tests for matcher engine)
+- **#16** Accessibility: confirm() dialogs, missing ARIA roles on modals, color-only highlights
+- **#17** Inconsistent error logging (mix of console.error/warn/silent)
+- **#18** .gitignore missing node_modules/, .env, OS temp files
+- **#19** No dark mode support
+- **#20** escHtml uses 4 chained .replace() calls instead of single-pass

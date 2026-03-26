@@ -11,6 +11,12 @@
   // Elements
   // ---------------------------------------------------------------------------
   const msgEl         = document.getElementById("msg");
+  const storageWarnEl = document.getElementById("storageWarning");
+  const confirmDialog = document.getElementById("confirmDialog");
+  const confirmTitle  = document.getElementById("confirmTitle");
+  const confirmBody   = document.getElementById("confirmBody");
+  const confirmOk     = document.getElementById("confirmOk");
+  const confirmCancel = document.getElementById("confirmCancel");
   const catEditorsEl  = document.getElementById("catEditors");
   const btnExport     = document.getElementById("btnExport");
   const btnImportHT   = document.getElementById("btnImportHT");
@@ -132,13 +138,61 @@
   const NO_HL_BG = "#e0e0e0";
   const NO_HL_FG = "#555555";
 
+  // Timing constants
+  const MSG_DISPLAY_MS = 4000;
+  const DICT_SAVE_DEBOUNCE_MS = 300;
+  const CLIENT_SEARCH_DEBOUNCE_MS = 80;
+
+  // Storage quota constants
+  const STORAGE_QUOTA_BYTES = 10 * 1024 * 1024; // 10 MB Chrome limit
+  const STORAGE_WARN_RATIO = 0.8;
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
   function showMsg(text, type) {
     msgEl.textContent = text;
     msgEl.className = "msg " + type;
-    setTimeout(() => { msgEl.className = "msg"; }, 4000);
+    setTimeout(() => { msgEl.className = "msg"; }, MSG_DISPLAY_MS);
+  }
+
+  function checkStorageQuota() {
+    if (!chrome.storage.local.getBytesInUse) return;
+    chrome.storage.local.getBytesInUse(null, (bytes) => {
+      const pct = ((bytes / STORAGE_QUOTA_BYTES) * 100).toFixed(1);
+      const mb  = (bytes / (1024 * 1024)).toFixed(1);
+      if (bytes >= STORAGE_QUOTA_BYTES * STORAGE_WARN_RATIO) {
+        storageWarnEl.textContent =
+          "Storage usage: " + mb + " MB / 10 MB (" + pct + "%). Consider removing unused categories or clients.";
+        storageWarnEl.style.display = "";
+      } else {
+        storageWarnEl.style.display = "none";
+      }
+    });
+  }
+
+  function showConfirmDialog(title, body, okLabel) {
+    return new Promise((resolve) => {
+      confirmTitle.textContent = title;
+      confirmBody.textContent = body;
+      confirmOk.textContent = okLabel || "Remove";
+      const trigger = document.activeElement;
+      function cleanup(result) {
+        confirmOk.removeEventListener("click", onOk);
+        confirmCancel.removeEventListener("click", onCancel);
+        confirmDialog.removeEventListener("cancel", onCancel);
+        confirmDialog.close();
+        if (trigger && trigger.focus) trigger.focus();
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      confirmOk.addEventListener("click", onOk);
+      confirmCancel.addEventListener("click", onCancel);
+      confirmDialog.addEventListener("cancel", onCancel);
+      confirmDialog.showModal();
+      confirmCancel.focus();
+    });
   }
 
   function safeStr(v) {
@@ -147,6 +201,10 @@
 
   function escHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function safeHexColor(v, fallback) {
+    return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v) ? v : fallback;
   }
 
   function normalizeAliasesFromTextarea(txt) {
@@ -334,8 +392,8 @@
 
     function pill(label, catName) {
       var st = catName ? stMap.get(catName) : null;
-      var bg = st ? (st.color || "#e0e0e0") : "#f0f0f0";
-      var fg = st ? (st.fColor || "#333") : "#777";
+      var bg = safeHexColor(st ? st.color : null, st ? "#e0e0e0" : "#f0f0f0");
+      var fg = safeHexColor(st ? st.fColor : null, st ? "#333" : "#777");
       var border = st ? "rgba(0,0,0,0.15)" : "#ddd";
       return '<span class="summary-pill" style="background:' + bg + ";color:" + fg + ";border-color:" + border + '">' + escHtml(label) + "</span>";
     }
@@ -390,6 +448,7 @@
       renderIgnoreList();
       renderClients();
       renderCategories();
+      checkStorageQuota();
 
       // Auto-fill the Add Client form once from the active CMS tab, if available.
       if (!addFormAutofilled) {
@@ -420,6 +479,7 @@
     invalidateCaches();
     chrome.storage.local.set({ dictionary: currentDict }, () => {
       if (msg) showMsg(msg, "success");
+      checkStorageQuota();
     });
   }
 
@@ -431,8 +491,8 @@
     if (_saveDictTimer) clearTimeout(_saveDictTimer);
     _saveDictTimer = setTimeout(() => {
       _saveDictTimer = null;
-      chrome.storage.local.set({ dictionary: currentDict });
-    }, 300);
+      chrome.storage.local.set({ dictionary: currentDict }, checkStorageQuota);
+    }, DICT_SAVE_DEBOUNCE_MS);
   }
 
   // ---------------------------------------------------------------------------
@@ -800,6 +860,8 @@
         if (!catName) {
           swatch.style.backgroundColor = NO_HL_BG;
           swatch.style.borderColor = "#bdbdbd";
+          swatch.setAttribute("aria-label", "No category color");
+          swatch.title = "No category";
         } else {
           const st = styleByName.get(catName);
           if (st) {
@@ -809,6 +871,8 @@
             swatch.style.backgroundColor = NO_HL_BG;
             swatch.style.borderColor = "#bdbdbd";
           }
+          swatch.setAttribute("aria-label", "Category: " + catName);
+          swatch.title = catName;
         }
       }
 
@@ -945,7 +1009,7 @@
   clientSearchEl.addEventListener("input", () => {
     clearTimeout(_clientSearchTimer);
     // Only rebuild the list body — skip repopulating the Add Client dropdowns.
-    _clientSearchTimer = setTimeout(renderClientListBody, 80);
+    _clientSearchTimer = setTimeout(renderClientListBody, CLIENT_SEARCH_DEBOUNCE_MS);
   });
 
   // Delegated click handler for client list (header expand/collapse + delete)
@@ -957,14 +1021,17 @@
       const key = card && card.getAttribute("data-key");
       if (!key) return;
       const entry = (currentDict.clients || []).find(c => patternKey(c.pattern) === key);
-      if (entry && confirm('Remove client "' + safeStr(entry.pattern) + '"?')) {
-        const idx = (currentDict.clients || []).indexOf(entry);
-        if (idx >= 0) {
-          currentDict.clients.splice(idx, 1);
-          saveDictionary('Removed client "' + safeStr(entry.pattern) + '"');
-          if (openClientKey === key) openClientKey = null;
-          renderClients();
-        }
+      if (entry) {
+        showConfirmDialog("Remove client", safeStr(entry.pattern), "Remove").then((yes) => {
+          if (!yes) return;
+          const idx = (currentDict.clients || []).indexOf(entry);
+          if (idx >= 0) {
+            currentDict.clients.splice(idx, 1);
+            saveDictionary('Removed client "' + safeStr(entry.pattern) + '"');
+            if (openClientKey === key) openClientKey = null;
+            renderClients();
+          }
+        });
       }
       return;
     }
@@ -1184,10 +1251,6 @@
       const body = document.createElement("div");
       body.className = "cat-body";
 
-      // Sanitise colour values before injecting into HTML — only allow valid
-      // CSS hex colours (#xxx or #xxxxxx) to prevent attribute injection.
-      const safeHexColor = (v, fallback) =>
-        /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v) ? v : fallback;
       const safeBg = safeHexColor(cat.color, "#FFFF00");
       const safeFg = safeHexColor(cat.fColor, "#FFFFFF");
 
@@ -1285,6 +1348,13 @@
           if (addExactCb.checked && !word.startsWith("//")) {
             word = "//" + word;
           }
+          if (typeof MatcherEngine !== "undefined") {
+            var check = MatcherEngine.validatePattern(word);
+            if (!check.ok) {
+              showMsg("Invalid pattern: " + check.reason, "error");
+              return;
+            }
+          }
           if (!Array.isArray(cat.words)) cat.words = [];
           insertAlphabetically(cat.words, word);
           wordArea.value = cat.words.join("\n");
@@ -1321,12 +1391,13 @@
       deleteBtn.addEventListener("click", () => {
         const nm = cat.name || "";
         const n = (cat.words && cat.words.length) ? cat.words.length : 0;
-        if (confirm('Delete "' + nm + '" and all its ' + n + " words?")) {
+        showConfirmDialog("Delete category", '"' + nm + '" and all its ' + n + " words will be removed.", "Delete").then((yes) => {
+          if (!yes) return;
           currentDict.categories.splice(index, 1);
           saveDictionary('Deleted "' + nm + '"');
           renderCategories();
           renderClients();
-        }
+        });
       });
       saveRow.appendChild(deleteBtn);
 
@@ -1351,6 +1422,14 @@
     const name = (newCatName.value || "").trim();
     if (!name) {
       showMsg("Enter a category name", "error");
+      return;
+    }
+
+    const duplicate = currentDict.categories.some(
+      c => c.name.toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      showMsg('A category named "' + name + '" already exists', "error");
       return;
     }
 

@@ -15,6 +15,13 @@
   const MAX_SPAN_LEN = 120;
   const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "SELECT", "NOSCRIPT"]);
 
+  // Tuning constants
+  const WILDCARD_MAX_GAP = 60;
+  const NODE_BATCH_SIZE = 200;
+  const IDLE_CALLBACK_TIMEOUT_MS = 500;
+  const MUTATION_DEBOUNCE_MS = 80;
+  const STORAGE_CHANGE_DEBOUNCE_MS = 150;
+
   let globalEnabled = true;
 
   // Compiled matcher
@@ -26,6 +33,7 @@
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
   let _cachedMentionKey = null;     // "<clientName>|<contentType>" — skip recompile when unchanged
   let _highlightCount = 0;          // cached count of highlight spans on the page
+  let _clientNameEl = null;         // cached .navbar-inner .client-name element
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -59,7 +67,10 @@
   // Client-name highlight
   // ---------------------------------------------------------------------------
   function getCmsClientNameEl() {
-    return document.querySelector(".navbar-inner .client-name");
+    if (!_clientNameEl || !_clientNameEl.isConnected) {
+      _clientNameEl = document.querySelector(".navbar-inner .client-name");
+    }
+    return _clientNameEl;
   }
 
   function getCmsClientName() {
@@ -105,7 +116,7 @@
         // Bound to 60 chars: client names can contain spaces and punctuation
         // (e.g. "Acme Corp — US"), so we use [\s\S] and a wider bound than
         // matcher-core's word wildcards (which use {0,30} and exclude \s\p{P}).
-        rx += "[\\s\\S]{0,60}";
+        rx += "[\\s\\S]{0," + WILDCARD_MAX_GAP + "}";
       } else if (ch === "?") {
         rx += "[\\s\\S]";
       } else {
@@ -300,9 +311,10 @@
             return NodeFilter.FILTER_REJECT;
           }
 
-          // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body)
-          if (node.parentElement.isContentEditable) {
-            return NodeFilter.FILTER_REJECT;
+          // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body).
+          // Traverse ancestors because the editable attribute may be on a grandparent.
+          for (let ce = node.parentElement; ce; ce = ce.parentElement) {
+            if (ce.isContentEditable) return NodeFilter.FILTER_REJECT;
           }
 
           // Skip already-processed parents
@@ -440,7 +452,7 @@
 
     // When the content root falls back to document.body, prioritize nodes
     // visible in the viewport so the user sees highlights appear first.
-    if (target === document.body && nodes.length > 200) {
+    if (target === document.body && nodes.length > NODE_BATCH_SIZE) {
       const vpBottom = window.innerHeight;
       const inView = [];
       const outView = [];
@@ -465,7 +477,7 @@
     // Process the first batch synchronously so highlights appear immediately
     // instead of waiting for requestIdleCallback (0-50ms idle delay).
     let i = 0;
-    const firstEnd = Math.min(200, nodes.length);
+    const firstEnd = Math.min(NODE_BATCH_SIZE, nodes.length);
     while (i < firstEnd) {
       highlightTextNode(nodes[i++]);
     }
@@ -473,20 +485,20 @@
     if (i >= nodes.length) return;
 
     function next() {
-      const end = Math.min(i + 200, nodes.length);
+      const end = Math.min(i + NODE_BATCH_SIZE, nodes.length);
       while (i < end) {
         highlightTextNode(nodes[i++]);
       }
       if (i < nodes.length) {
         if (typeof requestIdleCallback !== "undefined") {
-          requestIdleCallback(next, { timeout: 500 });
+          requestIdleCallback(next, { timeout: IDLE_CALLBACK_TIMEOUT_MS });
         } else {
           setTimeout(next, 0);
         }
       }
     }
     if (typeof requestIdleCallback !== "undefined") {
-      requestIdleCallback(next, { timeout: 500 });
+      requestIdleCallback(next, { timeout: IDLE_CALLBACK_TIMEOUT_MS });
     } else {
       setTimeout(next, 0);
     }
@@ -590,7 +602,7 @@
             highlightTextNode(item.node);
           }
         }
-      }, 80);
+      }, MUTATION_DEBOUNCE_MS);
     });
 
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
@@ -812,7 +824,7 @@
       } else {
         stopObserver();
       }
-    }, 150);
+    }, STORAGE_CHANGE_DEBOUNCE_MS);
   });
 
   if (document.readyState === "loading") {

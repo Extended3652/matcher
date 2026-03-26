@@ -17,6 +17,18 @@
 (function() {
   "use strict";
 
+  // Timing constants
+  const SEARCH_DEBOUNCE_MS = 150;
+  const ERROR_FLASH_MS = 1200;
+  const INVALID_RESET_MS = 1500;
+  const BUTTON_FEEDBACK_MS = 700;
+
+  const confirmDialog = document.getElementById("confirmDialog");
+  const confirmTitle  = document.getElementById("confirmTitle");
+  const confirmBody   = document.getElementById("confirmBody");
+  const confirmOk     = document.getElementById("confirmOk");
+  const confirmCancel = document.getElementById("confirmCancel");
+
   const masterToggle    = document.getElementById("masterToggle");
   const statsEl         = document.getElementById("stats");
   const catListEl       = document.getElementById("catList");
@@ -25,7 +37,6 @@
   const clientBannerEl  = document.getElementById("clientBanner");
   const bannerNameEl    = document.getElementById("bannerClientName");
   let bannerCatSelEl     = document.getElementById("bannerCatSelect");
-  let bannerNameCatSelEl = document.getElementById("bannerNameCatSelect");
   const bannerAddBtnEl   = document.getElementById("bannerAddBtn");
 
   let _bannerAbort = null; // AbortController for banner event listeners
@@ -65,8 +76,32 @@
     return n.length === 0 ? true : h.includes(n);
   }
 
+  function showConfirmDialog(title, body, okLabel) {
+    return new Promise((resolve) => {
+      confirmTitle.textContent = title;
+      confirmBody.textContent = body;
+      confirmOk.textContent = okLabel || "Remove";
+      const trigger = document.activeElement;
+      function cleanup(result) {
+        confirmOk.removeEventListener("click", onOk);
+        confirmCancel.removeEventListener("click", onCancel);
+        confirmDialog.removeEventListener("cancel", onCancel);
+        confirmDialog.close();
+        if (trigger && trigger.focus) trigger.focus();
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      confirmOk.addEventListener("click", onOk);
+      confirmCancel.addEventListener("click", onCancel);
+      confirmDialog.addEventListener("cancel", onCancel);
+      confirmDialog.showModal();
+      confirmCancel.focus();
+    });
+  }
+
   function confirmRemove(label, value) {
-    return window.confirm(`Remove from ${label}?\n\n${value}`);
+    return showConfirmDialog("Remove from " + label + "?", value);
   }
 
   // ---------------------------------------------------------------------------
@@ -130,82 +165,47 @@
     const sig = { signal: _bannerAbort.signal };
 
     const selEl = bannerCatSelEl;
-    const nameSelEl = bannerNameCatSelEl;
     const addBtn = document.getElementById("bannerAddBtn");
 
-    // Helper to build <option> list into a select element
-    function fillCatOptions(sel, noHlText, selectedValue) {
-      sel.innerHTML = "";
-      const defOpt = document.createElement("option");
-      defOpt.value = "";
-      defOpt.textContent = noHlText;
-      sel.appendChild(defOpt);
-      for (const cat of (currentDict.categories || [])) {
-        const opt = document.createElement("option");
-        opt.value = cat.name;
-        opt.textContent = cat.name;
-        if (cat.color) { opt.style.backgroundColor = cat.color; opt.style.color = cat.fColor || "#000"; }
-        sel.appendChild(opt);
-      }
-      sel.value = selectedValue || "";
-    }
-
-    function applySelectColor(sel) {
-      const cat = (currentDict.categories || []).find(c => c.name === sel.value);
-      if (cat) { sel.style.backgroundColor = cat.color || ""; sel.style.color = cat.fColor || "#000"; }
-      else { sel.style.backgroundColor = ""; sel.style.color = ""; }
-    }
-
     if (matched) {
-      // Known client — show current defaultCategory and mentionCategory, allow changing
+      // Known client — show current defaultCategory, allow updating
       clientBannerEl.style.background = "#e8f4fd";
       clientBannerEl.style.borderBottom = "1px solid #bee3f8";
       bannerNameEl.textContent = detectedClientName;
-      addBtn.style.display = "none";
 
-      fillCatOptions(selEl, "(header: no highlight)", matched.defaultCategory || "");
-      applySelectColor(selEl);
-      selEl.addEventListener("change", () => {
+      populateBannerSelect(matched.defaultCategory || "");
+      selEl.addEventListener("change", () => applyBannerSelectColor(), sig);
+
+      addBtn.textContent = "Update";
+      addBtn.style.display = "";
+      addBtn.addEventListener("click", () => {
         matched.defaultCategory = selEl.value || null;
         saveDictionary();
-        applySelectColor(selEl);
-      }, sig);
-
-      fillCatOptions(nameSelEl, "(name: no highlight)", matched.mentionCategory || "");
-      applySelectColor(nameSelEl);
-      nameSelEl.style.display = "";
-      nameSelEl.addEventListener("change", () => {
-        matched.mentionCategory = nameSelEl.value || null;
-        saveDictionary();
-        applySelectColor(nameSelEl);
+        renderClientBanner();
       }, sig);
 
     } else {
-      // Unknown client — amber warning, show add button
+      // Unknown client — amber warning, show save button
       clientBannerEl.style.background = "#fff8e1";
       clientBannerEl.style.borderBottom = "1px solid #ffe082";
       bannerNameEl.textContent = "\u26a0 " + detectedClientName;
-      addBtn.style.display = "";
 
-      // Pre-select first category as a suggested default
       const firstCat = (currentDict.categories || [])[0];
-      fillCatOptions(selEl, "(no highlight)", firstCat ? firstCat.name : "");
-      applySelectColor(selEl);
-      selEl.addEventListener("change", () => applySelectColor(selEl), sig);
+      populateBannerSelect(firstCat ? firstCat.name : "");
+      selEl.addEventListener("change", () => applyBannerSelectColor(), sig);
 
-      // Show name-color select for unknown clients too
-      fillCatOptions(nameSelEl, "(name: no highlight)", "");
-      applySelectColor(nameSelEl);
-      nameSelEl.style.display = "";
-      nameSelEl.addEventListener("change", () => applySelectColor(nameSelEl), sig);
-
+      addBtn.textContent = "Save";
+      addBtn.style.display = "";
       addBtn.addEventListener("click", () => {
         if (!currentDict.clients) currentDict.clients = [];
         const entry = {
           pattern: detectedClientName,
           defaultCategory: selEl.value || null,
-          mentionCategory: nameSelEl.value || null,
-          overrides: {}
+          mentionCategory: null,
+          overrides: {},
+          aliases: [],
+          includePatternInContent: true,
+          note: ""
         };
         currentDict.clients.push(entry);
         saveDictionary();
@@ -508,7 +508,7 @@
   let searchDebounce = null;
   popupSearch.addEventListener("input", () => {
     clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(renderAll, 150);
+    searchDebounce = setTimeout(renderAll, SEARCH_DEBOUNCE_MS);
   });
 
   function matchesGlobalSearchForIgnore(q) {
@@ -609,9 +609,11 @@
     function handleRemoveClick(e) {
       e.preventDefault();
       e.stopPropagation();
-      if (!confirmRemove(scopeLabel, raw)) return;
-      editing = null;
-      onRemove();
+      confirmRemove(scopeLabel, raw).then((yes) => {
+        if (!yes) return;
+        editing = null;
+        onRemove();
+      });
     }
 
     function handleEnterEdit(e) {
@@ -636,13 +638,22 @@
       input.style.border = "1px solid #cfd8dc";
       input.style.borderRadius = "8px";
 
+      function flashError(msg) {
+        input.style.borderColor = "#e74c3c";
+        input.title = msg;
+        setTimeout(() => { input.style.borderColor = "#cfd8dc"; input.title = ""; }, ERROR_FLASH_MS);
+      }
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           const nextRaw = normalizeTrim(input.value);
           if (!nextRaw) return; // stay in edit mode
+          if (typeof MatcherEngine !== "undefined") {
+            const check = MatcherEngine.validatePattern(nextRaw);
+            if (!check.ok) { flashError(check.reason); return; }
+          }
           editing = null;
-          onSave(nextRaw);
+          onSave(nextRaw, flashError);
           return;
         }
 
@@ -753,6 +764,8 @@
     const swatch = document.createElement("span");
     swatch.className = "cat-accent";
     swatch.style.backgroundColor = "#d1d5db";
+    swatch.setAttribute("aria-label", "Ignore List color");
+    swatch.title = "Ignore List";
     swatchWrap.appendChild(swatch);
     item.appendChild(swatchWrap);
 
@@ -870,12 +883,11 @@
             null,
             item2.entryIndex,
             item2.raw,
-            (nextRaw) => {
+            (nextRaw, flashError) => {
               // Avoid duplicate raw strings
               const existingIdx = currentDict.ignoreList.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                // do nothing, keep original
-                setOpenEditor("ignore");
+                if (flashError) { editing = { scope: "ignore", catIndex: null, entryIndex: item2.entryIndex }; flashError("Duplicate entry"); }
                 return;
               }
               currentDict.ignoreList[item2.entryIndex] = nextRaw;
@@ -900,10 +912,20 @@
         const raw = buildRaw(base, !!exactCb.checked, !!csCb.checked);
         if (!raw) return;
 
+        if (typeof MatcherEngine !== "undefined") {
+          const check = MatcherEngine.validatePattern(raw);
+          if (!check.ok) {
+            addBtn.textContent = "Invalid";
+            addBtn.title = check.reason;
+            setTimeout(() => { addBtn.textContent = "Add"; addBtn.title = ""; }, INVALID_RESET_MS);
+            return;
+          }
+        }
+
         if (!currentDict.ignoreList) currentDict.ignoreList = [];
         if (currentDict.ignoreList.includes(raw)) {
           addBtn.textContent = "Exists";
-          setTimeout(() => { addBtn.textContent = "Add"; }, 700);
+          setTimeout(() => { addBtn.textContent = "Add"; }, BUTTON_FEEDBACK_MS);
           return;
         }
 
@@ -916,7 +938,6 @@
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
         renderIgnoreWords();
-        setOpenEditor("ignore");
       }
 
       addBtn.addEventListener("click", (e) => {
@@ -952,6 +973,8 @@
     const swatch = document.createElement("span");
     swatch.className = "cat-accent";
     swatch.style.backgroundColor = cat.color || "#FFFF00";
+    swatch.setAttribute("aria-label", "Category: " + (cat.name || ""));
+    swatch.title = cat.name || "";
 
     const colorInput = document.createElement("input");
     colorInput.type = "color";
@@ -1115,10 +1138,10 @@
             index,
             item2.entryIndex,
             item2.raw,
-            (nextRaw) => {
+            (nextRaw, flashError) => {
               const existingIdx = cat.words.indexOf(nextRaw);
               if (existingIdx !== -1 && existingIdx !== item2.entryIndex) {
-                setOpenEditor(key);
+                if (flashError) { editing = { scope: "cat", catIndex: index, entryIndex: item2.entryIndex }; flashError("Duplicate entry"); }
                 return;
               }
               cat.words[item2.entryIndex] = nextRaw;
@@ -1143,10 +1166,20 @@
         const raw = buildRaw(base, !!exactCb.checked, !!csCb.checked);
         if (!raw) return;
 
+        if (typeof MatcherEngine !== "undefined") {
+          const check = MatcherEngine.validatePattern(raw);
+          if (!check.ok) {
+            addBtn.textContent = "Invalid";
+            addBtn.title = check.reason;
+            setTimeout(() => { addBtn.textContent = "Add"; addBtn.title = ""; }, INVALID_RESET_MS);
+            return;
+          }
+        }
+
         if (!cat.words) cat.words = [];
         if (cat.words.includes(raw)) {
           addBtn.textContent = "Exists";
-          setTimeout(() => { addBtn.textContent = "Add"; }, 700);
+          setTimeout(() => { addBtn.textContent = "Add"; }, BUTTON_FEEDBACK_MS);
           return;
         }
 
@@ -1159,7 +1192,6 @@
         setTimeout(() => { addBtn.textContent = "Add"; }, 700);
 
         renderWordList();
-        setOpenEditor(key);
       }
 
       addBtn.addEventListener("click", (e) => {

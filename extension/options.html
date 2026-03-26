@@ -539,12 +539,65 @@
       color: #2980b9;
       border: 1px solid #bee5eb;
     }
+    /* Accessible confirm dialog */
+    #confirmDialog {
+      border: none;
+      border-radius: 10px;
+      padding: 24px;
+      max-width: 380px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      font-family: inherit;
+    }
+    #confirmDialog::backdrop {
+      background: rgba(0,0,0,0.4);
+    }
+    #confirmDialog h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+    #confirmDialog p {
+      margin: 0 0 18px;
+      font-size: 13px;
+      color: #555;
+      word-break: break-word;
+    }
+    .dialog-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .dialog-buttons button {
+      padding: 6px 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-dialog-cancel {
+      background: #f5f5f5;
+      color: #333;
+    }
+    .btn-dialog-danger {
+      background: #e74c3c;
+      color: #fff;
+      border-color: #c0392b;
+    }
   </style>
 </head>
 <body>
+  <dialog id="confirmDialog" role="alertdialog" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+    <h3 id="confirmTitle"></h3>
+    <p id="confirmBody"></p>
+    <div class="dialog-buttons">
+      <button id="confirmCancel" class="btn-dialog-cancel">Cancel</button>
+      <button id="confirmOk" class="btn-dialog-danger">Remove</button>
+    </div>
+  </dialog>
+
   <h1>CMS Highlighter - Dictionary Editor</h1>
 
   <div id="msg" class="msg" role="status" aria-live="polite"></div>
+  <div id="storageWarning" role="alert" aria-live="polite" style="display:none; padding:10px 14px; margin:8px 0; border-radius:6px; background:#fff3cd; color:#856404; border:1px solid #ffc107; font-size:13px;"></div>
 
   <!-- Import / Export -->
   <div class="section">
@@ -675,6 +728,7 @@
   </div>
 
   <script src="utils.js"></script>
+  <script src="matcher-core.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

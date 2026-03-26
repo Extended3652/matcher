@@ -111,10 +111,11 @@ function globToRegexFragment(pattern) {
           result += "[^\\s]+";
         } else if (isFirst || isLast) {
           // Bound match length to prevent worst-case backtracking.
-          result += "[^\\s\\p{P}]{0,30}";
+          // Allow apostrophes so wildcards span contractions (isn't, don't).
+          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
         } else {
-          // Middle wildcard: bounded.
-          result += "[^\\s\\p{P}]{0,30}";
+          // Middle wildcard: bounded. Allow apostrophes for contractions.
+          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
         }
       } else if (ch === "?") {
         result += "[\\s\\S]";
@@ -365,10 +366,13 @@ function findMatches(text, compiled) {
         if (ignoreRanges[mid].end <= match.start) lo = mid + 1;
         else hi = mid;
       }
-      // Scan forward while ig.start < match.end; any such range overlaps.
+      // Scan forward: only suppress if an ignore range fully contains the match.
+      // This prevents a short ignore entry (e.g. "switch") from killing a longer
+      // phrase match (e.g. "bait and switch") that merely overlaps with it.
       for (let i = lo; i < ignoreRanges.length; i++) {
-        if (ignoreRanges[i].start >= match.end) break;
-        return false;
+        const ig = ignoreRanges[i];
+        if (ig.start >= match.end) break;
+        if (ig.start <= match.start && ig.end >= match.end) return false;
       }
       return true;
     });

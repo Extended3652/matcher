@@ -34,22 +34,25 @@
     let caseSensitive = false;
     let literal = false;
 
-    // Check for CS: prefix (case-sensitive flag)
-    if (text.startsWith("CS:")) {
-      caseSensitive = true;
-      text = text.slice(3);
-    }
-
-    // Check for // prefix (exact flag)
-    if (text.startsWith("//")) {
-      exact = true;
-      text = text.slice(2);
-    }
-
-    // Check for LIT: prefix (treat * and ? as literal characters)
-    if (text.startsWith("LIT:")) {
-      literal = true;
-      text = text.slice(4);
+    // Strip prefixes in any order (CS:, //, LIT: can be combined freely).
+    let changed = true;
+    while (changed) {
+      changed = false;
+      if (text.startsWith("CS:")) {
+        caseSensitive = true;
+        text = text.slice(3);
+        changed = true;
+      }
+      if (text.startsWith("//")) {
+        exact = true;
+        text = text.slice(2);
+        changed = true;
+      }
+      if (text.startsWith("LIT:")) {
+        literal = true;
+        text = text.slice(4);
+        changed = true;
+      }
     }
 
     // Detect boundary markers BEFORE stripping whitespace
@@ -119,10 +122,10 @@
             // catastrophic backtracking. Tighter than content.js's client-name
             // globToRegex ({0,60} over [\s\S]) because word wildcards should
             // stay within token boundaries.
-            result += "[^\\s\\p{P}]{0,30}";
+            result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
           } else {
             // Middle wildcard: same bounded class as leading/trailing.
-            result += "[^\\s\\p{P}]{0,30}";
+            result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
           }
         } else if (ch === "?") {
           result += "[\\s\\S]";
@@ -377,10 +380,13 @@
           if (ignoreRanges[mid].end <= match.start) lo = mid + 1;
           else hi = mid;
         }
-        // Scan forward while ig.start < match.end; any such range overlaps.
+        // Scan forward: only suppress if an ignore range fully contains the match.
+        // This prevents a short ignore entry (e.g. "switch") from killing a longer
+        // phrase match (e.g. "bait and switch") that merely overlaps with it.
         for (let i = lo; i < ignoreRanges.length; i++) {
-          if (ignoreRanges[i].start >= match.end) break;
-          return false;
+          const ig = ignoreRanges[i];
+          if (ig.start >= match.end) break;
+          if (ig.start <= match.start && ig.end >= match.end) return false;
         }
         return true;
       });
@@ -434,8 +440,25 @@
   // ---------------------------------------------------------------------------
   // Export
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Validate a single raw word entry: returns { ok: true } or { ok: false, reason: "..." }.
+  // ---------------------------------------------------------------------------
+  function validatePattern(rawEntry) {
+    const parsed = parseWordEntry(rawEntry);
+    if (!parsed) return { ok: false, reason: "Pattern is empty after stripping prefixes." };
+    try {
+      const frag = compileWordToRegexFragment(parsed);
+      const flags = parsed.caseSensitive ? "gu" : "giu";
+      new RegExp("(" + frag + ")", flags);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: e.message };
+    }
+  }
+
   const MatcherEngine = {
     parseWordEntry,
+    validatePattern,
     compileAll,
     findMatches,
   };

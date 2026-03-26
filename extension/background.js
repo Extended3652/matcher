@@ -13,6 +13,7 @@ importScripts("utils.js");
 
 const MENU_PARENT_ID = "cms-hl-parent";
 const MENU_SEP1_ID   = "cms-hl-sep1";
+const MENU_REBUILD_DEBOUNCE_MS = 200;
 const MENU_EXACT_ID  = "cms-hl-exact";
 const MENU_CS_ID     = "cms-hl-cs";
 const MENU_SEP2_ID   = "cms-hl-sep2";
@@ -214,89 +215,115 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // ---------------------------------------------------------------------------
+// Serialized storage-write queue.  Each context-menu "add word" operation
+// reads the dictionary, mutates it, and writes it back.  Without
+// serialization two rapid adds can race (both read the same snapshot, the
+// second write silently drops the first).  We chain operations through a
+// promise queue so each read always sees the previous write.
+// ---------------------------------------------------------------------------
+let _storageWriteChain = Promise.resolve();
+
+function enqueueStorageWrite(fn) {
+  _storageWriteChain = _storageWriteChain.then(fn, fn);
+}
+
+// ---------------------------------------------------------------------------
 // Add a word to a category
 // ---------------------------------------------------------------------------
 function addWordToCategory(text, catIndex, tab) {
-  chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"], (result) => {
-    const dict = result.dictionary;
-    if (!dict || !Array.isArray(dict.categories) || !dict.categories[catIndex]) return;
+  enqueueStorageWrite(() => new Promise((resolve) => {
+    chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"], (result) => {
+      const dict = result.dictionary;
+      if (!dict || !Array.isArray(dict.categories) || !dict.categories[catIndex]) { resolve(); return; }
 
-    let word = text;
-    const isExact = result.contextExact || false;
-    const isCS = result.contextCaseSensitive || false;
+      let word = text;
+      const isExact = result.contextExact || false;
+      const isCS = result.contextCaseSensitive || false;
 
-    // Apply prefixes
-    if (isExact) word = "//" + word;
-    if (isCS) word = "CS:" + word;
+      // Escape glob characters so selected text is treated literally
+      word = word.replace(/([*?])/g, "\\$1");
 
-    // Check for duplicate. For case-insensitive adds, compare lowercased so
-    // "Amazon" and "amazon" are not stored as separate redundant entries.
-    const dupCheck = isCS ? word : word.toLowerCase();
-    const existing = dict.categories[catIndex].words;
-    const isDup = isCS
-      ? existing.includes(word)
-      : existing.some(w => w.toLowerCase() === dupCheck);
-    if (isDup) {
-      notifyTab(tab, `"${text}" already in ${dict.categories[catIndex].name}`);
-      return;
-    }
+      // Apply prefixes
+      if (isExact) word = "//" + word;
+      if (isCS) word = "CS:" + word;
 
-    // Insert alphabetically instead of appending
-    insertAlphabetically(dict.categories[catIndex].words, word);
-
-    chrome.storage.local.set({ dictionary: dict }, () => {
-      if (chrome.runtime.lastError) {
-        console.error("CMS Highlighter: failed to save word:", chrome.runtime.lastError.message);
-        notifyTab(tab, `Failed to save "${text}" — storage error`);
+      // Check for duplicate. For case-insensitive adds, compare lowercased so
+      // "Amazon" and "amazon" are not stored as separate redundant entries.
+      const dupCheck = isCS ? word : word.toLowerCase();
+      const existing = dict.categories[catIndex].words;
+      const isDup = isCS
+        ? existing.includes(word)
+        : existing.some(w => w.toLowerCase() === dupCheck);
+      if (isDup) {
+        notifyTab(tab, `"${text}" already in ${dict.categories[catIndex].name}`);
+        resolve();
         return;
       }
-      notifyTab(
-        tab,
-        `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
-      );
-      if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
-          void chrome.runtime.lastError; // swallow "no receiver" errors
-        });
-      }
-      buildContextMenu();
+
+      // Insert alphabetically instead of appending
+      insertAlphabetically(dict.categories[catIndex].words, word);
+
+      chrome.storage.local.set({ dictionary: dict }, () => {
+        if (chrome.runtime.lastError) {
+          console.error("CMS Highlighter: failed to save word:", chrome.runtime.lastError.message);
+          notifyTab(tab, `Failed to save "${text}" — storage error`);
+          resolve();
+          return;
+        }
+        notifyTab(
+          tab,
+          `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
+        );
+        if (tab && tab.id) {
+          chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+            void chrome.runtime.lastError; // swallow "no receiver" errors
+          });
+        }
+        buildContextMenu();
+        resolve();
+      });
     });
-  });
+  }));
 }
 
 // ---------------------------------------------------------------------------
 // Add a word to the ignore list
 // ---------------------------------------------------------------------------
 function addWordToIgnoreList(text, tab) {
-  chrome.storage.local.get(["dictionary"], (result) => {
-    const dict = result.dictionary;
-    if (!dict) return;
+  enqueueStorageWrite(() => new Promise((resolve) => {
+    chrome.storage.local.get(["dictionary"], (result) => {
+      const dict = result.dictionary;
+      if (!dict) { resolve(); return; }
 
-    if (!dict.ignoreList) dict.ignoreList = [];
+      if (!dict.ignoreList) dict.ignoreList = [];
 
-    if (dict.ignoreList.includes(text)) {
-      notifyTab(tab, `"${text}" already in Ignore List`);
-      return;
-    }
-
-    // Insert alphabetically instead of appending
-    insertAlphabetically(dict.ignoreList, text);
-
-    chrome.storage.local.set({ dictionary: dict }, () => {
-      if (chrome.runtime.lastError) {
-        console.error("CMS Highlighter: failed to save ignore word:", chrome.runtime.lastError.message);
-        notifyTab(tab, `Failed to save "${text}" — storage error`);
+      if (dict.ignoreList.includes(text)) {
+        notifyTab(tab, `"${text}" already in Ignore List`);
+        resolve();
         return;
       }
-      notifyTab(tab, `Added "${text}" to Ignore List`);
-      if (tab && tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
-          void chrome.runtime.lastError; // swallow "no receiver" errors
-        });
-      }
-      buildContextMenu();
+
+      // Insert alphabetically instead of appending
+      insertAlphabetically(dict.ignoreList, text);
+
+      chrome.storage.local.set({ dictionary: dict }, () => {
+        if (chrome.runtime.lastError) {
+          console.error("CMS Highlighter: failed to save ignore word:", chrome.runtime.lastError.message);
+          notifyTab(tab, `Failed to save "${text}" — storage error`);
+          resolve();
+          return;
+        }
+        notifyTab(tab, `Added "${text}" to Ignore List`);
+        if (tab && tab.id) {
+          chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
+            void chrome.runtime.lastError; // swallow "no receiver" errors
+          });
+        }
+        buildContextMenu();
+        resolve();
+      });
     });
-  });
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -369,5 +396,5 @@ chrome.storage.onChanged.addListener((changes, area) => {
   menuRebuildTimer = setTimeout(() => {
     menuRebuildTimer = null;
     buildContextMenu();
-  }, 200);
+  }, MENU_REBUILD_DEBOUNCE_MS);
 });

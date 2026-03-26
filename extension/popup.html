@@ -241,9 +241,61 @@
       font-size: 12px;
       color: #6b7280;
     }
+    /* Accessible confirm dialog */
+    #confirmDialog {
+      border: none;
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 320px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      font-family: inherit;
+    }
+    #confirmDialog::backdrop {
+      background: rgba(0,0,0,0.4);
+    }
+    #confirmDialog h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+    #confirmDialog p {
+      margin: 0 0 14px;
+      font-size: 12px;
+      color: #555;
+      word-break: break-word;
+    }
+    .dialog-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .dialog-buttons button {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-dialog-cancel {
+      background: #f5f5f5;
+      color: #333;
+    }
+    .btn-dialog-danger {
+      background: #e74c3c;
+      color: #fff;
+      border-color: #c0392b;
+    }
   </style>
 </head>
 <body>
+  <dialog id="confirmDialog" role="alertdialog" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+    <h3 id="confirmTitle"></h3>
+    <p id="confirmBody"></p>
+    <div class="dialog-buttons">
+      <button id="confirmCancel" class="btn-dialog-cancel">Cancel</button>
+      <button id="confirmOk" class="btn-dialog-danger">Remove</button>
+    </div>
+  </dialog>
+
   <div class="header">
     <h1>CMS Highlighter</h1>
 
@@ -263,9 +315,8 @@
   <div id="clientBanner" role="region" aria-label="Detected client" style="display:none; padding:8px 12px; font-size:13px; border-bottom:1px solid #ddd;">
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <span id="bannerClientName" style="font-weight:600; flex:1; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-      <select id="bannerCatSelect" style="padding:4px 6px; border:1px solid #ccc; border-radius:6px; font-size:12px; max-width:140px;" title="Header / Review highlight color"></select>
-      <select id="bannerNameCatSelect" style="display:none; padding:4px 6px; border:1px solid #ccc; border-radius:6px; font-size:12px; max-width:140px;" title="Client name highlight color in content"></select>
-      <button id="bannerAddBtn" style="display:none; padding:4px 10px; border-radius:6px; border:1px solid #27ae60; background:#27ae60; color:#fff; cursor:pointer; font-size:12px; white-space:nowrap;">+ Add client</button>
+      <select id="bannerCatSelect" style="padding:4px 6px; border:1px solid #ccc; border-radius:6px; font-size:12px; max-width:140px;" title="Default client category"></select>
+      <button id="bannerAddBtn" style="display:none; padding:4px 10px; border-radius:6px; border:1px solid #27ae60; background:#27ae60; color:#fff; cursor:pointer; font-size:12px; white-space:nowrap;">Save</button>
     </div>
   </div>
 
@@ -276,6 +327,7 @@
   <div class="cat-list" id="catList"></div>
 
   <script src="utils.js"></script>
+  <script src="matcher-core.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -5,3 +5,23 @@ extension/bench.js
 
 # local scratch
 _scratch/
+
+# dependencies
+node_modules/
+
+# environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# logs
+npm-debug.log*

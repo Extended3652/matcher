@@ -482,9 +482,35 @@ assertMatches(
 );
 
 // =============================================================================
-// 13. Plain phrase container beats //exact in lower-priority category
+// 13. Wildcard spanning apostrophes in contractions
 // =============================================================================
-section("13. Plain phrase container beats //exact (lower-priority cat)");
+section("13. Wildcard spanning apostrophes");
+
+assertMatches(
+  "leading wildcard spans apostrophe: *t mentioned matches isn't mentioned",
+  cfg([cat("a", "Phrase", "#0f0", ["*t mentioned in the description"])]),
+  "It isn't mentioned in the description here",
+  [{ cat: "Phrase", word: "isn't mentioned in the description" }]
+);
+
+assertMatches(
+  "leading wildcard spans curly apostrophe: *t match\u2019s text",
+  cfg([cat("a", "Phrase", "#0f0", ["*t work"])]),
+  "It doesn\u2019t work at all",
+  [{ cat: "Phrase", word: "doesn\u2019t work" }]
+);
+
+assertMatches(
+  "middle wildcard spans apostrophe: do*t matches don't",
+  cfg([cat("a", "W", "#0f0", ["do*t"])]),
+  "I don't know",
+  [{ cat: "W", word: "don't" }]
+);
+
+// =============================================================================
+// 14. Plain phrase container beats //exact in lower-priority category
+// =============================================================================
+section("14. Plain phrase container beats //exact (lower-priority cat)");
 
 assertMatches(
   "//exact in lower-priority cat should NOT beat plain phrase container from higher-priority cat",
@@ -494,6 +520,32 @@ assertMatches(
   ]),
   "I no longer have receipt for service",
   [{ cat: "Phrase", word: "no longer have receipt for service" }]
+);
+
+// =============================================================================
+// 15. Ignore list containment: partial overlap should NOT suppress longer match
+// =============================================================================
+section("15. Ignore list containment vs overlap");
+
+assertMatches(
+  "ignore 'switch' does NOT suppress phrase 'bait and switch'",
+  cfg([cat("a", "NLI", "#ff0", ["bait?*?switch"])], ["switch"]),
+  "This is a bait and switch tactic",
+  [{ cat: "NLI", word: "bait and switch" }]
+);
+
+assertMatches(
+  "ignore 'switch' still suppresses standalone 'switch' match",
+  cfg([cat("a", "NLI", "#ff0", ["switch"])], ["switch"]),
+  "They made the switch today",
+  []
+);
+
+assertMatches(
+  "ignore phrase fully containing match still suppresses it",
+  cfg([cat("a", "Ret", "#0f0", ["store"])], ["store front"]),
+  "I went to the store front but the store was open",
+  [{ cat: "Ret", word: "store" }]
 );
 
 // =============================================================================
