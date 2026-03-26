@@ -239,6 +239,9 @@ function addWordToCategory(text, catIndex, tab) {
       const isExact = result.contextExact || false;
       const isCS = result.contextCaseSensitive || false;
 
+      // Escape glob characters so selected text is treated literally
+      word = word.replace(/([*?])/g, "\\$1");
+
       // Apply prefixes
       if (isExact) word = "//" + word;
       if (isCS) word = "CS:" + word;

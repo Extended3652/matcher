@@ -26,6 +26,7 @@
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
   let _cachedMentionKey = null;     // "<clientName>|<contentType>" — skip recompile when unchanged
   let _highlightCount = 0;          // cached count of highlight spans on the page
+  let _clientNameEl = null;         // cached .navbar-inner .client-name element
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -59,7 +60,10 @@
   // Client-name highlight
   // ---------------------------------------------------------------------------
   function getCmsClientNameEl() {
-    return document.querySelector(".navbar-inner .client-name");
+    if (!_clientNameEl || !_clientNameEl.isConnected) {
+      _clientNameEl = document.querySelector(".navbar-inner .client-name");
+    }
+    return _clientNameEl;
   }
 
   function getCmsClientName() {

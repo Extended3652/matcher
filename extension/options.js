@@ -149,6 +149,10 @@
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  function safeHexColor(v, fallback) {
+    return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v) ? v : fallback;
+  }
+
   function normalizeAliasesFromTextarea(txt) {
     return String(txt || "")
       .split("\n")
@@ -334,8 +338,8 @@
 
     function pill(label, catName) {
       var st = catName ? stMap.get(catName) : null;
-      var bg = st ? (st.color || "#e0e0e0") : "#f0f0f0";
-      var fg = st ? (st.fColor || "#333") : "#777";
+      var bg = safeHexColor(st ? st.color : null, st ? "#e0e0e0" : "#f0f0f0");
+      var fg = safeHexColor(st ? st.fColor : null, st ? "#333" : "#777");
       var border = st ? "rgba(0,0,0,0.15)" : "#ddd";
       return '<span class="summary-pill" style="background:' + bg + ";color:" + fg + ";border-color:" + border + '">' + escHtml(label) + "</span>";
     }
@@ -1184,10 +1188,6 @@
       const body = document.createElement("div");
       body.className = "cat-body";
 
-      // Sanitise colour values before injecting into HTML — only allow valid
-      // CSS hex colours (#xxx or #xxxxxx) to prevent attribute injection.
-      const safeHexColor = (v, fallback) =>
-        /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v) ? v : fallback;
       const safeBg = safeHexColor(cat.color, "#FFFF00");
       const safeFg = safeHexColor(cat.fColor, "#FFFFFF");
 
@@ -1284,6 +1284,13 @@
           let word = addInput.value.trim();
           if (addExactCb.checked && !word.startsWith("//")) {
             word = "//" + word;
+          }
+          if (typeof MatcherEngine !== "undefined") {
+            var check = MatcherEngine.validatePattern(word);
+            if (!check.ok) {
+              showMsg("Invalid pattern: " + check.reason, "error");
+              return;
+            }
           }
           if (!Array.isArray(cat.words)) cat.words = [];
           insertAlphabetically(cat.words, word);

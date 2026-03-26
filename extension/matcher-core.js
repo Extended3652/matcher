@@ -34,22 +34,25 @@
     let caseSensitive = false;
     let literal = false;
 
-    // Check for CS: prefix (case-sensitive flag)
-    if (text.startsWith("CS:")) {
-      caseSensitive = true;
-      text = text.slice(3);
-    }
-
-    // Check for // prefix (exact flag)
-    if (text.startsWith("//")) {
-      exact = true;
-      text = text.slice(2);
-    }
-
-    // Check for LIT: prefix (treat * and ? as literal characters)
-    if (text.startsWith("LIT:")) {
-      literal = true;
-      text = text.slice(4);
+    // Strip prefixes in any order (CS:, //, LIT: can be combined freely).
+    let changed = true;
+    while (changed) {
+      changed = false;
+      if (text.startsWith("CS:")) {
+        caseSensitive = true;
+        text = text.slice(3);
+        changed = true;
+      }
+      if (text.startsWith("//")) {
+        exact = true;
+        text = text.slice(2);
+        changed = true;
+      }
+      if (text.startsWith("LIT:")) {
+        literal = true;
+        text = text.slice(4);
+        changed = true;
+      }
     }
 
     // Detect boundary markers BEFORE stripping whitespace
@@ -437,8 +440,25 @@
   // ---------------------------------------------------------------------------
   // Export
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Validate a single raw word entry: returns { ok: true } or { ok: false, reason: "..." }.
+  // ---------------------------------------------------------------------------
+  function validatePattern(rawEntry) {
+    const parsed = parseWordEntry(rawEntry);
+    if (!parsed) return { ok: false, reason: "Pattern is empty after stripping prefixes." };
+    try {
+      const frag = compileWordToRegexFragment(parsed);
+      const flags = parsed.caseSensitive ? "gu" : "giu";
+      new RegExp("(" + frag + ")", flags);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: e.message };
+    }
+  }
+
   const MatcherEngine = {
     parseWordEntry,
+    validatePattern,
     compileAll,
     findMatches,
   };
