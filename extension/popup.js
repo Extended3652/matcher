@@ -17,6 +17,18 @@
 (function() {
   "use strict";
 
+  // Timing constants
+  const SEARCH_DEBOUNCE_MS = 150;
+  const ERROR_FLASH_MS = 1200;
+  const INVALID_RESET_MS = 1500;
+  const BUTTON_FEEDBACK_MS = 700;
+
+  const confirmDialog = document.getElementById("confirmDialog");
+  const confirmTitle  = document.getElementById("confirmTitle");
+  const confirmBody   = document.getElementById("confirmBody");
+  const confirmOk     = document.getElementById("confirmOk");
+  const confirmCancel = document.getElementById("confirmCancel");
+
   const masterToggle    = document.getElementById("masterToggle");
   const statsEl         = document.getElementById("stats");
   const catListEl       = document.getElementById("catList");
@@ -64,8 +76,32 @@
     return n.length === 0 ? true : h.includes(n);
   }
 
+  function showConfirmDialog(title, body, okLabel) {
+    return new Promise((resolve) => {
+      confirmTitle.textContent = title;
+      confirmBody.textContent = body;
+      confirmOk.textContent = okLabel || "Remove";
+      const trigger = document.activeElement;
+      function cleanup(result) {
+        confirmOk.removeEventListener("click", onOk);
+        confirmCancel.removeEventListener("click", onCancel);
+        confirmDialog.removeEventListener("cancel", onCancel);
+        confirmDialog.close();
+        if (trigger && trigger.focus) trigger.focus();
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      confirmOk.addEventListener("click", onOk);
+      confirmCancel.addEventListener("click", onCancel);
+      confirmDialog.addEventListener("cancel", onCancel);
+      confirmDialog.showModal();
+      confirmCancel.focus();
+    });
+  }
+
   function confirmRemove(label, value) {
-    return window.confirm(`Remove from ${label}?\n\n${value}`);
+    return showConfirmDialog("Remove from " + label + "?", value);
   }
 
   // ---------------------------------------------------------------------------
@@ -472,7 +508,7 @@
   let searchDebounce = null;
   popupSearch.addEventListener("input", () => {
     clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(renderAll, 150);
+    searchDebounce = setTimeout(renderAll, SEARCH_DEBOUNCE_MS);
   });
 
   function matchesGlobalSearchForIgnore(q) {
@@ -573,9 +609,11 @@
     function handleRemoveClick(e) {
       e.preventDefault();
       e.stopPropagation();
-      if (!confirmRemove(scopeLabel, raw)) return;
-      editing = null;
-      onRemove();
+      confirmRemove(scopeLabel, raw).then((yes) => {
+        if (!yes) return;
+        editing = null;
+        onRemove();
+      });
     }
 
     function handleEnterEdit(e) {
@@ -603,7 +641,7 @@
       function flashError(msg) {
         input.style.borderColor = "#e74c3c";
         input.title = msg;
-        setTimeout(() => { input.style.borderColor = "#cfd8dc"; input.title = ""; }, 1200);
+        setTimeout(() => { input.style.borderColor = "#cfd8dc"; input.title = ""; }, ERROR_FLASH_MS);
       }
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
@@ -726,6 +764,8 @@
     const swatch = document.createElement("span");
     swatch.className = "cat-accent";
     swatch.style.backgroundColor = "#d1d5db";
+    swatch.setAttribute("aria-label", "Ignore List color");
+    swatch.title = "Ignore List";
     swatchWrap.appendChild(swatch);
     item.appendChild(swatchWrap);
 
@@ -877,7 +917,7 @@
           if (!check.ok) {
             addBtn.textContent = "Invalid";
             addBtn.title = check.reason;
-            setTimeout(() => { addBtn.textContent = "Add"; addBtn.title = ""; }, 1500);
+            setTimeout(() => { addBtn.textContent = "Add"; addBtn.title = ""; }, INVALID_RESET_MS);
             return;
           }
         }
@@ -885,7 +925,7 @@
         if (!currentDict.ignoreList) currentDict.ignoreList = [];
         if (currentDict.ignoreList.includes(raw)) {
           addBtn.textContent = "Exists";
-          setTimeout(() => { addBtn.textContent = "Add"; }, 700);
+          setTimeout(() => { addBtn.textContent = "Add"; }, BUTTON_FEEDBACK_MS);
           return;
         }
 
@@ -933,6 +973,8 @@
     const swatch = document.createElement("span");
     swatch.className = "cat-accent";
     swatch.style.backgroundColor = cat.color || "#FFFF00";
+    swatch.setAttribute("aria-label", "Category: " + (cat.name || ""));
+    swatch.title = cat.name || "";
 
     const colorInput = document.createElement("input");
     colorInput.type = "color";
@@ -1129,7 +1171,7 @@
           if (!check.ok) {
             addBtn.textContent = "Invalid";
             addBtn.title = check.reason;
-            setTimeout(() => { addBtn.textContent = "Add"; addBtn.title = ""; }, 1500);
+            setTimeout(() => { addBtn.textContent = "Add"; addBtn.title = ""; }, INVALID_RESET_MS);
             return;
           }
         }
@@ -1137,7 +1179,7 @@
         if (!cat.words) cat.words = [];
         if (cat.words.includes(raw)) {
           addBtn.textContent = "Exists";
-          setTimeout(() => { addBtn.textContent = "Add"; }, 700);
+          setTimeout(() => { addBtn.textContent = "Add"; }, BUTTON_FEEDBACK_MS);
           return;
         }
 

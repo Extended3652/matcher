@@ -13,6 +13,7 @@ importScripts("utils.js");
 
 const MENU_PARENT_ID = "cms-hl-parent";
 const MENU_SEP1_ID   = "cms-hl-sep1";
+const MENU_REBUILD_DEBOUNCE_MS = 200;
 const MENU_EXACT_ID  = "cms-hl-exact";
 const MENU_CS_ID     = "cms-hl-cs";
 const MENU_SEP2_ID   = "cms-hl-sep2";
@@ -395,5 +396,5 @@ chrome.storage.onChanged.addListener((changes, area) => {
   menuRebuildTimer = setTimeout(() => {
     menuRebuildTimer = null;
     buildContextMenu();
-  }, 200);
+  }, MENU_REBUILD_DEBOUNCE_MS);
 });
