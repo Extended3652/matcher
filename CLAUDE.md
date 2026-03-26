@@ -99,14 +99,28 @@ Full code review → 8 fixes implemented, tested (55 unit + 12 integration), mer
 - **`#bannerNameCatSelect` was removed** from popup.html
 
 ### Outstanding tech debt (not yet addressed)
-- **#8 Storage quota** — dictionary is ~7MB vs 10MB Chrome limit; should warn at 80%
 - **#11** No ESLint/Prettier
-- **#12** Magic numbers (debounce delays, chunk sizes) should be named constants
 - **#13** Callback nesting in background.js could use async/await
-- **#14** options.js (1510 lines) and popup.js (1188 lines) could be split into modules
+- **#14** options.js (~1600 lines) and popup.js (~1250 lines) could be split into modules
 - **#15** No integration/e2e tests (only unit tests for matcher engine)
-- **#16** Accessibility: confirm() dialogs, missing ARIA roles on modals, color-only highlights
 - **#17** Inconsistent error logging (mix of console.error/warn/silent)
-- **#18** .gitignore missing node_modules/, .env, OS temp files
 - **#19** No dark mode support
 - **#20** escHtml uses 4 chained .replace() calls instead of single-pass
+
+## Session log — 2026-03-26 Tech Debt Batch
+
+### What was done
+Addressed 4 tech debt items, merged to `main`:
+
+| # | Fix | Files |
+|---|-----|-------|
+| 8 | Storage quota warning — `checkStorageQuota()` using `chrome.storage.local.getBytesInUse()`; amber bar appears when usage ≥ 80% of 10 MB; runs on load and after every save/import | options.js, options.html |
+| 12 | Magic numbers → named constants — 20 hardcoded numeric values extracted to `const` declarations at top of each IIFE | background.js, content.js, options.js, popup.js |
+| 16 | Accessibility — replaced 3 `confirm()` calls with native `<dialog>` elements (`role="alertdialog"`, `aria-labelledby`, `aria-describedby`, focus management, Escape support); added `aria-label` + `title` to color swatches (`.client-swatch`, `.cat-accent`) | options.html, options.js, popup.html, popup.js |
+| 18 | `.gitignore` expanded — added `node_modules/`, `.env`, `.DS_Store`, `Thumbs.db`, editor dirs, swap files | .gitignore |
+
+### Key architectural changes to remember
+- **`#confirmDialog`** is a `<dialog>` element in both options.html and popup.html; each JS file has its own `showConfirmDialog(title, body, okLabel)` returning a Promise
+- **`#storageWarning`** is an alert bar in options.html, controlled by `checkStorageQuota()` in options.js
+- **Named constants** live at the top of each file's IIFE (not in a shared file), e.g. `DICT_SAVE_DEBOUNCE_MS`, `NODE_BATCH_SIZE`, `STORAGE_QUOTA_BYTES`
+- **`confirmRemove()` in popup.js** is now async (returns a Promise); callers use `.then()` instead of synchronous `if (!confirmRemove(...))`
