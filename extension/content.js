@@ -300,9 +300,10 @@
             return NodeFilter.FILTER_REJECT;
           }
 
-          // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body)
-          if (node.parentElement.isContentEditable) {
-            return NodeFilter.FILTER_REJECT;
+          // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body).
+          // Traverse ancestors because the editable attribute may be on a grandparent.
+          for (let ce = node.parentElement; ce; ce = ce.parentElement) {
+            if (ce.isContentEditable) return NodeFilter.FILTER_REJECT;
           }
 
           // Skip already-processed parents

@@ -1354,6 +1354,14 @@
       return;
     }
 
+    const duplicate = currentDict.categories.some(
+      c => c.name.toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      showMsg('A category named "' + name + '" already exists', "error");
+      return;
+    }
+
     currentDict.categories.push({
       id: "cat_" + Date.now(),
       name: name,
