@@ -1,734 +1,992 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>CMS Highlighter - Options</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      color: #333;
-      background: #f5f5f5;
-      padding: 20px;
-      max-width: 900px;
-      margin: 0 auto;
-    }
+  <head>
+    <meta charset="utf-8" />
+    <title>CMS Highlighter - Options</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg-page: #f5f5f5;
+        --bg-card: #fff;
+        --bg-card-alt: #fbfbfb;
+        --bg-header: #f9f9f9;
+        --bg-header-alt: #f7f7f7;
+        --bg-hover: #f0f0f0;
+        --bg-hover-subtle: #fafafa;
+        --bg-inset: #fcfcfc;
+        --text-primary: #333;
+        --text-secondary: #555;
+        --text-tertiary: #666;
+        --text-muted: #999;
+        --text-faint: #aaa;
+        --text-description: #777;
+        --text-strong: #111;
+        --text-label: #444;
+        --border: #ddd;
+        --border-input: #ccc;
+        --border-light: #eee;
+        --border-subtle: #e5e5e5;
+        --border-section: #e8e8e8;
+        --border-button: #bbb;
+        --accent: #3498db;
+        --accent-hover: #2980b9;
+        --danger: #e74c3c;
+        --danger-hover: #c0392b;
+        --msg-success-bg: #d5f5e3;
+        --msg-success-text: #1e8449;
+        --msg-success-border: #82e0aa;
+        --msg-error-bg: #fadbd8;
+        --msg-error-text: #922b21;
+        --msg-error-border: #f1948a;
+        --msg-warning-bg: #fff3cd;
+        --msg-warning-text: #856404;
+        --msg-warning-border: #ffc107;
+        --chip-bg: #e8f4fd;
+        --chip-text: #2980b9;
+        --chip-border: #bee5eb;
+        --pill-bg: #f5f5f5;
+        --pill-text: #555;
+        --pill-border: #ddd;
+        --dialog-shadow: rgba(0, 0, 0, 0.2);
+        --dialog-backdrop: rgba(0, 0, 0, 0.4);
+        --drag-handle: #bbb;
+        --drag-handle-hover: #888;
+        --summary-pill-border: rgba(0, 0, 0, 0.15);
+        --swatch-border: rgba(0, 0, 0, 0.2);
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        color: var(--text-primary);
+        background: var(--bg-page);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
 
-    h1 { font-size: 22px; margin-bottom: 8px; }
-    h2 { font-size: 16px; margin: 20px 0 8px; }
-    h3 { font-size: 14px; margin: 16px 0 6px; color: #555; }
+      h1 {
+        font-size: 22px;
+        margin-bottom: 8px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 20px 0 8px;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 16px 0 6px;
+        color: var(--text-secondary);
+      }
 
-    .section {
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
+      .section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
 
-    .row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-    .row label { min-width: 120px; font-weight: 500; }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .row label {
+        min-width: 120px;
+        font-weight: 500;
+      }
 
-    input[type="text"], textarea, select {
-      padding: 6px 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 13px;
-      font-family: inherit;
-    }
-    input[type="text"] { width: 100%; max-width: 300px; }
-    textarea { width: 100%; min-height: 200px; font-family: monospace; font-size: 12px; resize: vertical; }
+      input[type="text"],
+      textarea,
+      select {
+        padding: 6px 8px;
+        border: 1px solid var(--border-input);
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      input[type="text"] {
+        width: 100%;
+        max-width: 300px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 200px;
+        font-family: monospace;
+        font-size: 12px;
+        resize: vertical;
+      }
 
-    button {
-      padding: 6px 14px;
-      border: 1px solid #bbb;
-      border-radius: 4px;
-      background: #fff;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    button:hover { background: #f0f0f0; }
-    input[type="text"]:focus, textarea:focus, select:focus, button:focus-visible {
-      outline: 2px solid #3498db;
-      outline-offset: 1px;
-    }
-    button.primary { background: #3498db; color: #fff; border-color: #2980b9; }
-    button.primary:hover { background: #2980b9; }
-    button.danger { background: #e74c3c; color: #fff; border-color: #c0392b; }
-    button.danger:hover { background: #c0392b; }
+      button {
+        padding: 6px 14px;
+        border: 1px solid var(--border-button);
+        border-radius: 4px;
+        background: var(--bg-card);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button:hover {
+        background: var(--bg-hover);
+      }
+      input[type="text"]:focus,
+      textarea:focus,
+      select:focus,
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent-hover);
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      button.danger {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger-hover);
+      }
+      button.danger:hover {
+        background: var(--danger-hover);
+      }
 
-    .msg {
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin-bottom: 12px;
-      display: none;
-    }
-    .msg.success { display: block; background: #d5f5e3; color: #1e8449; border: 1px solid #82e0aa; }
-    .msg.error { display: block; background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
+      .msg {
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin-bottom: 12px;
+        display: none;
+      }
+      .msg.success {
+        display: block;
+        background: var(--msg-success-bg);
+        color: var(--msg-success-text);
+        border: 1px solid var(--msg-success-border);
+      }
+      .msg.error {
+        display: block;
+        background: var(--msg-error-bg);
+        color: var(--msg-error-text);
+        border: 1px solid var(--msg-error-border);
+      }
 
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
 
-    .new-cat-form {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-    .new-cat-form input[type="text"] { width: 100%; max-width: 200px; }
+      .new-cat-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .new-cat-form input[type="text"] {
+        width: 100%;
+        max-width: 200px;
+      }
 
-    #importFile { display: none; }
+      #importFile {
+        display: none;
+      }
 
-    /* Category editor */
-    .cat-editor {
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      margin-bottom: 12px;
-      overflow: hidden;
-    }
-    .cat-header {
-      display: flex;
-      align-items: center;
-      padding: 10px 12px;
-      background: #f9f9f9;
-      border-bottom: 1px solid #eee;
-      gap: 10px;
-      cursor: pointer;
-    }
-    .cat-header:hover { background: #f0f0f0; }
-    .cat-arrow {
-      transition: transform 0.2s;
-      font-size: 12px;
-      color: #999;
-    }
-    .cat-arrow.open { transform: rotate(90deg); }
-    .cat-header-name { flex: 1; font-weight: 500; }
-    .cat-header-count { font-size: 12px; color: #999; }
-    .cat-body { display: none; padding: 12px; }
-    .cat-body.open { display: block; }
+      /* Category editor */
+      .cat-editor {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        margin-bottom: 12px;
+        overflow: hidden;
+      }
+      .cat-header {
+        display: flex;
+        align-items: center;
+        padding: 10px 12px;
+        background: var(--bg-header);
+        border-bottom: 1px solid var(--border-light);
+        gap: 10px;
+        cursor: pointer;
+      }
+      .cat-header:hover {
+        background: var(--bg-hover);
+      }
+      .cat-arrow {
+        transition: transform 0.2s;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .cat-arrow.open {
+        transform: rotate(90deg);
+      }
+      .cat-header-name {
+        flex: 1;
+        font-weight: 500;
+      }
+      .cat-header-count {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .cat-body {
+        display: none;
+        padding: 12px;
+      }
+      .cat-body.open {
+        display: block;
+      }
 
-    .word-list {
-      width: 100%;
-      min-height: 150px;
-      font-family: monospace;
-      font-size: 12px;
-      line-height: 1.5;
-      resize: vertical;
-    }
+      .word-list {
+        width: 100%;
+        min-height: 150px;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        resize: vertical;
+      }
 
-    .add-word-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .add-word-row input[type="text"] { flex: 1; min-width: 240px; }
+      .add-word-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .add-word-row input[type="text"] {
+        flex: 1;
+        min-width: 240px;
+      }
 
-    .color-picker-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-      flex-wrap: wrap;
-    }
-    .color-picker-row input[type="color"] {
-      width: 40px;
-      height: 28px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      cursor: pointer;
-    }
+      .color-picker-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .color-picker-row input[type="color"] {
+        width: 40px;
+        height: 28px;
+        border: 1px solid var(--border-input);
+        border-radius: 4px;
+        cursor: pointer;
+      }
 
-    /* Clients UI */
-    .clients-topbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
-    }
+      /* Clients UI */
+      .clients-topbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
 
-    .clients-topbar input[type="text"] {
-      width: 100%;
-      max-width: 320px;
-    }
+      .clients-topbar input[type="text"] {
+        width: 100%;
+        max-width: 320px;
+      }
 
-    .client-add-box {
-      border: 1px solid #e5e5e5;
-      border-radius: 6px;
-      background: #fbfbfb;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
+      .client-add-box {
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        background: var(--bg-card-alt);
+        padding: 12px;
+        margin-bottom: 12px;
+      }
 
-    .client-add-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      align-items: end;
-    }
+      .client-add-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        align-items: end;
+      }
 
-    .client-add-grid .field label {
-      display: block;
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 4px;
-    }
+      .client-add-grid .field label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-bottom: 4px;
+      }
 
-    .client-add-grid .field input[type="text"],
-    .client-add-grid .field select {
-      width: 100%;
-    }
+      .client-add-grid .field input[type="text"],
+      .client-add-grid .field select {
+        width: 100%;
+      }
 
-    .client-add-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
+      .client-add-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
 
-    .client-list {
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      overflow: hidden;
-      background: #fff;
-    }
+      .client-list {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg-card);
+      }
 
-    .client-list-header {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 12px;
-      background: #f7f7f7;
-      border-bottom: 1px solid #eee;
-      font-size: 12px;
-      color: #666;
-    }
+      .client-list-header {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        background: var(--bg-header-alt);
+        border-bottom: 1px solid var(--border-light);
+        font-size: 12px;
+        color: var(--text-tertiary);
+      }
 
-    .client-list-body {
-      max-height: 420px;
-      overflow: auto;
-    }
+      .client-list-body {
+        max-height: 420px;
+        overflow: auto;
+      }
 
-    .client-card {
-      border-top: 1px solid #eee;
-    }
+      .client-card {
+        border-top: 1px solid var(--border-light);
+      }
 
-    .client-card:first-child {
-      border-top: none;
-    }
+      .client-card:first-child {
+        border-top: none;
+      }
 
-    .client-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      cursor: pointer;
-      background: #fff;
-    }
-    .client-header:hover { background: #fafafa; }
+      .client-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+        background: var(--bg-card);
+      }
+      .client-header:hover {
+        background: var(--bg-hover-subtle);
+      }
 
-    .client-arrow {
-      transition: transform 0.2s;
-      font-size: 12px;
-      color: #999;
-      width: 14px;
-      text-align: center;
-      flex: 0 0 auto;
-    }
-    .client-arrow.open { transform: rotate(90deg); }
+      .client-arrow {
+        transition: transform 0.2s;
+        font-size: 12px;
+        color: var(--text-muted);
+        width: 14px;
+        text-align: center;
+        flex: 0 0 auto;
+      }
+      .client-arrow.open {
+        transform: rotate(90deg);
+      }
 
-    .client-swatch {
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
-      border: 1px solid rgba(0,0,0,0.2);
-      flex: 0 0 auto;
-    }
+      .client-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid var(--swatch-border);
+        flex: 0 0 auto;
+      }
 
-    .client-pattern {
-      font-weight: 600;
-      flex: 1 1 auto;
-      min-width: 160px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      .client-pattern {
+        font-weight: 600;
+        flex: 1 1 auto;
+        min-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    /* .client-summary moved to end of stylesheet (Change 2: Summary pills) */
+      /* .client-summary moved to end of stylesheet (Change 2: Summary pills) */
 
-    .client-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex: 0 0 auto;
-    }
+      .client-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex: 0 0 auto;
+      }
 
-    .btn-del {
-      padding: 4px 10px;
-      border: 1px solid #c0392b;
-      background: #e74c3c;
-      color: #fff;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 700;
-    }
-    .btn-del:hover { background: #c0392b; }
+      .btn-del {
+        padding: 4px 10px;
+        border: 1px solid var(--danger-hover);
+        background: var(--danger);
+        color: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .btn-del:hover {
+        background: var(--danger-hover);
+      }
 
-    .client-body {
-      display: none;
-      padding: 12px;
-      background: #fcfcfc;
-      border-top: 1px solid #eee;
-    }
-    .client-body.open { display: block; }
+      .client-body {
+        display: none;
+        padding: 12px;
+        background: var(--bg-inset);
+        border-top: 1px solid var(--border-light);
+      }
+      .client-body.open {
+        display: block;
+      }
 
-    .client-edit-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
+      .client-edit-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
 
-    .client-edit-grid .field label {
-      display: block;
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 4px;
-    }
+      .client-edit-grid .field label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-bottom: 4px;
+      }
 
-    .client-edit-grid .field input[type="text"],
-    .client-edit-grid .field select {
-      width: 100%;
-    }
+      .client-edit-grid .field input[type="text"],
+      .client-edit-grid .field select {
+        width: 100%;
+      }
 
-    .client-add-grid .field.full {
-      grid-column: 1 / -1;
-    }
-    .client-add-grid .field textarea {
-      width: 100%;
-      min-height: 60px;
-      font-family: monospace;
-      font-size: 12px;
-      resize: vertical;
-    }
-    .client-add-grid .field.checkbox-field {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .client-add-grid .field.checkbox-field label {
-      margin-bottom: 0;
-      font-size: 12px;
-      color: #555;
-    }
-    .client-add-grid .form-divider {
-      border: none;
-      border-top: 1px solid #ddd;
-      margin: 4px 0;
-      grid-column: 1 / -1;
-    }
+      .client-add-grid .field.full {
+        grid-column: 1 / -1;
+      }
+      .client-add-grid .field textarea {
+        width: 100%;
+        min-height: 60px;
+        font-family: monospace;
+        font-size: 12px;
+        resize: vertical;
+      }
+      .client-add-grid .field.checkbox-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .client-add-grid .field.checkbox-field label {
+        margin-bottom: 0;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .client-add-grid .form-divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 4px 0;
+        grid-column: 1 / -1;
+      }
 
-    .pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid #ddd;
-      background: #f5f5f5;
-      color: #555;
-      margin-left: 6px;
-    }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid var(--pill-border);
+        background: var(--pill-bg);
+        color: var(--pill-text);
+        margin-left: 6px;
+      }
 
-    .muted {
-      color: #888;
-      font-size: 12px;
-    }
+      .muted {
+        color: var(--text-description);
+        font-size: 12px;
+      }
 
-    /* Collapsible Add Client toggle */
-    .client-add-toggle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      padding: 4px 0 8px;
-      user-select: none;
-    }
-    .client-add-toggle:hover .client-add-toggle-label { color: #111; }
-    .client-add-arrow {
-      font-size: 12px;
-      color: #999;
-      transition: transform 0.2s;
-      width: 14px;
-      text-align: center;
-    }
-    .client-add-arrow.open { transform: rotate(90deg); }
-    .client-add-toggle-label {
-      font-size: 14px;
-      font-weight: 600;
-      color: #444;
-    }
-    .client-add-content { display: none; }
-    .client-add-content.open { display: block; }
+      /* Collapsible Add Client toggle */
+      .client-add-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 4px 0 8px;
+        user-select: none;
+      }
+      .client-add-toggle:hover .client-add-toggle-label {
+        color: var(--text-strong);
+      }
+      .client-add-arrow {
+        font-size: 12px;
+        color: var(--text-muted);
+        transition: transform 0.2s;
+        width: 14px;
+        text-align: center;
+      }
+      .client-add-arrow.open {
+        transform: rotate(90deg);
+      }
+      .client-add-toggle-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-label);
+      }
+      .client-add-content {
+        display: none;
+      }
+      .client-add-content.open {
+        display: block;
+      }
 
-    /* Form section labels (replaces bare <hr> dividers) */
-    .client-add-grid .form-section-label {
-      grid-column: 1 / -1;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #aaa;
-      padding: 6px 0 2px;
-      border-top: 1px solid #e8e8e8;
-      margin-top: 2px;
-    }
+      /* Form section labels (replaces bare <hr> dividers) */
+      .client-add-grid .form-section-label {
+        grid-column: 1 / -1;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-faint);
+        padding: 6px 0 2px;
+        border-top: 1px solid var(--border-section);
+        margin-top: 2px;
+      }
 
-    /* Client list header column alignment */
-    .col-arrow  { width: 14px; flex: 0 0 auto; }
-    .col-swatch { width: 14px; flex: 0 0 auto; }
-    .col-pattern { flex: 1; }
-    .col-summary { flex: 1 1 auto; }
-    .col-actions { flex: 0 0 auto; width: 90px; text-align: right; }
+      /* Client list header column alignment */
+      .col-arrow {
+        width: 14px;
+        flex: 0 0 auto;
+      }
+      .col-swatch {
+        width: 14px;
+        flex: 0 0 auto;
+      }
+      .col-pattern {
+        flex: 1;
+      }
+      .col-summary {
+        flex: 1 1 auto;
+      }
+      .col-actions {
+        flex: 0 0 auto;
+        width: 90px;
+        text-align: right;
+      }
 
-    /* Change 9: Category section scroll */
-    #catEditors { max-height: 600px; overflow-y: auto; }
+      /* Change 9: Category section scroll */
+      #catEditors {
+        max-height: 600px;
+        overflow-y: auto;
+      }
 
-    /* Change 3: Search input wrapper */
-    .search-input-wrap {
-      position: relative;
-      display: inline-block;
-      width: 100%;
-      max-width: 320px;
-    }
-    .search-input-wrap .search-icon {
-      position: absolute;
-      left: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #999;
-      font-size: 14px;
-      pointer-events: none;
-    }
-    .search-input-wrap input[type="text"] {
-      padding-left: 28px;
-      width: 100%;
-      max-width: none;
-    }
+      /* Change 3: Search input wrapper */
+      .search-input-wrap {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+        max-width: 320px;
+      }
+      .search-input-wrap .search-icon {
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: 14px;
+        pointer-events: none;
+      }
+      .search-input-wrap input[type="text"] {
+        padding-left: 28px;
+        width: 100%;
+        max-width: none;
+      }
 
-    /* Change 4: Drag handles */
-    .cat-drag-handle {
-      cursor: grab;
-      color: #bbb;
-      font-size: 14px;
-      letter-spacing: 2px;
-      padding: 0 2px;
-      user-select: none;
-      flex: 0 0 auto;
-    }
-    .cat-drag-handle:hover { color: #888; }
-    .cat-drag-handle:active { cursor: grabbing; }
+      /* Change 4: Drag handles */
+      .cat-drag-handle {
+        cursor: grab;
+        color: var(--drag-handle);
+        font-size: 14px;
+        letter-spacing: 2px;
+        padding: 0 2px;
+        user-select: none;
+        flex: 0 0 auto;
+      }
+      .cat-drag-handle:hover {
+        color: var(--drag-handle-hover);
+      }
+      .cat-drag-handle:active {
+        cursor: grabbing;
+      }
 
-    /* Change 5: Empty states */
-    .empty-state {
-      padding: 32px 16px;
-      text-align: center;
-    }
-    .empty-state-icon {
-      font-size: 32px;
-      margin-bottom: 8px;
-      opacity: 0.5;
-    }
-    .empty-state-text {
-      font-size: 14px;
-      font-weight: 500;
-      color: #666;
-      margin-bottom: 4px;
-    }
-    .empty-state-hint {
-      font-size: 12px;
-      color: #999;
-    }
+      /* Change 5: Empty states */
+      .empty-state {
+        padding: 32px 16px;
+        text-align: center;
+      }
+      .empty-state-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+        opacity: 0.5;
+      }
+      .empty-state-text {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-tertiary);
+        margin-bottom: 4px;
+      }
+      .empty-state-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
 
-    /* Change 1: Collapsible form sections */
-    .client-add-grid .form-section-toggle {
-      grid-column: 1 / -1;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #aaa;
-      padding: 6px 0 2px;
-      border-top: 1px solid #e8e8e8;
-      margin-top: 2px;
-      cursor: pointer;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .client-add-grid .form-section-toggle:hover { color: #777; }
-    .form-section-arrow {
-      font-size: 10px;
-      transition: transform 0.2s;
-      display: inline-block;
-    }
-    .form-section-toggle:not(.collapsed) .form-section-arrow {
-      transform: rotate(90deg);
-    }
-    .client-add-grid .form-section-body {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      align-items: end;
-    }
-    .client-add-grid .form-section-body .field.full {
-      grid-column: 1 / -1;
-    }
-    .client-add-grid .form-section-body .field.checkbox-field {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .client-add-grid .form-section-body .field.checkbox-field label {
-      margin-bottom: 0;
-      font-size: 12px;
-      color: #555;
-    }
+      /* Change 1: Collapsible form sections */
+      .client-add-grid .form-section-toggle {
+        grid-column: 1 / -1;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-faint);
+        padding: 6px 0 2px;
+        border-top: 1px solid var(--border-section);
+        margin-top: 2px;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .client-add-grid .form-section-toggle:hover {
+        color: var(--text-description);
+      }
+      .form-section-arrow {
+        font-size: 10px;
+        transition: transform 0.2s;
+        display: inline-block;
+      }
+      .form-section-toggle:not(.collapsed) .form-section-arrow {
+        transform: rotate(90deg);
+      }
+      .client-add-grid .form-section-body {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        align-items: end;
+      }
+      .client-add-grid .form-section-body .field.full {
+        grid-column: 1 / -1;
+      }
+      .client-add-grid .form-section-body .field.checkbox-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .client-add-grid .form-section-body .field.checkbox-field label {
+        margin-bottom: 0;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
 
-    /* Change 2: Summary pills */
-    .client-summary {
-      font-size: 12px;
-      flex: 1 1 auto;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 3px;
-      align-items: center;
-    }
-    .summary-pill {
-      display: inline-block;
-      padding: 1px 6px;
-      border-radius: 999px;
-      font-size: 11px;
-      border: 1px solid rgba(0,0,0,0.15);
-      white-space: nowrap;
-      vertical-align: middle;
-    }
+      /* Change 2: Summary pills */
+      .client-summary {
+        font-size: 12px;
+        flex: 1 1 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        align-items: center;
+      }
+      .summary-pill {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-size: 11px;
+        border: 1px solid var(--summary-pill-border);
+        white-space: nowrap;
+        vertical-align: middle;
+      }
 
-    /* Change 7: Alias chips */
-    .alias-chips-preview {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 6px;
-    }
-    .alias-chip {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      background: #e8f4fd;
-      color: #2980b9;
-      border: 1px solid #bee5eb;
-    }
-    /* Accessible confirm dialog */
-    #confirmDialog {
-      border: none;
-      border-radius: 10px;
-      padding: 24px;
-      max-width: 380px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-      font-family: inherit;
-    }
-    #confirmDialog::backdrop {
-      background: rgba(0,0,0,0.4);
-    }
-    #confirmDialog h3 {
-      margin: 0 0 8px;
-      font-size: 15px;
-    }
-    #confirmDialog p {
-      margin: 0 0 18px;
-      font-size: 13px;
-      color: #555;
-      word-break: break-word;
-    }
-    .dialog-buttons {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .dialog-buttons button {
-      padding: 6px 16px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .btn-dialog-cancel {
-      background: #f5f5f5;
-      color: #333;
-    }
-    .btn-dialog-danger {
-      background: #e74c3c;
-      color: #fff;
-      border-color: #c0392b;
-    }
-  </style>
-</head>
-<body>
-  <dialog id="confirmDialog" role="alertdialog" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
-    <h3 id="confirmTitle"></h3>
-    <p id="confirmBody"></p>
-    <div class="dialog-buttons">
-      <button id="confirmCancel" class="btn-dialog-cancel">Cancel</button>
-      <button id="confirmOk" class="btn-dialog-danger">Remove</button>
-    </div>
-  </dialog>
+      /* Change 7: Alias chips */
+      .alias-chips-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .alias-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        background: var(--chip-bg);
+        color: var(--chip-text);
+        border: 1px solid var(--chip-border);
+      }
+      /* Accessible confirm dialog */
+      #confirmDialog {
+        border: none;
+        border-radius: 10px;
+        padding: 24px;
+        max-width: 380px;
+        background: var(--bg-card);
+        color: var(--text-primary);
+        box-shadow: 0 8px 30px var(--dialog-shadow);
+        font-family: inherit;
+      }
+      #confirmDialog::backdrop {
+        background: var(--dialog-backdrop);
+      }
+      #confirmDialog h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+      #confirmDialog p {
+        margin: 0 0 18px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        word-break: break-word;
+      }
+      .dialog-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .dialog-buttons button {
+        padding: 6px 16px;
+        border-radius: 6px;
+        border: 1px solid var(--border-input);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-dialog-cancel {
+        background: var(--bg-page);
+        color: var(--text-primary);
+      }
+      .btn-dialog-danger {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger-hover);
+      }
 
-  <h1>CMS Highlighter - Dictionary Editor</h1>
+      /* Utility classes for inline-style replacements */
+      .storage-warning {
+        padding: 10px 14px;
+        margin: 8px 0;
+        border-radius: 6px;
+        background: var(--msg-warning-bg);
+        color: var(--msg-warning-text);
+        border: 1px solid var(--msg-warning-border);
+        font-size: 13px;
+      }
+      .count-label {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .description {
+        font-size: 12px;
+        color: var(--text-description);
+      }
 
-  <div id="msg" class="msg" role="status" aria-live="polite"></div>
-  <div id="storageWarning" role="alert" aria-live="polite" style="display:none; padding:10px 14px; margin:8px 0; border-radius:6px; background:#fff3cd; color:#856404; border:1px solid #ffc107; font-size:13px;"></div>
-
-  <!-- Import / Export -->
-  <div class="section">
-    <h2>Import / Export</h2>
-    <div class="toolbar">
-      <button id="btnExport">Export Dictionary (JSON)</button>
-      <button id="btnImportHT">Import HighlightThis Backup</button>
-      <button id="btnImportJSON">Import CMS Highlighter JSON</button>
-      <input type="file" id="importFile" accept=".json,*">
-    </div>
-    <p style="font-size: 12px; color: #777;">
-      Import your existing HighlightThis backup file, or a previously exported CMS Highlighter dictionary.
-    </p>
-  </div>
-
-  <!-- Clients -->
-  <div class="section">
-    <h2>Clients <span id="clientCount" style="font-size:12px; color:#999;"></span></h2>
-    <p style="font-size: 12px; color: #777; margin-bottom: 10px;">
-      Match against the client name shown in the CMS header. Pattern supports * and ?.
-      Review uses the Default setting. Image/Profile/Question/Comment can each override Default.
-      <span class="pill">No highlight</span> uses grey.
-    </p>
-
-    <div class="client-add-box">
-      <div class="client-add-toggle" id="clientAddToggle">
-        <span class="client-add-arrow" id="clientAddArrow">&#9654;</span>
-        <span class="client-add-toggle-label">Add / Edit Client</span>
+      /* Dark mode */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-page: #1a1a2e;
+          --bg-card: #16213e;
+          --bg-card-alt: #1a2540;
+          --bg-header: #1e2a45;
+          --bg-header-alt: #1c2840;
+          --bg-hover: #223050;
+          --bg-hover-subtle: #1e2d48;
+          --bg-inset: #182438;
+          --text-primary: #e0e0e0;
+          --text-secondary: #b0b0b0;
+          --text-tertiary: #a0a0a0;
+          --text-muted: #808080;
+          --text-faint: #707070;
+          --text-description: #909090;
+          --text-strong: #f0f0f0;
+          --text-label: #c0c0c0;
+          --border: #2a2a4a;
+          --border-input: #3a3a5a;
+          --border-light: #252545;
+          --border-subtle: #2e2e4e;
+          --border-section: #2a2a4a;
+          --border-button: #4a4a6a;
+          --accent: #5dade2;
+          --accent-hover: #3498db;
+          --danger: #e74c3c;
+          --danger-hover: #c0392b;
+          --msg-success-bg: #1a3a2a;
+          --msg-success-text: #82e0aa;
+          --msg-success-border: #27ae60;
+          --msg-error-bg: #3a1a1a;
+          --msg-error-text: #f1948a;
+          --msg-error-border: #922b21;
+          --msg-warning-bg: #3a3018;
+          --msg-warning-text: #f0d060;
+          --msg-warning-border: #a08020;
+          --chip-bg: #1a2e4a;
+          --chip-text: #5dade2;
+          --chip-border: #2a4a6a;
+          --pill-bg: #252545;
+          --pill-text: #b0b0b0;
+          --pill-border: #3a3a5a;
+          --dialog-shadow: rgba(0, 0, 0, 0.5);
+          --dialog-backdrop: rgba(0, 0, 0, 0.6);
+          --drag-handle: #606060;
+          --drag-handle-hover: #909090;
+          --summary-pill-border: rgba(255, 255, 255, 0.15);
+          --swatch-border: rgba(255, 255, 255, 0.2);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <dialog id="confirmDialog" role="alertdialog" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+      <h3 id="confirmTitle"></h3>
+      <p id="confirmBody"></p>
+      <div class="dialog-buttons">
+        <button id="confirmCancel" class="btn-dialog-cancel">Cancel</button>
+        <button id="confirmOk" class="btn-dialog-danger">Remove</button>
       </div>
-      <div class="client-add-content" id="clientAddContent">
-      <div class="client-add-grid">
-        <div class="field">
-          <label>Client Name (as it appears in the CMS)</label>
-          <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)">
-        </div>
+    </dialog>
 
-        <div class="field">
-          <label>Default header (reviews)</label>
-          <select id="newClientReview"></select>
-        </div>
+    <h1>CMS Highlighter - Dictionary Editor</h1>
 
-        <div class="form-section-toggle collapsed" data-section="overrides">
-          <span class="form-section-arrow">&#9654;</span>
-          Per-type overrides
-        </div>
-        <div class="form-section-body" data-section="overrides" style="display:none;">
-          <div class="field">
-            <label>Image override</label>
-            <select id="newClientImage"></select>
-          </div>
-          <div class="field">
-            <label>Profile override</label>
-            <select id="newClientProfile"></select>
-          </div>
-          <div class="field">
-            <label>Question override</label>
-            <select id="newClientQuestion"></select>
-          </div>
-          <div class="field">
-            <label>Comment override</label>
-            <select id="newClientComment"></select>
-          </div>
-        </div>
+    <div id="msg" class="msg" role="status" aria-live="polite"></div>
+    <div id="storageWarning" class="storage-warning" role="alert" aria-live="polite" style="display: none"></div>
 
-        <div class="form-section-toggle collapsed" data-section="mentions">
-          <span class="form-section-arrow">&#9654;</span>
-          Mentions &amp; metadata
-        </div>
-        <div class="form-section-body" data-section="mentions" style="display:none;">
-          <div class="field">
-            <label>Text mentions</label>
-            <select id="newClientMentionCategory"></select>
-          </div>
-          <div class="field">
-            <label>Notes</label>
-            <input type="text" id="newClientNote" placeholder="Internal note">
-          </div>
-          <div class="field full">
-            <label>Aliases (one per line)</label>
-            <textarea id="newClientAliases" placeholder="Enter aliases, one per line"></textarea>
-            <div id="aliasChipsPreview" class="alias-chips-preview"></div>
-          </div>
-          <div class="field full checkbox-field">
-            <input type="checkbox" id="newClientIncludePatternInContent" checked>
-            <label for="newClientIncludePatternInContent">Also treat the client name as a mention in content (in addition to aliases)</label>
-          </div>
-        </div>
+    <!-- Import / Export -->
+    <div class="section">
+      <h2>Import / Export</h2>
+      <div class="toolbar">
+        <button id="btnExport">Export Dictionary (JSON)</button>
+        <button id="btnImportHT">Import HighlightThis Backup</button>
+        <button id="btnImportJSON">Import CMS Highlighter JSON</button>
+        <input type="file" id="importFile" accept=".json,*" />
       </div>
-
-      <div class="client-add-actions">
-        <button class="primary" id="btnAddClient">Add Client</button>
-        <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
-      </div>
-      </div><!-- /.client-add-content -->
+      <p class="description">
+        Import your existing HighlightThis backup file, or a previously exported CMS Highlighter dictionary.
+      </p>
     </div>
 
-    <div class="clients-topbar">
-      <div class="search-input-wrap">
-        <span class="search-icon">&#128269;</span>
-        <input type="text" id="clientSearch" placeholder="Search clients (pattern contains...)" aria-label="Search clients by pattern, note, or aliases">
+    <!-- Clients -->
+    <div class="section">
+      <h2>Clients <span id="clientCount" class="count-label"></span></h2>
+      <p class="description" style="margin-bottom: 10px">
+        Match against the client name shown in the CMS header. Pattern supports * and ?. Review uses the Default
+        setting. Image/Profile/Question/Comment can each override Default.
+        <span class="pill">No highlight</span> uses grey.
+      </p>
+
+      <div class="client-add-box">
+        <div class="client-add-toggle" id="clientAddToggle">
+          <span class="client-add-arrow" id="clientAddArrow">&#9654;</span>
+          <span class="client-add-toggle-label">Add / Edit Client</span>
+        </div>
+        <div class="client-add-content" id="clientAddContent">
+          <div class="client-add-grid">
+            <div class="field">
+              <label>Client Name (as it appears in the CMS)</label>
+              <input type="text" id="newClientPattern" placeholder="Client pattern (supports * and ?)" />
+            </div>
+
+            <div class="field">
+              <label>Default header (reviews)</label>
+              <select id="newClientReview"></select>
+            </div>
+
+            <div class="form-section-toggle collapsed" data-section="overrides">
+              <span class="form-section-arrow">&#9654;</span>
+              Per-type overrides
+            </div>
+            <div class="form-section-body" data-section="overrides" style="display: none">
+              <div class="field">
+                <label>Image override</label>
+                <select id="newClientImage"></select>
+              </div>
+              <div class="field">
+                <label>Profile override</label>
+                <select id="newClientProfile"></select>
+              </div>
+              <div class="field">
+                <label>Question override</label>
+                <select id="newClientQuestion"></select>
+              </div>
+              <div class="field">
+                <label>Comment override</label>
+                <select id="newClientComment"></select>
+              </div>
+            </div>
+
+            <div class="form-section-toggle collapsed" data-section="mentions">
+              <span class="form-section-arrow">&#9654;</span>
+              Mentions &amp; metadata
+            </div>
+            <div class="form-section-body" data-section="mentions" style="display: none">
+              <div class="field">
+                <label>Text mentions</label>
+                <select id="newClientMentionCategory"></select>
+              </div>
+              <div class="field">
+                <label>Notes</label>
+                <input type="text" id="newClientNote" placeholder="Internal note" />
+              </div>
+              <div class="field full">
+                <label>Aliases (one per line)</label>
+                <textarea id="newClientAliases" placeholder="Enter aliases, one per line"></textarea>
+                <div id="aliasChipsPreview" class="alias-chips-preview"></div>
+              </div>
+              <div class="field full checkbox-field">
+                <input type="checkbox" id="newClientIncludePatternInContent" checked />
+                <label for="newClientIncludePatternInContent"
+                  >Also treat the client name as a mention in content (in addition to aliases)</label
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="client-add-actions">
+            <button class="primary" id="btnAddClient">Add Client</button>
+            <span class="muted">Tip: leave overrides as "-" to inherit Default.</span>
+          </div>
+        </div>
+        <!-- /.client-add-content -->
       </div>
-      <span id="clientShowing" class="muted" aria-live="polite"></span>
-    </div>
 
-    <div class="client-list">
-      <div class="client-list-header">
-        <span class="col-arrow"></span>
-        <span class="col-swatch"></span>
-        <span class="col-pattern">Client pattern</span>
-        <span class="col-summary">Summary</span>
-        <span class="col-actions">Remove</span>
+      <div class="clients-topbar">
+        <div class="search-input-wrap">
+          <span class="search-icon">&#128269;</span>
+          <input
+            type="text"
+            id="clientSearch"
+            placeholder="Search clients (pattern contains...)"
+            aria-label="Search clients by pattern, note, or aliases"
+          />
+        </div>
+        <span id="clientShowing" class="muted" aria-live="polite"></span>
       </div>
-      <div id="clientListBody" class="client-list-body"></div>
+
+      <div class="client-list">
+        <div class="client-list-header">
+          <span class="col-arrow"></span>
+          <span class="col-swatch"></span>
+          <span class="col-pattern">Client pattern</span>
+          <span class="col-summary">Summary</span>
+          <span class="col-actions">Remove</span>
+        </div>
+        <div id="clientListBody" class="client-list-body"></div>
+      </div>
     </div>
-  </div>
 
-  <!-- Categories -->
-  <div class="section">
-    <h2>Categories</h2>
+    <!-- Categories -->
+    <div class="section">
+      <h2>Categories</h2>
 
-    <div class="new-cat-form">
-      <input type="text" id="newCatName" placeholder="New category name">
-      <input type="color" id="newCatColor" value="#FF9900">
-      <button class="primary" id="btnAddCat">Add Category</button>
+      <div class="new-cat-form">
+        <input type="text" id="newCatName" placeholder="New category name" />
+        <input type="color" id="newCatColor" value="#FF9900" />
+        <button class="primary" id="btnAddCat">Add Category</button>
+      </div>
+
+      <div id="catEditors"></div>
     </div>
 
-    <div id="catEditors"></div>
-  </div>
-
-  <script src="utils.js"></script>
-  <script src="matcher-core.js"></script>
-  <script src="options.js"></script>
-</body>
+    <script src="utils.js"></script>
+    <script src="matcher-core.js"></script>
+    <script src="options-state.js"></script>
+    <script src="options-clients.js"></script>
+    <script src="options-categories.js"></script>
+    <script src="options-import-export.js"></script>
+    <script src="options-init.js"></script>
+  </body>
 </html>

@@ -49,7 +49,7 @@ function parseWordEntry(rawEntry) {
 
   // Detect boundary markers BEFORE stripping whitespace
   const boundaryBefore = /^[\s\n\r\t]/.test(text);
-  const boundaryAfter  = /[\s\n\r\t]$/.test(text);
+  const boundaryAfter = /[\s\n\r\t]$/.test(text);
 
   // Strip all leading/trailing whitespace
   text = text.trim();
@@ -61,14 +61,14 @@ function parseWordEntry(rawEntry) {
     text = text.toLowerCase();
   }
 
-  const hasWildcard = (!literal) && (text.includes("*") || text.includes("?"));
+  const hasWildcard = !literal && (text.includes("*") || text.includes("?"));
 
   return {
     pattern: text,
     exact: exact,
     caseSensitive: caseSensitive,
     boundaryBefore: exact ? true : boundaryBefore,
-    boundaryAfter:  exact ? true : boundaryAfter,
+    boundaryAfter: exact ? true : boundaryAfter,
     hasWildcard: hasWildcard,
     literal: literal,
   };
@@ -84,8 +84,8 @@ function globToRegexFragment(pattern) {
 
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i];
-    const isFirst = (i === 0);
-    const isLast  = (i === chars.length - 1);
+    const isFirst = i === 0;
+    const isLast = i === chars.length - 1;
 
     // Escape support: treat next char literally (including * and ?)
     if (ch === "\\") {
@@ -101,24 +101,24 @@ function globToRegexFragment(pattern) {
       continue;
     }
 
-      if (ch === "*") {
-        const prev = chars[i - 1];
-        const next = chars[i + 1];
+    if (ch === "*") {
+      const prev = chars[i - 1];
+      const next = chars[i + 1];
 
-        // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
-        // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
-        if (prev === " " && next === " ") {
-          result += "[^\\s]+";
-        } else if (isFirst || isLast) {
-          // Bound match length to prevent worst-case backtracking.
-          // Allow apostrophes so wildcards span contractions (isn't, don't).
-          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
-        } else {
-          // Middle wildcard: bounded. Allow apostrophes for contractions.
-          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
-        }
-      } else if (ch === "?") {
-        result += "[\\s\\S]";
+      // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
+      // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
+      if (prev === " " && next === " ") {
+        result += "[^\\s]+";
+      } else if (isFirst || isLast) {
+        // Bound match length to prevent worst-case backtracking.
+        // Allow apostrophes so wildcards span contractions (isn't, don't).
+        result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
+      } else {
+        // Middle wildcard: bounded. Allow apostrophes for contractions.
+        result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
+      }
+    } else if (ch === "?") {
+      result += "[\\s\\S]";
     } else if (ch === " ") {
       result += "\\s+";
     } else {
@@ -186,11 +186,11 @@ function compileCategory(category) {
       const chunk = items.slice(start, start + MAX_ALTS_PER_REGEX);
 
       // Wrap each in a CAPTURE group so we can identify which matched
-      const combined = chunk.map(f => "(" + f.fragment + ")").join("|");
-      const metas = chunk.map(f => ({
+      const combined = chunk.map((f) => "(" + f.fragment + ")").join("|");
+      const metas = chunk.map((f) => ({
         hasWildcard: !!f.parsed.hasWildcard,
         isExact: !!f.parsed.exact,
-        patternLen: f.parsed.pattern.length
+        patternLen: f.parsed.pattern.length,
       }));
 
       try {
@@ -207,10 +207,10 @@ function compileCategory(category) {
   if (regexes.length === 0) return null;
 
   return {
-    id:      category.id,
-    name:    category.name,
-    color:   category.color,
-    fColor:  category.fColor,
+    id: category.id,
+    name: category.name,
+    color: category.color,
+    fColor: category.fColor,
     regexes: regexes,
   };
 }
@@ -242,7 +242,7 @@ function compileAll(config) {
     if (cat.enabled === false) continue;
     cat._warnings = warnings; // let compileCategory append failures here
     const compiled = compileCategory(cat);
-    delete cat._warnings;     // clean up temp property
+    delete cat._warnings; // clean up temp property
     if (compiled) compiledCategories.push(compiled);
   }
 
@@ -262,8 +262,8 @@ function pickBetterOverlap(a, b) {
   const aLen = a.end - a.start;
   const bLen = b.end - b.start;
 
-  const aContainsB = (a.start <= b.start) && (a.end >= b.end);
-  const bContainsA = (b.start <= a.start) && (b.end >= a.end);
+  const aContainsB = a.start <= b.start && a.end >= b.end;
+  const bContainsA = b.start <= a.start && b.end >= a.end;
 
   if (aContainsB && !bContainsA) {
     const aExact = !!a.isExact;
@@ -284,12 +284,12 @@ function pickBetterOverlap(a, b) {
 
   if (aWild !== bWild) return aWild ? b : a;
 
-  if (a.priority !== b.priority) return (a.priority < b.priority) ? a : b;
+  if (a.priority !== b.priority) return a.priority < b.priority ? a : b;
 
-  if (aLen !== bLen) return (aLen > bLen) ? a : b;
+  if (aLen !== bLen) return aLen > bLen ? a : b;
 
-  if (a.start !== b.start) return (a.start < b.start) ? a : b;
-  if (a.end !== b.end) return (a.end < b.end) ? a : b;
+  if (a.start !== b.start) return a.start < b.start ? a : b;
+  if (a.end !== b.end) return a.end < b.end ? a : b;
 
   return a;
 }
@@ -308,7 +308,10 @@ function findMatches(text, compiled) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(text)) !== null) {
-        if (m[0].length === 0) { re.lastIndex++; continue; }
+        if (m[0].length === 0) {
+          re.lastIndex++;
+          continue;
+        }
         ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
       }
     }
@@ -326,7 +329,10 @@ function findMatches(text, compiled) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(text)) !== null) {
-        if (m[0].length === 0) { re.lastIndex++; continue; }
+        if (m[0].length === 0) {
+          re.lastIndex++;
+          continue;
+        }
 
         // Identify which capture group matched
         let meta = null;
@@ -338,11 +344,11 @@ function findMatches(text, compiled) {
         }
 
         allMatches.push({
-          start:    m.index,
-          end:      m.index + m[0].length,
-          name:     cat.name,
-          color:    cat.color,
-          fColor:   cat.fColor,
+          start: m.index,
+          end: m.index + m[0].length,
+          name: cat.name,
+          color: cat.color,
+          fColor: cat.fColor,
           priority: i,
           isWildcard: meta ? !!meta.hasWildcard : false,
           isExact: meta ? !!meta.isExact : false,
@@ -358,9 +364,10 @@ function findMatches(text, compiled) {
     // instead of the naive O(N*M) .some() scan.
     ignoreRanges.sort((a, b) => a.start - b.start);
 
-    filtered = allMatches.filter(match => {
+    filtered = allMatches.filter((match) => {
       // Binary search: find first ignore range whose .end > match.start
-      let lo = 0, hi = ignoreRanges.length;
+      let lo = 0,
+        hi = ignoreRanges.length;
       while (lo < hi) {
         const mid = (lo + hi) >>> 1;
         if (ignoreRanges[mid].end <= match.start) lo = mid + 1;
@@ -401,7 +408,7 @@ function findMatches(text, compiled) {
       continue;
     }
 
-    const overlaps = (m.start < winner.end) && (m.end > winner.start);
+    const overlaps = m.start < winner.end && m.end > winner.start;
     if (!overlaps) {
       final.push(winner);
       winner = m;
@@ -413,12 +420,12 @@ function findMatches(text, compiled) {
 
   if (winner) final.push(winner);
 
-  return final.map(m => ({
-    start:        m.start,
-    end:          m.end,
+  return final.map((m) => ({
+    start: m.start,
+    end: m.end,
     categoryName: m.name,
-    color:        m.color,
-    fColor:       m.fColor,
+    color: m.color,
+    fColor: m.fColor,
   }));
 }
 

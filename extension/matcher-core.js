@@ -1,3 +1,5 @@
+/* global log, module */
+/* exported MatcherEngine */
 // =============================================================================
 // MATCHER ENGINE v6 — Chrome Extension Module
 // =============================================================================
@@ -22,7 +24,7 @@
 //   test\*file        → escaped wildcard (literal *)
 // =============================================================================
 
-(function() {
+(function () {
   "use strict";
 
   // ---------------------------------------------------------------------------
@@ -57,7 +59,7 @@
 
     // Detect boundary markers BEFORE stripping whitespace
     const boundaryBefore = /^[\s\n\r\t]/.test(text);
-    const boundaryAfter  = /[\s\n\r\t]$/.test(text);
+    const boundaryAfter = /[\s\n\r\t]$/.test(text);
 
     // Strip all leading/trailing whitespace
     text = text.trim();
@@ -69,18 +71,18 @@
       text = text.toLowerCase();
     }
 
-    const hasWildcard = (!literal) && (text.includes("*") || text.includes("?"));
+    const hasWildcard = !literal && (text.includes("*") || text.includes("?"));
 
     return {
       pattern: text,
       exact: exact,
       caseSensitive: caseSensitive,
       boundaryBefore: exact ? true : boundaryBefore,
-      boundaryAfter:  exact ? true : boundaryAfter,
+      boundaryAfter: exact ? true : boundaryAfter,
       hasWildcard: hasWildcard,
       literal: literal,
     };
-}
+  }
 
   // ---------------------------------------------------------------------------
   // STEP 2: Convert a glob pattern into a regex fragment string.
@@ -92,8 +94,8 @@
 
     for (let i = 0; i < chars.length; i++) {
       const ch = chars[i];
-      const isFirst = (i === 0);
-      const isLast  = (i === chars.length - 1);
+      const isFirst = i === 0;
+      const isLast = i === chars.length - 1;
 
       // Escape support: treat next char literally (including * and ?)
       if (ch === "\\") {
@@ -109,26 +111,26 @@
         continue;
       }
 
-        if (ch === "*") {
-          const prev = chars[i - 1];
-          const next = chars[i + 1];
+      if (ch === "*") {
+        const prev = chars[i - 1];
+        const next = chars[i + 1];
 
-          // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
-          // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
-          if (prev === " " && next === " ") {
-            result += "[^\\s]+";
-          } else if (isFirst || isLast) {
-            // Bound to 30 chars (non-whitespace, non-punctuation) to prevent
-            // catastrophic backtracking. Tighter than content.js's client-name
-            // globToRegex ({0,60} over [\s\S]) because word wildcards should
-            // stay within token boundaries.
-            result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
-          } else {
-            // Middle wildcard: same bounded class as leading/trailing.
-            result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
-          }
-        } else if (ch === "?") {
-          result += "[\\s\\S]";
+        // If "*" is surrounded by literal spaces in the PATTERN, treat it as "one token"
+        // Example: "took * days" => "*" matches exactly one non-space run (allows hyphens)
+        if (prev === " " && next === " ") {
+          result += "[^\\s]+";
+        } else if (isFirst || isLast) {
+          // Bound to 30 chars (non-whitespace, non-punctuation) to prevent
+          // catastrophic backtracking. Tighter than content.js's client-name
+          // globToRegex ({0,60} over [\s\S]) because word wildcards should
+          // stay within token boundaries.
+          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
+        } else {
+          // Middle wildcard: same bounded class as leading/trailing.
+          result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
+        }
+      } else if (ch === "?") {
+        result += "[\\s\\S]";
       } else if (ch === " ") {
         result += "\\s+";
       } else {
@@ -196,17 +198,17 @@
         const chunk = items.slice(start, start + MAX_ALTS_PER_REGEX);
 
         // Wrap each in a CAPTURE group so we can identify which matched
-        const combined = chunk.map(f => "(" + f.fragment + ")").join("|");
-        const metas = chunk.map(f => ({
+        const combined = chunk.map((f) => "(" + f.fragment + ")").join("|");
+        const metas = chunk.map((f) => ({
           hasWildcard: !!f.parsed.hasWildcard,
           isExact: !!f.parsed.exact,
-          patternLen: f.parsed.pattern.length
+          patternLen: f.parsed.pattern.length,
         }));
 
         try {
           regexes.push({ re: new RegExp(combined, flags), metas });
         } catch (e) {
-          console.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
+          log.error(`Failed to compile regex for "${category.name}" (${key}):`, e.message);
           if (Array.isArray(category._warnings)) {
             category._warnings.push(`"${category.name}" (${key}): ${e.message}`);
           }
@@ -217,10 +219,10 @@
     if (regexes.length === 0) return null;
 
     return {
-      id:      category.id,
-      name:    category.name,
-      color:   category.color,
-      fColor:  category.fColor,
+      id: category.id,
+      name: category.name,
+      color: category.color,
+      fColor: category.fColor,
       regexes: regexes,
     };
   }
@@ -255,7 +257,7 @@
       try {
         compiled = compileCategory(cat);
       } finally {
-        delete cat._warnings;   // clean up temp property even if compileCategory throws
+        delete cat._warnings; // clean up temp property even if compileCategory throws
       }
       if (compiled) compiledCategories.push(compiled);
     }
@@ -276,8 +278,8 @@
     const aLen = a.end - a.start;
     const bLen = b.end - b.start;
 
-    const aContainsB = (a.start <= b.start) && (a.end >= b.end);
-    const bContainsA = (b.start <= a.start) && (b.end >= a.end);
+    const aContainsB = a.start <= b.start && a.end >= b.end;
+    const bContainsA = b.start <= a.start && b.end >= a.end;
 
     if (aContainsB && !bContainsA) {
       const aExact = !!a.isExact;
@@ -298,12 +300,12 @@
 
     if (aWild !== bWild) return aWild ? b : a;
 
-    if (a.priority !== b.priority) return (a.priority < b.priority) ? a : b;
+    if (a.priority !== b.priority) return a.priority < b.priority ? a : b;
 
-    if (aLen !== bLen) return (aLen > bLen) ? a : b;
+    if (aLen !== bLen) return aLen > bLen ? a : b;
 
-    if (a.start !== b.start) return (a.start < b.start) ? a : b;
-    if (a.end !== b.end) return (a.end < b.end) ? a : b;
+    if (a.start !== b.start) return a.start < b.start ? a : b;
+    if (a.end !== b.end) return a.end < b.end ? a : b;
 
     return a;
   }
@@ -322,7 +324,10 @@
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
-          if (m[0].length === 0) { re.lastIndex++; continue; }
+          if (m[0].length === 0) {
+            re.lastIndex++;
+            continue;
+          }
           ignoreRanges.push({ start: m.index, end: m.index + m[0].length });
         }
       }
@@ -340,7 +345,10 @@
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
-          if (m[0].length === 0) { re.lastIndex++; continue; }
+          if (m[0].length === 0) {
+            re.lastIndex++;
+            continue;
+          }
 
           // Identify which capture group matched
           let meta = null;
@@ -352,11 +360,11 @@
           }
 
           allMatches.push({
-            start:    m.index,
-            end:      m.index + m[0].length,
-            name:     cat.name,
-            color:    cat.color,
-            fColor:   cat.fColor,
+            start: m.index,
+            end: m.index + m[0].length,
+            name: cat.name,
+            color: cat.color,
+            fColor: cat.fColor,
             priority: i,
             isWildcard: meta ? !!meta.hasWildcard : false,
             isExact: meta ? !!meta.isExact : false,
@@ -372,9 +380,10 @@
       // instead of the naive O(N*M) .some() scan.
       ignoreRanges.sort((a, b) => a.start - b.start);
 
-      filtered = allMatches.filter(match => {
+      filtered = allMatches.filter((match) => {
         // Binary search: find first ignore range whose .end > match.start
-        let lo = 0, hi = ignoreRanges.length;
+        let lo = 0,
+          hi = ignoreRanges.length;
         while (lo < hi) {
           const mid = (lo + hi) >>> 1;
           if (ignoreRanges[mid].end <= match.start) lo = mid + 1;
@@ -422,9 +431,15 @@
         continue;
       }
 
-      const overlaps = (m.start < winner.end) && (m.end > winner.start);
+      const overlaps = m.start < winner.end && m.end > winner.start;
       if (!overlaps) {
-        final.push({ start: winner.start, end: winner.end, categoryName: winner.name, color: winner.color, fColor: winner.fColor });
+        final.push({
+          start: winner.start,
+          end: winner.end,
+          categoryName: winner.name,
+          color: winner.color,
+          fColor: winner.fColor,
+        });
         winner = m;
         continue;
       }
@@ -432,7 +447,14 @@
       winner = pickBetterOverlap(winner, m);
     }
 
-    if (winner) final.push({ start: winner.start, end: winner.end, categoryName: winner.name, color: winner.color, fColor: winner.fColor });
+    if (winner)
+      final.push({
+        start: winner.start,
+        end: winner.end,
+        categoryName: winner.name,
+        color: winner.color,
+        fColor: winner.fColor,
+      });
 
     return final;
   }

@@ -1,3 +1,4 @@
+/* global log, MatcherEngine */
 // =============================================================================
 // CMS Highlighter - Content Script
 // - Walk text nodes
@@ -5,7 +6,7 @@
 // - Client name in navbar can be highlighted based on dict.clients rules
 // =============================================================================
 
-(function() {
+(function () {
   "use strict";
 
   const MARKER_ATTR = "data-cms-hl-processed";
@@ -31,9 +32,9 @@
   let clientRules = [];
   let categoryStyleByName = new Map();
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
-  let _cachedMentionKey = null;     // "<clientName>|<contentType>" — skip recompile when unchanged
-  let _highlightCount = 0;          // cached count of highlight spans on the page
-  let _clientNameEl = null;         // cached .navbar-inner .client-name element
+  let _cachedMentionKey = null; // "<clientName>|<contentType>" — skip recompile when unchanged
+  let _highlightCount = 0; // cached count of highlight spans on the page
+  let _clientNameEl = null; // cached .navbar-inner .client-name element
 
   // ---------------------------------------------------------------------------
   // Route guard
@@ -53,11 +54,11 @@
     const map = new Map();
     const cats = Array.isArray(dict.categories) ? dict.categories : [];
     for (const c of cats) {
-      const name = (c && c.name) ? String(c.name).trim() : "";
+      const name = c && c.name ? String(c.name).trim() : "";
       if (!name) continue;
       map.set(name, {
         color: c.color || "#FFFF00",
-        fColor: c.fColor || "#000000"
+        fColor: c.fColor || "#000000",
       });
     }
     return map;
@@ -80,7 +81,11 @@
 
   function getCmsContentType() {
     const el = document.querySelector("span.decisionAreaLabel");
-    const raw = el ? String(el.textContent || "").trim().toLowerCase() : "";
+    const raw = el
+      ? String(el.textContent || "")
+          .trim()
+          .toLowerCase()
+      : "";
 
     if (raw.includes("image")) return "Image";
     if (raw.includes("profile")) return "Profile";
@@ -166,7 +171,7 @@
     if (rule.includePatternInContent !== false && rule.pattern) {
       patterns.push(rule.pattern);
     }
-    (rule.aliases || []).forEach(a => {
+    (rule.aliases || []).forEach((a) => {
       const s = String(a || "").trim();
       if (s) patterns.push(s);
     });
@@ -182,7 +187,7 @@
       enabled: true,
     };
     const compiled = MatcherEngine.compileAll({ categories: [fakeCat], ignoreList: [] });
-    return (compiled.compiledCategories.length > 0) ? compiled : null;
+    return compiled.compiledCategories.length > 0 ? compiled : null;
   }
 
   // Merge category matches and mention matches into one sorted array.
@@ -192,8 +197,9 @@
     if (!catMatches || !catMatches.length) return mentionMatches;
     // Binary search: find first catMatch whose end > mm.start, then check overlap.
     // O(n log m) instead of O(n*m).
-    const filtered = mentionMatches.filter(mm => {
-      let lo = 0, hi = catMatches.length;
+    const filtered = mentionMatches.filter((mm) => {
+      let lo = 0,
+        hi = catMatches.length;
       while (lo < hi) {
         const mid = (lo + hi) >>> 1;
         if (catMatches[mid].end <= mm.start) lo = mid + 1;
@@ -287,50 +293,46 @@
     const nodes = [];
     // Cache once per call — avoids repeated .closest() traversal for every text node.
     const navbarInner = document.querySelector(".navbar-inner");
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          if (!node || !node.parentElement) return NodeFilter.FILTER_REJECT;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        if (!node || !node.parentElement) return NodeFilter.FILTER_REJECT;
 
-          // Skip nodes inside our own highlights
-          if (node.parentElement.classList.contains(HL_CLASS)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip the navbar — highlighted exclusively by applyClientHighlight()
-          // so that category spans don't override the block-level background colour.
-          if (navbarInner && navbarInner.contains(node.parentElement)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip script/style/textarea/input/select/noscript
-          const tag = node.parentElement.tagName || "";
-          if (SKIP_TAGS.has(tag)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body).
-          // Traverse ancestors because the editable attribute may be on a grandparent.
-          for (let ce = node.parentElement; ce; ce = ce.parentElement) {
-            if (ce.isContentEditable) return NodeFilter.FILTER_REJECT;
-          }
-
-          // Skip already-processed parents
-          if (node.parentElement.hasAttribute(MARKER_ATTR)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          // Only process nodes with visible text
-          if (!node.textContent || node.textContent.trim().length === 0) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          return NodeFilter.FILTER_ACCEPT;
+        // Skip nodes inside our own highlights
+        if (node.parentElement.classList.contains(HL_CLASS)) {
+          return NodeFilter.FILTER_REJECT;
         }
-      }
-    );
+
+        // Skip the navbar — highlighted exclusively by applyClientHighlight()
+        // so that category spans don't override the block-level background colour.
+        if (navbarInner && navbarInner.contains(node.parentElement)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // Skip script/style/textarea/input/select/noscript
+        const tag = node.parentElement.tagName || "";
+        if (SKIP_TAGS.has(tag)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body).
+        // Traverse ancestors because the editable attribute may be on a grandparent.
+        for (let ce = node.parentElement; ce; ce = ce.parentElement) {
+          if (ce.isContentEditable) return NodeFilter.FILTER_REJECT;
+        }
+
+        // Skip already-processed parents
+        if (node.parentElement.hasAttribute(MARKER_ATTR)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // Only process nodes with visible text
+        if (!node.textContent || node.textContent.trim().length === 0) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
 
     while (walker.nextNode()) {
       nodes.push(walker.currentNode);
@@ -347,10 +349,11 @@
     const out = [];
     for (const m of matches) {
       if (!m) continue;
-      const s = m.start, e = m.end;
+      const s = m.start,
+        e = m.end;
       if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
       if (s < 0 || e <= s || e > textLen) continue;
-      if ((e - s) > MAX_SPAN_LEN) continue;
+      if (e - s > MAX_SPAN_LEN) continue;
       if (!m.categoryName) continue;
       out.push(m);
     }
@@ -511,17 +514,17 @@
     _highlightCount = 0;
     const spans = document.querySelectorAll("." + HL_CLASS);
     const parents = new Set();
-    spans.forEach(span => {
+    spans.forEach((span) => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
       parents.add(parent);
     });
     // Normalize once per parent, not once per span (avoids redundant reflows)
-    parents.forEach(p => p.normalize());
+    parents.forEach((p) => p.normalize());
 
     const marked = document.querySelectorAll("[" + MARKER_ATTR + "]");
-    marked.forEach(el => el.removeAttribute(MARKER_ATTR));
+    marked.forEach((el) => el.removeAttribute(MARKER_ATTR));
 
     clearClientHighlight();
   }
@@ -590,7 +593,7 @@
 
           if (item.type === "element") {
             // Skip if a parent element is already queued (it will cover this node)
-            if (elementRoots.some(r => r !== item.node && r.contains(item.node))) continue;
+            if (elementRoots.some((r) => r !== item.node && r.contains(item.node))) continue;
             if (item.node === document.body || item.node === document.documentElement) {
               highlightAllChunked(getCmsContentRoot());
             } else {
@@ -598,7 +601,7 @@
             }
           } else {
             // Skip text nodes inside an element that's already queued
-            if (elementRoots.some(r => r.contains(item.node))) continue;
+            if (elementRoots.some((r) => r.contains(item.node))) continue;
             highlightTextNode(item.node);
           }
         }
@@ -671,7 +674,7 @@
 
     compiledMatcher = MatcherEngine.compileAll(dict);
     if (compiledMatcher.warnings && compiledMatcher.warnings.length > 0) {
-      console.warn("CMS Highlighter: some patterns failed to compile —", compiledMatcher.warnings);
+      log.warn("some patterns failed to compile —", compiledMatcher.warnings);
     }
     categoryStyleByName = buildCategoryStyleMap(dict);
     clientRules = Array.isArray(dict.clients) ? dict.clients.slice() : [];
@@ -692,7 +695,7 @@
 
     chrome.storage.local.get(["dictionary", "enabled"], (result) => {
       if (chrome.runtime.lastError) {
-        console.error("CMS Highlighter: storage error", chrome.runtime.lastError);
+        log.error("storage error", chrome.runtime.lastError);
         return;
       }
 
@@ -763,7 +766,7 @@
           highlights: _highlightCount,
           enabled: globalEnabled,
           cats: compiledMatcher && compiledMatcher.compiledCategories ? compiledMatcher.compiledCategories.length : 0,
-          clients: clientRules.length
+          clients: clientRules.length,
         });
         break;
 
@@ -789,7 +792,7 @@
 
     // Merge into pending: latest value wins per key.
     if (changes.dictionary) _pendingChanges.dictionary = changes.dictionary;
-    if (changes.enabled)    _pendingChanges.enabled    = changes.enabled;
+    if (changes.enabled) _pendingChanges.enabled = changes.enabled;
 
     // Debounce so rapid-fire edits from the options page coalesce into one
     // re-render instead of thrashing the DOM on every keystroke.
@@ -833,4 +836,3 @@
     init();
   }
 })();
-

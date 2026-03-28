@@ -23,19 +23,19 @@
 //   7. Outputs clean JSON the matcher engine can consume directly
 // =============================================================================
 
-const fs   = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 // --- Read input ---
 const inputPath = process.argv[2];
 if (!inputPath) {
-  console.error('Usage: node convert.js <path_to_backup_file>');
+  console.error("Usage: node convert.js <path_to_backup_file>");
   process.exit(1);
 }
 
 let raw;
 try {
-  raw = fs.readFileSync(inputPath, 'utf8');
+  raw = fs.readFileSync(inputPath, "utf8");
 } catch (e) {
   console.error(`Cannot read file: ${inputPath}`);
   console.error(e.message);
@@ -46,15 +46,15 @@ let backup;
 try {
   backup = JSON.parse(raw);
 } catch (e) {
-  console.error('File is not valid JSON.');
+  console.error("File is not valid JSON.");
   console.error(e.message);
   process.exit(1);
 }
 
 // --- Validate structure ---
 if (!backup.groups || !backup.order || !Array.isArray(backup.order)) {
-  console.error('File does not look like a HighlightThis backup.');
-  console.error('Expected top-level keys: groups, order');
+  console.error("File does not look like a HighlightThis backup.");
+  console.error("Expected top-level keys: groups, order");
   process.exit(1);
 }
 
@@ -70,9 +70,9 @@ if (!backup.groups || !backup.order || !Array.isArray(backup.order)) {
 // -----------------------------------------------------------------------------
 function cleanWord(raw) {
   // Remove trailing \n and \r only (not spaces)
-  let w = raw.replace(/[\n\r]+$/g, '');
+  let w = raw.replace(/[\n\r]+$/g, "");
   // Also remove leading \n\r if any (shouldn't exist but just in case)
-  w = w.replace(/^[\n\r]+/, '');
+  w = w.replace(/^[\n\r]+/, "");
   // If nothing left, skip
   if (w.length === 0) return null;
   return w;
@@ -102,7 +102,7 @@ function convertWords(words, findWords) {
     }
 
     if (findWords) {
-      out.push('//' + cleaned);
+      out.push("//" + cleaned);
     } else {
       out.push(cleaned);
     }
@@ -115,8 +115,8 @@ function convertWords(words, findWords) {
 // Main conversion
 // -----------------------------------------------------------------------------
 const output = {
-  ignoreList: [],        // words from the Unhighlight category
-  categories: []         // all other categories, in priority order
+  ignoreList: [], // words from the Unhighlight category
+  categories: [], // all other categories, in priority order
 };
 
 let totalWords = 0;
@@ -141,33 +141,33 @@ for (const id of backup.order) {
   totalSkipped += skipped;
 
   // Unhighlight is special — it becomes the ignoreList
-  if (group.name === 'Unhighlight') {
+  if (group.name === "Unhighlight") {
     output.ignoreList = words;
     continue;
   }
 
   // Everything else is a normal category
   output.categories.push({
-    id:     id,
-    name:   group.name,
-    color:  group.color,
-    fColor: group.fColor || '#FFFFFF',
-    words:  words
+    id: id,
+    name: group.name,
+    color: group.color,
+    fColor: group.fColor || "#FFFFFF",
+    words: words,
   });
 }
 
 // --- Write output (next to this script) ---
-const outFile = path.join(__dirname || '.', 'converted_dictionary.json');
-fs.writeFileSync(outFile, JSON.stringify(output, null, 2), 'utf8');
+const outFile = path.join(__dirname || ".", "converted_dictionary.json");
+fs.writeFileSync(outFile, JSON.stringify(output, null, 2), "utf8");
 
 // --- Report ---
-console.log('='.repeat(60));
-console.log('CONVERSION COMPLETE');
-console.log('='.repeat(60));
-console.log('');
+console.log("=".repeat(60));
+console.log("CONVERSION COMPLETE");
+console.log("=".repeat(60));
+console.log("");
 console.log(`  Input file:          ${inputPath}`);
 console.log(`  Output file:         ${outFile}`);
-console.log('');
+console.log("");
 console.log(`  Ignore list words:   ${output.ignoreList.length}`);
 console.log(`  Categories:          ${output.categories.length}`);
 console.log(`  Total words:         ${totalWords}`);
@@ -177,12 +177,12 @@ if (totalSkipped > 0) {
 if (skippedCategories > 0) {
   console.log(`  Skipped (disabled):  ${skippedCategories} categories`);
 }
-console.log('');
-console.log('  Category breakdown:');
+console.log("");
+console.log("  Category breakdown:");
 output.categories.forEach((cat, i) => {
-  const exactCount = cat.words.filter(w => w.startsWith('//')).length;
-  const label = exactCount > 0 ? ` (${exactCount} exact)` : '';
-  console.log(`    ${(i+1).toString().padStart(2)}. ${cat.name.padEnd(35)} ${cat.words.length} words${label}`);
+  const exactCount = cat.words.filter((w) => w.startsWith("//")).length;
+  const label = exactCount > 0 ? ` (${exactCount} exact)` : "";
+  console.log(`    ${(i + 1).toString().padStart(2)}. ${cat.name.padEnd(35)} ${cat.words.length} words${label}`);
 });
-console.log('');
-console.log('='.repeat(60));
+console.log("");
+console.log("=".repeat(60));

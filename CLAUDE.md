@@ -63,18 +63,24 @@ Only touch files and elements explicitly mentioned in the request. Nothing else.
 ## File map
 ```
 extension/
-  manifest.json      — Chrome extension manifest
-  background.js      — service worker / storage helpers
-  content.js         — page-level highlighter injected into CMS tabs
-  matcher-core.js    — shared pattern-matching engine
-  highlight.css      — highlight styles injected into CMS pages
-  options.html       — dictionary editor UI
-  options.js         — dictionary editor logic
-  popup.html         — browser-action popup UI
-  popup.js           — popup logic
-  utils.js           — shared helpers (sortKey, insertAlphabetically, clientGlobToRegex)
-tools/               — standalone Node scripts (seeding, testing)
-cms-fake/            — local CMS mock for manual testing
+  manifest.json             — Chrome extension manifest
+  background.js             — service worker (async/await, context menu, storage)
+  content.js                — page-level highlighter injected into CMS tabs
+  matcher-core.js           — shared pattern-matching engine
+  highlight.css             — highlight styles injected into CMS pages
+  utils.js                  — shared helpers (log, escHtml, sortKey, insertAlphabetically, clientGlobToRegex)
+  options.html              — dictionary editor UI (dark mode via CSS custom properties)
+  options-state.js          — options: DOM refs, state, helpers, cache, load/save
+  options-clients.js        — options: client CRUD, search, rendering
+  options-categories.js     — options: category CRUD, word editing, color picker
+  options-import-export.js  — options: JSON export, HighlightThis import
+  options-init.js           — options: entry point (calls load())
+  popup.html                — browser-action popup UI (dark mode via CSS custom properties)
+  popup-state.js            — popup: DOM refs, state, helpers, client banner
+  popup-categories.js       — popup: category/word rendering, drag-reorder, inline edit
+  popup-init.js             — popup: loadState, master toggle, search, stats
+tools/                      — standalone Node scripts (seeding, testing)
+cms-fake/                   — local CMS mock for manual testing
 ```
 
 ## Session log — 2026-03-26 Comprehensive Code Review
@@ -99,13 +105,7 @@ Full code review → 8 fixes implemented, tested (55 unit + 12 integration), mer
 - **`#bannerNameCatSelect` was removed** from popup.html
 
 ### Outstanding tech debt (not yet addressed)
-- **#11** No ESLint/Prettier
-- **#13** Callback nesting in background.js could use async/await
-- **#14** options.js (~1600 lines) and popup.js (~1250 lines) could be split into modules
 - **#15** No integration/e2e tests (only unit tests for matcher engine)
-- **#17** Inconsistent error logging (mix of console.error/warn/silent)
-- **#19** No dark mode support
-- **#20** escHtml uses 4 chained .replace() calls instead of single-pass
 
 ## Session log — 2026-03-26 Tech Debt Batch
 
@@ -124,3 +124,27 @@ Addressed 4 tech debt items, merged to `main`:
 - **`#storageWarning`** is an alert bar in options.html, controlled by `checkStorageQuota()` in options.js
 - **Named constants** live at the top of each file's IIFE (not in a shared file), e.g. `DICT_SAVE_DEBOUNCE_MS`, `NODE_BATCH_SIZE`, `STORAGE_QUOTA_BYTES`
 - **`confirmRemove()` in popup.js** is now async (returns a Promise); callers use `.then()` instead of synchronous `if (!confirmRemove(...))`
+
+## Session log — 2026-03-28 Tech Debt Batch 3
+
+### What was done
+Addressed 6 tech debt items (all remaining except #15):
+
+| # | Fix | Files |
+|---|-----|-------|
+| 20 | Single-pass `escHtml` — moved to utils.js with regex + lookup map | utils.js |
+| 17 | Consistent logging — `log.error/warn/debug` helper in utils.js; all files updated | utils.js, background.js, content.js, matcher-core.js, popup-*.js |
+| 13 | async/await — background.js fully converted; promisified wrappers for `contextMenus.create` | background.js |
+| 14 | File splitting — options.js → 5 files, popup.js → 3 files; old monoliths deleted | options-state.js, options-clients.js, options-categories.js, options-import-export.js, options-init.js, popup-state.js, popup-categories.js, popup-init.js, options.html, popup.html |
+| 19 | Dark mode — CSS custom properties + `@media (prefers-color-scheme: dark)` in both HTML files; inline styles moved to CSS classes | options.html, popup.html |
+| 11 | ESLint + Prettier — eslint.config.js (flat config), .prettierrc, npm scripts; all files formatted; 0 lint errors | eslint.config.js, .prettierrc, package.json, all JS files |
+
+### Key architectural changes to remember
+- **options.js and popup.js no longer exist** — replaced by split files loaded via `<script>` tags
+- **Global-scope file splitting** — no ES modules, no bundler; files share state via top-level `let`/`const` and function declarations; ESLint `/* global */` comments declare cross-file references
+- **utils.js is loaded everywhere** — by background.js via `importScripts`, by content.js via manifest content_scripts, by HTML pages via `<script>` tags
+- **Dark mode follows OS preference** — no JS toggle; uses `:root` CSS custom properties overridden in `@media (prefers-color-scheme: dark)`; `highlight.css` is intentionally NOT themed (highlights on CMS pages use their own theme)
+- **`#storageWarning` inline styles replaced** with `.storage-warning` CSS class in options.html
+- **`#clientBanner` inline styles replaced** with `.client-banner`, `.banner-client-name`, `.save-btn` CSS classes in popup.html
+- **ESLint flat config** (v10) — `/* exported */` directives not supported; `no-unused-vars` warnings for cross-file globals are expected
+- **npm scripts**: `npm run lint`, `npm run lint:fix`, `npm run format`

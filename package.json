@@ -7,6 +7,16 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node tools/test_assertions.js && node tools/test_real.js"
+    "test": "node tools/test_assertions.js && node tools/test_real.js",
+    "lint": "eslint extension/ tools/",
+    "lint:fix": "eslint --fix extension/ tools/",
+    "format": "prettier --write 'extension/**/*.{js,html,css}' 'tools/**/*.js'"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1"
   }
 }

@@ -20,22 +20,52 @@ const { compileAll, findMatches } = require("./matcher.js");
 
 const config = {
   ignoreList: [
-    "easy to use", "easy to clean", "easy to wear", "easy to open",
-    "store front", "near store",
+    "easy to use",
+    "easy to clean",
+    "easy to wear",
+    "easy to open",
+    "store front",
+    "near store",
     " elf ",
-    "drug store", "drugstore",
-    "highly recommend", "highly",
-    "beautiful", "basically", "because", "interesting",
-    "d*t burn", "d*t dry", "d*t hurt", "d*t sting", "d*t irritate",
-    "no burn", "no sting", "no issue", "no problem",
-    "from the", "from this", "of the", "of this",
-    "good for dry skin", "gentle on skin", "gentle on my",
-    "skin feel* smooth*", "skin feel* soft",
-    "worth it", "worth trying",
-    "after", "along", "because", "before",
-    "not harsh", "not dry", "not painful",
-    "as expected", "as well",
-    "stores", "stored",
+    "drug store",
+    "drugstore",
+    "highly recommend",
+    "highly",
+    "beautiful",
+    "basically",
+    "because",
+    "interesting",
+    "d*t burn",
+    "d*t dry",
+    "d*t hurt",
+    "d*t sting",
+    "d*t irritate",
+    "no burn",
+    "no sting",
+    "no issue",
+    "no problem",
+    "from the",
+    "from this",
+    "of the",
+    "of this",
+    "good for dry skin",
+    "gentle on skin",
+    "gentle on my",
+    "skin feel* smooth*",
+    "skin feel* soft",
+    "worth it",
+    "worth trying",
+    "after",
+    "along",
+    "because",
+    "before",
+    "not harsh",
+    "not dry",
+    "not painful",
+    "as expected",
+    "as well",
+    "stores",
+    "stored",
   ],
 
   categories: [
@@ -46,18 +76,45 @@ const config = {
       fColor: "#FFFFFF",
       enabled: true,
       words: [
-        "walmart", "wal*mart", "amazon", "target", "store",
-        "best buy", "bestbuy", "cvs", "walgreens",
-        "amazon*", "ebay", "e?bay", "etsy",
-        "costco", "sam's club", "sams club",
-        "home dep?t", "homedepot", "lowes", "lowe",
-        "nike", "adidas", "elf", "from elf",
-        "bought * from", "bought at", "bought from",
-        "order from", "order* from",
-        "available at", "available from",
-        "*etailer", "*purchase* from",
-        "apple", "google", "samsung",
-        "ikea", "netflix", "uber",
+        "walmart",
+        "wal*mart",
+        "amazon",
+        "target",
+        "store",
+        "best buy",
+        "bestbuy",
+        "cvs",
+        "walgreens",
+        "amazon*",
+        "ebay",
+        "e?bay",
+        "etsy",
+        "costco",
+        "sam's club",
+        "sams club",
+        "home dep?t",
+        "homedepot",
+        "lowes",
+        "lowe",
+        "nike",
+        "adidas",
+        "elf",
+        "from elf",
+        "bought * from",
+        "bought at",
+        "bought from",
+        "order from",
+        "order* from",
+        "available at",
+        "available from",
+        "*etailer",
+        "*purchase* from",
+        "apple",
+        "google",
+        "samsung",
+        "ikea",
+        "netflix",
+        "uber",
         "*.com",
       ],
     },
@@ -68,22 +125,45 @@ const config = {
       fColor: "#FFFFFF",
       enabled: true,
       words: [
-        "arriv*", "deliver*", "d?liver*",
-        "took * days", "took * weeks",
-        "came * fast", "came late*", "came in fast",
-        "ship*", "shipping", "shipped",
-        "never arrived", "never received",
-        "lost in transit", "lost in mail",
-        "tracking", "tracking number",
-        "wrong item", "wrong size", "wrong * sent",
-        "damaged", "damag*", "broken", "broke",
-        "missing", "not delivered", "not received",
-        "fast* shipping", "free shipping", "free delivery",
-        "next day", "following day",
-        "took forever", "took too long", "took days",
+        "arriv*",
+        "deliver*",
+        "d?liver*",
+        "took * days",
+        "took * weeks",
+        "came * fast",
+        "came late*",
+        "came in fast",
+        "ship*",
+        "shipping",
+        "shipped",
+        "never arrived",
+        "never received",
+        "lost in transit",
+        "lost in mail",
+        "tracking",
+        "tracking number",
+        "wrong item",
+        "wrong size",
+        "wrong * sent",
+        "damaged",
+        "damag*",
+        "broken",
+        "broke",
+        "missing",
+        "not delivered",
+        "not received",
+        "fast* shipping",
+        "free shipping",
+        "free delivery",
+        "next day",
+        "following day",
+        "took forever",
+        "took too long",
+        "took days",
         "fast and convenient",
         "arrived in a good *",
-        "package*", "*packag*",
+        "package*",
+        "*packag*",
       ],
     },
     {
@@ -93,8 +173,20 @@ const config = {
       fColor: "#FFFFFF",
       enabled: true,
       words: [
-        "//AF\n", "//AF", "//B S", "//DAT", "//F?U", "//FU",
-        "//SOB", "//Zalando", "//as!", "//as.", "//flu", "//nads", "//pm", "//s*hit*",
+        "//AF\n",
+        "//AF",
+        "//B S",
+        "//DAT",
+        "//F?U",
+        "//FU",
+        "//SOB",
+        "//Zalando",
+        "//as!",
+        "//as.",
+        "//flu",
+        "//nads",
+        "//pm",
+        "//s*hit*",
       ],
     },
     {
@@ -103,9 +195,7 @@ const config = {
       color: "#32CD32",
       fColor: "#FFFFFF",
       enabled: true,
-      words: [
-        "//ELF\r", "//ELF", "//GE", "//HP", "//MEC", "//UA", "//ego", "//elf",
-      ],
+      words: ["//ELF\r", "//ELF", "//GE", "//HP", "//MEC", "//UA", "//ego", "//elf"],
     },
     {
       id: "GIU_Clients_Exact",
@@ -113,10 +203,7 @@ const config = {
       color: "#FF9900",
       fColor: "#FFFFFF",
       enabled: true,
-      words: [
-        "//ATT\n", "//ATT", "//LG", "//Macys", "//anaconda",
-        "//booking.com", "//cuisinart", "//since birth",
-      ],
+      words: ["//ATT\n", "//ATT", "//LG", "//Macys", "//anaconda", "//booking.com", "//cuisinart", "//since birth"],
     },
     {
       id: "PRF",
@@ -125,15 +212,35 @@ const config = {
       fColor: "#FFFFFF",
       enabled: true,
       words: [
-        "sh*t", "sh?t", "sh?tty", "sh*show",
-        "f?ck", "fuc*", "fuck",
-        "a*hole", "ass", "assh*",
-        "b?tch", "dick", "cock",
-        "bull*", "crap*", "damn*", "d?mn*",
-        "idio*", "stupid*", "mofo", "mo?fo",
-        "never bought", "never ordered", "never used",
-        "did*t buy", "did*t order", "did*t purchase",
-        "not purchased", "have not tried",
+        "sh*t",
+        "sh?t",
+        "sh?tty",
+        "sh*show",
+        "f?ck",
+        "fuc*",
+        "fuck",
+        "a*hole",
+        "ass",
+        "assh*",
+        "b?tch",
+        "dick",
+        "cock",
+        "bull*",
+        "crap*",
+        "damn*",
+        "d?mn*",
+        "idio*",
+        "stupid*",
+        "mofo",
+        "mo?fo",
+        "never bought",
+        "never ordered",
+        "never used",
+        "did*t buy",
+        "did*t order",
+        "did*t purchase",
+        "not purchased",
+        "have not tried",
       ],
     },
     {
@@ -143,14 +250,13 @@ const config = {
       fColor: "#FFFFFF",
       enabled: true,
       words: [
-        "CS:HP",          // case-sensitive substring
-        "CS://ATT",       // case-sensitive exact
-        "LIT:test*file",  // literal asterisk
+        "CS:HP", // case-sensitive substring
+        "CS://ATT", // case-sensitive exact
+        "LIT:test*file", // literal asterisk
       ],
     },
   ],
 };
-
 
 // ---------------------------------------------------------------------------
 // SAMPLE REVIEWS + EXPECTED BEHAVIOR
@@ -209,12 +315,13 @@ const reviews = [
   {
     label: "Review 10 — nothing should match",
     text: "This lotion feels great on my skin. Very moisturizing and gentle.",
-    notes: 'SHOULD: nothing. All benign text.',
+    notes: "SHOULD: nothing. All benign text.",
   },
   {
     label: "Review 11 — case-sensitive CS:HP",
     text: "My HP printer works great. The hp brand is reliable.",
-    notes: 'SHOULD: first "HP" (CS Test, case-sensitive). NOT lowercase "hp" from CS:HP. But lowercase "hp" might match RET Exact //HP.',
+    notes:
+      'SHOULD: first "HP" (CS Test, case-sensitive). NOT lowercase "hp" from CS:HP. But lowercase "hp" might match RET Exact //HP.',
   },
   {
     label: "Review 12 — literal asterisk LIT:test*file",
@@ -222,7 +329,6 @@ const reviews = [
     notes: 'SHOULD: "test*file" (CS Test, literal match). NOT "testfile" (no asterisk in text).',
   },
 ];
-
 
 // ---------------------------------------------------------------------------
 // RUN
@@ -233,7 +339,9 @@ const compiled = compileAll(config);
 console.log("=".repeat(70));
 console.log(" MATCHER ENGINE v6 — TEST RESULTS");
 console.log("=".repeat(70));
-console.log(`\n  Categories: ${compiled.compiledCategories.length} | Ignore list: ${compiled.ignoreCompiled ? "active" : "empty"}\n`);
+console.log(
+  `\n  Categories: ${compiled.compiledCategories.length} | Ignore list: ${compiled.ignoreCompiled ? "active" : "empty"}\n`
+);
 
 reviews.forEach((review, i) => {
   const matches = findMatches(review.text, compiled);
@@ -246,7 +354,7 @@ reviews.forEach((review, i) => {
   if (matches.length === 0) {
     console.log(`    → (no highlights)`);
   } else {
-    matches.forEach(m => {
+    matches.forEach((m) => {
       const word = review.text.slice(m.start, m.end);
       console.log(`    → [${m.categoryName}] "${word}"`);
     });

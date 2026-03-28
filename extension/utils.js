@@ -5,27 +5,48 @@
 // Do NOT wrap in an IIFE — these need to be globals accessible to all scripts.
 // =============================================================================
 
+/* exported log, sortKey, insertAlphabetically, escHtml, clientGlobToRegex */
 "use strict";
+
+// ---------------------------------------------------------------------------
+// Logging helper — consistent prefix across all scripts
+// ---------------------------------------------------------------------------
+const log = {
+  error: (...args) => console.error("CMS Highlighter:", ...args),
+  warn: (...args) => console.warn("CMS Highlighter:", ...args),
+  debug: (...args) => console.debug("CMS Highlighter:", ...args),
+};
 
 // ---------------------------------------------------------------------------
 // Alphabetical insert helpers
 // ---------------------------------------------------------------------------
 // Strips CS: and // prefixes so that "CS://HP" sorts by "hp", not the prefix.
 function sortKey(raw) {
-  return String(raw || "").replace(/^(CS:)?(\/\/)?/, "").toLowerCase();
+  return String(raw || "")
+    .replace(/^(CS:)?(\/\/)?/, "")
+    .toLowerCase();
 }
 
 // Inserts word into arr at the correct alphabetical position (by bare word).
 // Binary search: O(log n) comparisons instead of O(n).
 function insertAlphabetically(arr, word) {
   const key = sortKey(word);
-  let lo = 0, hi = arr.length;
+  let lo = 0,
+    hi = arr.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
     if (sortKey(arr[mid]) < key) lo = mid + 1;
     else hi = mid;
   }
   arr.splice(lo, 0, word);
+}
+
+// ---------------------------------------------------------------------------
+// HTML escaping (single-pass)
+// ---------------------------------------------------------------------------
+const _escMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
+function escHtml(s) {
+  return String(s).replace(/[&<>"]/g, (m) => _escMap[m]);
 }
 
 // ---------------------------------------------------------------------------
@@ -38,5 +59,9 @@ function clientGlobToRegex(pattern) {
   if (!p) return null;
   const esc = p.replace(/[.+^${}()|[\]\\]/g, "\\$&");
   const rx = "^" + esc.replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
-  try { return new RegExp(rx, "i"); } catch (_) { return null; }
+  try {
+    return new RegExp(rx, "i");
+  } catch (_) {
+    return null;
+  }
 }

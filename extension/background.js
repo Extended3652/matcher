@@ -7,16 +7,17 @@
 //   3. Rebuilding context menu safely (no duplicate-id errors)
 // =============================================================================
 
+/* global importScripts, log, insertAlphabetically */
 "use strict";
 
 importScripts("utils.js");
 
 const MENU_PARENT_ID = "cms-hl-parent";
-const MENU_SEP1_ID   = "cms-hl-sep1";
+const MENU_SEP1_ID = "cms-hl-sep1";
 const MENU_REBUILD_DEBOUNCE_MS = 200;
-const MENU_EXACT_ID  = "cms-hl-exact";
-const MENU_CS_ID     = "cms-hl-cs";
-const MENU_SEP2_ID   = "cms-hl-sep2";
+const MENU_EXACT_ID = "cms-hl-exact";
+const MENU_CS_ID = "cms-hl-cs";
+const MENU_SEP2_ID = "cms-hl-sep2";
 const MENU_IGNORE_ID = "cms-hl-ignore";
 
 let menuBuildInProgress = false;
@@ -32,44 +33,41 @@ function isDuplicateIdError(err) {
   return err.message.toLowerCase().includes("duplicate id");
 }
 
-function safeRemoveAll(cb) {
-  chrome.contextMenus.removeAll(() => {
-    if (chrome.runtime.lastError) {
-      console.warn("CMS Highlighter: contextMenus.removeAll error:", chrome.runtime.lastError.message);
-      // Still continue; we will handle duplicates per-item below.
-    }
-    cb();
+// Promisified contextMenus.create (this API does NOT return a Promise in MV3)
+function createMenuItem(item) {
+  return new Promise((resolve) => {
+    chrome.contextMenus.create(item, () => {
+      resolve(chrome.runtime.lastError || null);
+    });
   });
 }
 
-function safeCreate(item) {
-  // Attempt create; if duplicate, remove existing id and re-create.
-  chrome.contextMenus.create(item, () => {
-    const err = chrome.runtime.lastError;
-    if (!err) return;
-
-    if (isDuplicateIdError(err)) {
-      // Remove the existing item with same ID then retry create.
-      chrome.contextMenus.remove(item.id, () => {
-        // Ignore remove errors, then retry create.
-        chrome.contextMenus.create(item, () => {
-          if (chrome.runtime.lastError) {
-            console.error(
-              "CMS Highlighter: contextMenus.create failed after retry:",
-              item.id,
-              chrome.runtime.lastError.message
-            );
-          }
-        });
-      });
-      return;
-    }
-
-    console.error("CMS Highlighter: contextMenus.create error:", item.id, err.message);
+// Promisified contextMenus.remove
+function removeMenuItem(id) {
+  return new Promise((resolve) => {
+    chrome.contextMenus.remove(id, () => {
+      resolve(chrome.runtime.lastError || null);
+    });
   });
 }
 
-function buildContextMenu() {
+async function safeCreate(item) {
+  const err = await createMenuItem(item);
+  if (!err) return;
+
+  if (isDuplicateIdError(err)) {
+    await removeMenuItem(item.id);
+    const retryErr = await createMenuItem(item);
+    if (retryErr) {
+      log.error("contextMenus.create failed after retry:", item.id, retryErr.message);
+    }
+    return;
+  }
+
+  log.error("contextMenus.create error:", item.id, err.message);
+}
+
+async function buildContextMenu() {
   // Serialize rebuilds so they cannot overlap.
   if (menuBuildInProgress) {
     menuBuildQueued = true;
@@ -77,103 +75,113 @@ function buildContextMenu() {
   }
   menuBuildInProgress = true;
 
-  safeRemoveAll(() => {
-    chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"], (result) => {
-      if (chrome.runtime.lastError) {
-        console.error("CMS Highlighter: storage get error:", chrome.runtime.lastError.message);
-        menuBuildInProgress = false;
-        if (menuBuildQueued) { menuBuildQueued = false; buildContextMenu(); }
-        return;
-      }
+  try {
+    await chrome.contextMenus.removeAll();
+  } catch (e) {
+    log.warn("contextMenus.removeAll error:", e.message);
+    // Still continue; we will handle duplicates per-item below.
+  }
 
-      const dict = result.dictionary;
-      if (!dict || !Array.isArray(dict.categories)) {
-        // No dictionary yet, nothing to build.
-        menuBuildInProgress = false;
-        if (menuBuildQueued) { menuBuildQueued = false; buildContextMenu(); }
-        return;
-      }
+  let result;
+  try {
+    result = await chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"]);
+  } catch (e) {
+    log.error("storage get error:", e.message);
+    menuBuildInProgress = false;
+    if (menuBuildQueued) {
+      menuBuildQueued = false;
+      buildContextMenu();
+    }
+    return;
+  }
 
-      const isExact = !!result.contextExact;
-      const isCS    = !!result.contextCaseSensitive;
+  const dict = result.dictionary;
+  if (!dict || !Array.isArray(dict.categories)) {
+    // No dictionary yet, nothing to build.
+    menuBuildInProgress = false;
+    if (menuBuildQueued) {
+      menuBuildQueued = false;
+      buildContextMenu();
+    }
+    return;
+  }
 
-      // Parent menu
-      safeCreate({
-        id: MENU_PARENT_ID,
-        title: "Add to Highlighter",
-        contexts: ["selection"],
-      });
+  const isExact = !!result.contextExact;
+  const isCS = !!result.contextCaseSensitive;
 
-      // One item per category
-      dict.categories.forEach((cat, i) => {
-        safeCreate({
-          id: `cms-hl-cat-${i}`,
-          parentId: MENU_PARENT_ID,
-          title: cat.name,
-          contexts: ["selection"],
-        });
-      });
-
-      // Separator
-      safeCreate({
-        id: MENU_SEP1_ID,
-        parentId: MENU_PARENT_ID,
-        type: "separator",
-        contexts: ["selection"],
-      });
-
-      // Exact toggle
-      safeCreate({
-        id: MENU_EXACT_ID,
-        parentId: MENU_PARENT_ID,
-        title: isExact ? "\u2611 Add as exact" : "\u2610 Add as exact",
-        contexts: ["selection"],
-      });
-
-      // Case-sensitive toggle
-      safeCreate({
-        id: MENU_CS_ID,
-        parentId: MENU_PARENT_ID,
-        title: isCS ? "\u2611 Case-sensitive" : "\u2610 Case-sensitive",
-        contexts: ["selection"],
-      });
-
-      // Separator
-      safeCreate({
-        id: MENU_SEP2_ID,
-        parentId: MENU_PARENT_ID,
-        type: "separator",
-        contexts: ["selection"],
-      });
-
-      // Ignore list — use the callback of the LAST create to clear the
-      // in-progress flag, so a queued rebuild cannot fire removeAll while
-      // earlier safeCreate calls are still being processed.
-      chrome.contextMenus.create({
-        id: MENU_IGNORE_ID,
-        parentId: MENU_PARENT_ID,
-        title: "Add to Ignore List",
-        contexts: ["selection"],
-      }, () => {
-        if (chrome.runtime.lastError) {
-          console.debug("CMS Highlighter: last menu item create error:", chrome.runtime.lastError.message);
-        }
-        menuBuildInProgress = false;
-
-        // If another rebuild request came in while we were building, run again once.
-        if (menuBuildQueued) {
-          menuBuildQueued = false;
-          buildContextMenu();
-        }
-      });
-    });
+  // Parent menu
+  await safeCreate({
+    id: MENU_PARENT_ID,
+    title: "Add to Highlighter",
+    contexts: ["selection"],
   });
+
+  // One item per category
+  for (let i = 0; i < dict.categories.length; i++) {
+    await safeCreate({
+      id: `cms-hl-cat-${i}`,
+      parentId: MENU_PARENT_ID,
+      title: dict.categories[i].name,
+      contexts: ["selection"],
+    });
+  }
+
+  // Separator
+  await safeCreate({
+    id: MENU_SEP1_ID,
+    parentId: MENU_PARENT_ID,
+    type: "separator",
+    contexts: ["selection"],
+  });
+
+  // Exact toggle
+  await safeCreate({
+    id: MENU_EXACT_ID,
+    parentId: MENU_PARENT_ID,
+    title: isExact ? "\u2611 Add as exact" : "\u2610 Add as exact",
+    contexts: ["selection"],
+  });
+
+  // Case-sensitive toggle
+  await safeCreate({
+    id: MENU_CS_ID,
+    parentId: MENU_PARENT_ID,
+    title: isCS ? "\u2611 Case-sensitive" : "\u2610 Case-sensitive",
+    contexts: ["selection"],
+  });
+
+  // Separator
+  await safeCreate({
+    id: MENU_SEP2_ID,
+    parentId: MENU_PARENT_ID,
+    type: "separator",
+    contexts: ["selection"],
+  });
+
+  // Ignore list — last item
+  const lastErr = await createMenuItem({
+    id: MENU_IGNORE_ID,
+    parentId: MENU_PARENT_ID,
+    title: "Add to Ignore List",
+    contexts: ["selection"],
+  });
+  if (lastErr) {
+    log.debug("last menu item create error:", lastErr.message);
+  }
+
+  menuBuildInProgress = false;
+
+  // If another rebuild request came in while we were building, run again once.
+  if (menuBuildQueued) {
+    menuBuildQueued = false;
+    buildContextMenu();
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Handle context menu clicks
 // ---------------------------------------------------------------------------
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const menuId = info.menuItemId;
   const selectedText = info.selectionText;
 
@@ -181,21 +189,19 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
   // Toggle exact mode
   if (menuId === MENU_EXACT_ID) {
-    chrome.storage.local.get(["contextExact"], (result) => {
-      const newVal = !(result.contextExact || false);
-      chrome.storage.local.set({ contextExact: newVal });
-      // storage.onChanged listener will debounce-rebuild the menu
-    });
+    const result = await chrome.storage.local.get(["contextExact"]);
+    const newVal = !(result.contextExact || false);
+    await chrome.storage.local.set({ contextExact: newVal });
+    // storage.onChanged listener will debounce-rebuild the menu
     return;
   }
 
   // Toggle case-sensitive mode
   if (menuId === MENU_CS_ID) {
-    chrome.storage.local.get(["contextCaseSensitive"], (result) => {
-      const newVal = !(result.contextCaseSensitive || false);
-      chrome.storage.local.set({ contextCaseSensitive: newVal });
-      // storage.onChanged listener will debounce-rebuild the menu
-    });
+    const result = await chrome.storage.local.get(["contextCaseSensitive"]);
+    const newVal = !(result.contextCaseSensitive || false);
+    await chrome.storage.local.set({ contextCaseSensitive: newVal });
+    // storage.onChanged listener will debounce-rebuild the menu
     return;
   }
 
@@ -231,99 +237,95 @@ function enqueueStorageWrite(fn) {
 // Add a word to a category
 // ---------------------------------------------------------------------------
 function addWordToCategory(text, catIndex, tab) {
-  enqueueStorageWrite(() => new Promise((resolve) => {
-    chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"], (result) => {
-      const dict = result.dictionary;
-      if (!dict || !Array.isArray(dict.categories) || !dict.categories[catIndex]) { resolve(); return; }
+  enqueueStorageWrite(async () => {
+    const result = await chrome.storage.local.get(["dictionary", "contextExact", "contextCaseSensitive"]);
+    const dict = result.dictionary;
+    if (!dict || !Array.isArray(dict.categories) || !dict.categories[catIndex]) return;
 
-      let word = text;
-      const isExact = result.contextExact || false;
-      const isCS = result.contextCaseSensitive || false;
+    let word = text;
+    const isExact = result.contextExact || false;
+    const isCS = result.contextCaseSensitive || false;
 
-      // Escape glob characters so selected text is treated literally
-      word = word.replace(/([*?])/g, "\\$1");
+    // Escape glob characters so selected text is treated literally
+    word = word.replace(/([*?])/g, "\\$1");
 
-      // Apply prefixes
-      if (isExact) word = "//" + word;
-      if (isCS) word = "CS:" + word;
+    // Apply prefixes
+    if (isExact) word = "//" + word;
+    if (isCS) word = "CS:" + word;
 
-      // Check for duplicate. For case-insensitive adds, compare lowercased so
-      // "Amazon" and "amazon" are not stored as separate redundant entries.
-      const dupCheck = isCS ? word : word.toLowerCase();
-      const existing = dict.categories[catIndex].words;
-      const isDup = isCS
-        ? existing.includes(word)
-        : existing.some(w => w.toLowerCase() === dupCheck);
-      if (isDup) {
-        notifyTab(tab, `"${text}" already in ${dict.categories[catIndex].name}`);
-        resolve();
-        return;
+    // Check for duplicate. For case-insensitive adds, compare lowercased so
+    // "Amazon" and "amazon" are not stored as separate redundant entries.
+    const dupCheck = isCS ? word : word.toLowerCase();
+    const existing = dict.categories[catIndex].words;
+    const isDup = isCS ? existing.includes(word) : existing.some((w) => w.toLowerCase() === dupCheck);
+    if (isDup) {
+      notifyTab(tab, `"${text}" already in ${dict.categories[catIndex].name}`);
+      return;
+    }
+
+    // Insert alphabetically instead of appending
+    insertAlphabetically(dict.categories[catIndex].words, word);
+
+    try {
+      await chrome.storage.local.set({ dictionary: dict });
+    } catch (e) {
+      log.error("failed to save word:", e.message);
+      notifyTab(tab, `Failed to save "${text}" — storage error`);
+      return;
+    }
+
+    notifyTab(
+      tab,
+      `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
+    );
+    if (tab && tab.id) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, { action: "refresh" });
+      } catch (_) {
+        /* swallow "no receiver" errors */
       }
-
-      // Insert alphabetically instead of appending
-      insertAlphabetically(dict.categories[catIndex].words, word);
-
-      chrome.storage.local.set({ dictionary: dict }, () => {
-        if (chrome.runtime.lastError) {
-          console.error("CMS Highlighter: failed to save word:", chrome.runtime.lastError.message);
-          notifyTab(tab, `Failed to save "${text}" — storage error`);
-          resolve();
-          return;
-        }
-        notifyTab(
-          tab,
-          `Added "${text}" to ${dict.categories[catIndex].name}${isExact ? " (exact)" : ""}${isCS ? " (CS)" : ""}`
-        );
-        if (tab && tab.id) {
-          chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
-            void chrome.runtime.lastError; // swallow "no receiver" errors
-          });
-        }
-        buildContextMenu();
-        resolve();
-      });
-    });
-  }));
+    }
+    buildContextMenu();
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Add a word to the ignore list
 // ---------------------------------------------------------------------------
 function addWordToIgnoreList(text, tab) {
-  enqueueStorageWrite(() => new Promise((resolve) => {
-    chrome.storage.local.get(["dictionary"], (result) => {
-      const dict = result.dictionary;
-      if (!dict) { resolve(); return; }
+  enqueueStorageWrite(async () => {
+    const result = await chrome.storage.local.get(["dictionary"]);
+    const dict = result.dictionary;
+    if (!dict) return;
 
-      if (!dict.ignoreList) dict.ignoreList = [];
+    if (!dict.ignoreList) dict.ignoreList = [];
 
-      if (dict.ignoreList.includes(text)) {
-        notifyTab(tab, `"${text}" already in Ignore List`);
-        resolve();
-        return;
+    if (dict.ignoreList.includes(text)) {
+      notifyTab(tab, `"${text}" already in Ignore List`);
+      return;
+    }
+
+    // Insert alphabetically instead of appending
+    insertAlphabetically(dict.ignoreList, text);
+
+    try {
+      await chrome.storage.local.set({ dictionary: dict });
+    } catch (e) {
+      log.error("failed to save ignore word:", e.message);
+      notifyTab(tab, `Failed to save "${text}" — storage error`);
+      return;
+    }
+
+    notifyTab(tab, `Added "${text}" to Ignore List`);
+    if (tab && tab.id) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, { action: "refresh" });
+      } catch (_) {
+        /* swallow "no receiver" errors */
       }
-
-      // Insert alphabetically instead of appending
-      insertAlphabetically(dict.ignoreList, text);
-
-      chrome.storage.local.set({ dictionary: dict }, () => {
-        if (chrome.runtime.lastError) {
-          console.error("CMS Highlighter: failed to save ignore word:", chrome.runtime.lastError.message);
-          notifyTab(tab, `Failed to save "${text}" — storage error`);
-          resolve();
-          return;
-        }
-        notifyTab(tab, `Added "${text}" to Ignore List`);
-        if (tab && tab.id) {
-          chrome.tabs.sendMessage(tab.id, { action: "refresh" }, () => {
-            void chrome.runtime.lastError; // swallow "no receiver" errors
-          });
-        }
-        buildContextMenu();
-        resolve();
-      });
-    });
-  }));
+    }
+    buildContextMenu();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -331,8 +333,8 @@ function addWordToIgnoreList(text, tab) {
 // ---------------------------------------------------------------------------
 function notifyTab(tab, message) {
   if (tab && tab.id) {
-    chrome.tabs.sendMessage(tab.id, { action: "notify", message: message }, () => {
-      void chrome.runtime.lastError; // swallow "no receiver" errors
+    chrome.tabs.sendMessage(tab.id, { action: "notify", message: message }).catch(() => {
+      /* swallow "no receiver" errors */
     });
   }
 }
@@ -340,49 +342,42 @@ function notifyTab(tab, message) {
 // ---------------------------------------------------------------------------
 // On install — set up defaults
 // ---------------------------------------------------------------------------
-chrome.runtime.onInstalled.addListener(() => {
-  // On first install or update, ensure we have a real dictionary.
-  // If storage is empty (no categories), seed from bundled default_dictionary.json.
-  chrome.storage.local.get(["dictionary", "enabled", "contextExact", "contextCaseSensitive"], (result) => {
-    const existing = result.dictionary;
-    const hasCats = !!(existing && Array.isArray(existing.categories) && existing.categories.length > 0);
+chrome.runtime.onInstalled.addListener(async () => {
+  const result = await chrome.storage.local.get(["dictionary", "enabled", "contextExact", "contextCaseSensitive"]);
+  const existing = result.dictionary;
+  const hasCats = !!(existing && Array.isArray(existing.categories) && existing.categories.length > 0);
 
-    if (hasCats) {
-      buildContextMenu();
-      return;
-    }
+  if (hasCats) {
+    buildContextMenu();
+    return;
+  }
 
-    // Seed from packaged default if available
+  // Seed from packaged default if available
+  try {
     const url = chrome.runtime.getURL("default_dictionary.json");
-    fetch(url)
-      .then(resp => resp.ok ? resp.json() : Promise.reject(new Error("Failed to load default_dictionary.json")))
-      .then((dict) => {
-        const payload = {
-          enabled: result.enabled !== false,
-          dictionary: dict,
-          contextExact: !!result.contextExact,
-          contextCaseSensitive: !!result.contextCaseSensitive,
-        };
-        chrome.storage.local.set(payload, () => {
-          buildContextMenu();
-        });
-      })
-      .catch(() => {
-        // Fallback: if fetch fails, at least ensure we have an empty structure
-        if (!existing) {
-          chrome.storage.local.set({
-            enabled: true,
-            dictionary: { ignoreList: [], categories: [] },
-            contextExact: false,
-            contextCaseSensitive: false,
-          }, () => {
-            buildContextMenu();
-          });
-        } else {
-          buildContextMenu();
-        }
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("Failed to load default_dictionary.json");
+    const dict = await resp.json();
+
+    await chrome.storage.local.set({
+      enabled: result.enabled !== false,
+      dictionary: dict,
+      contextExact: !!result.contextExact,
+      contextCaseSensitive: !!result.contextCaseSensitive,
+    });
+  } catch (_) {
+    // Fallback: if fetch fails, at least ensure we have an empty structure
+    if (!existing) {
+      await chrome.storage.local.set({
+        enabled: true,
+        dictionary: { ignoreList: [], categories: [] },
+        contextExact: false,
+        contextCaseSensitive: false,
       });
-  });
+    }
+  }
+
+  buildContextMenu();
 });
 
 // ---------------------------------------------------------------------------
