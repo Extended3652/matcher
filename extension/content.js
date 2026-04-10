@@ -80,17 +80,31 @@
   }
 
   function getCmsContentType() {
-    const el = document.querySelector("span.decisionAreaLabel");
+    // Scope to .navbar-inner first (consistent with getCmsClientNameEl) so we
+    // don't accidentally read a different decisionAreaLabel elsewhere on the page.
+    const el =
+      document.querySelector(".navbar-inner span.decisionAreaLabel") ||
+      document.querySelector("span.decisionAreaLabel");
     const raw = el
       ? String(el.textContent || "")
           .trim()
           .toLowerCase()
       : "";
 
-    if (raw.includes("image")) return "Image";
-    if (raw.includes("profile")) return "Profile";
-    if (raw.includes("question") || raw.includes("answer")) return "Question";
-    if (raw.includes("comment")) return "Comment";
+    if (!raw) return "Default";
+
+    // Exact match — covers standard single-word CMS labels
+    if (raw === "image") return "Image";
+    if (raw === "profile") return "Profile";
+    if (raw === "question" || raw === "answer") return "Question";
+    if (raw === "comment") return "Comment";
+
+    // Word-boundary fallback for compound labels (e.g. "Image Review")
+    if (/\bimage\b/.test(raw)) return "Image";
+    if (/\bprofile\b/.test(raw)) return "Profile";
+    if (/\bquestion\b/.test(raw) || /\banswer\b/.test(raw)) return "Question";
+    if (/\bcomment\b/.test(raw)) return "Comment";
+
     return "Default";
   }
 
@@ -141,6 +155,15 @@
     const name = String(clientName || "").trim();
     if (!name) return null;
 
+    const lower = name.toLowerCase();
+
+    // Pass 1: prefer exact pattern match (prevents "d*" from shadowing "diy")
+    for (const r of clientRules) {
+      if (!r || !(r._rx instanceof RegExp)) continue;
+      if (String(r.pattern || "").trim().toLowerCase() === lower) return r;
+    }
+
+    // Pass 2: first glob/wildcard match
     for (const r of clientRules) {
       if (!r || !(r._rx instanceof RegExp)) continue;
       if (r._rx.test(name)) return r;
