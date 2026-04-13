@@ -124,6 +124,16 @@ section("1. parseWordEntry");
 
   p = parseWordEntry("CS://ELF\r\n");
   assert(p && p.exact && p.caseSensitive && p.pattern === "ELF", "CS:// with trailing CRLF → trimmed, NOT lowercased");
+
+  // hasWildcard with consecutive asterisks
+  p = parseWordEntry("f**k");
+  assert(p && !p.hasWildcard && p.pattern === "f**k", "f**k: consecutive ** is NOT a wildcard");
+
+  p = parseWordEntry("f**k*");
+  assert(p && p.hasWildcard && p.pattern === "f**k*", "f**k*: trailing single * IS a wildcard despite ** earlier");
+
+  p = parseWordEntry("sh*t");
+  assert(p && p.hasWildcard && p.pattern === "sh*t", "sh*t: single * IS a wildcard");
 })();
 
 // =============================================================================
@@ -535,6 +545,88 @@ assertMatches(
   cfg([cat("a", "Ret", "#0f0", ["store"])], ["store front"]),
   "I went to the store front but the store was open",
   [{ cat: "Ret", word: "store" }]
+);
+
+// =============================================================================
+// 16. Consecutive asterisks — literal treatment
+// =============================================================================
+section("16. Consecutive asterisks — literal treatment");
+
+assertMatches(
+  "f**k matches literal f**k in text",
+  cfg([cat("a", "PRF", "#f00", ["f**k"])]),
+  "The review said f**k this product",
+  [{ cat: "PRF", word: "f**k" }]
+);
+
+assertMatches(
+  "f**k does NOT match 'fitting' (not a wildcard)",
+  cfg([cat("a", "PRF", "#f00", ["f**k"])]),
+  "The fitting was perfect",
+  []
+);
+
+assertMatches(
+  "f**k does NOT match 'fuck' (literal asterisks required)",
+  cfg([cat("a", "PRF", "#f00", ["f**k"])]),
+  "What the fuck happened",
+  []
+);
+
+assertMatches(
+  "f** matches literal f** but not 'fitting'",
+  cfg([cat("a", "PRF", "#f00", ["f**"])]),
+  "They said f** and fitting was fine",
+  [{ cat: "PRF", word: "f**" }]
+);
+
+assertMatches(
+  "a**hole matches literal a**hole but not 'asshole'",
+  cfg([cat("a", "PRF", "#f00", ["a**hole"])]),
+  "What an a**hole but not asshole",
+  [{ cat: "PRF", word: "a**hole" }]
+);
+
+assertMatches(
+  "single * wildcard can match literal * in text (sh*t matches sh*t)",
+  cfg([cat("a", "PRF", "#f00", ["sh*t"])]),
+  "They wrote sh*t in the review",
+  [{ cat: "PRF", word: "sh*t" }]
+);
+
+assertMatches(
+  "single * wildcard still matches non-asterisk text (sh*t matches shit)",
+  cfg([cat("a", "PRF", "#f00", ["sh*t"])]),
+  "What a load of shit here",
+  [{ cat: "PRF", word: "shit" }]
+);
+
+assertMatches(
+  "mixed: f**k* has literal ** + trailing wildcard, matches f**king",
+  cfg([cat("a", "PRF", "#f00", ["f**k*"])]),
+  "They said f**king was harsh",
+  [{ cat: "PRF", word: "f**king" }]
+);
+
+assertMatches(
+  "mixed: f**k* trailing wildcard matches f**ked",
+  cfg([cat("a", "PRF", "#f00", ["f**k*"])]),
+  "They f**ked up the order",
+  [{ cat: "PRF", word: "f**ked" }]
+);
+
+assertMatches(
+  "existing wildcard: amazon* still works (no regression)",
+  cfg([cat("a", "Ret", "#0f0", ["amazon*"])]),
+  "I love amazonian products",
+  [{ cat: "Ret", word: "amazonian" }]
+);
+
+assertMatches(
+  "existing wildcard: *etailer still works (no regression)",
+  cfg([cat("a", "Ret", "#0f0", ["*etailer"])]),
+  "That retailer is big",
+  [{ cat: "Ret", word: "retailer" }]
 );
 
 // =============================================================================

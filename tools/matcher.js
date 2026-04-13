@@ -21,6 +21,32 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
+// Detect whether a pattern contains an active wildcard (single * or ?).
+// Skips escaped chars (\* \?) and consecutive-asterisk runs (** or more).
+// ---------------------------------------------------------------------------
+function hasActiveWildcard(text) {
+  const chars = [...text];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "*") {
+      let runLen = 1;
+      while (i + runLen < chars.length && chars[i + runLen] === "*") {
+        runLen++;
+      }
+      if (runLen === 1) return true;
+      i += runLen - 1;
+      continue;
+    }
+    if (ch === "?") return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // STEP 1: Parse a raw word entry into a structured object.
 // ---------------------------------------------------------------------------
 function parseWordEntry(rawEntry) {
@@ -61,7 +87,7 @@ function parseWordEntry(rawEntry) {
     text = text.toLowerCase();
   }
 
-  const hasWildcard = !literal && (text.includes("*") || text.includes("?"));
+  const hasWildcard = !literal && hasActiveWildcard(text);
 
   return {
     pattern: text,
@@ -102,6 +128,21 @@ function globToRegexFragment(pattern) {
     }
 
     if (ch === "*") {
+      // Consecutive asterisks (** or more) → literal asterisks, not wildcards.
+      // Two consecutive wildcards serve no purpose (one already matches 0-30 chars).
+      // Consecutive * in patterns virtually always represent censoring (f**k, a**).
+      let runLen = 1;
+      while (i + runLen < chars.length && chars[i + runLen] === "*") {
+        runLen++;
+      }
+      if (runLen >= 2) {
+        for (let r = 0; r < runLen; r++) {
+          result += "\\*";
+        }
+        i += runLen - 1;
+        continue;
+      }
+
       const prev = chars[i - 1];
       const next = chars[i + 1];
 
@@ -112,10 +153,12 @@ function globToRegexFragment(pattern) {
       } else if (isFirst || isLast) {
         // Bound match length to prevent worst-case backtracking.
         // Allow apostrophes so wildcards span contractions (isn't, don't).
-        result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
+        // Include * in the exception list so wildcards can match literal
+        // asterisks in text (e.g. sh*t matches both "shit" and "sh*t").
+        result += "(?:[^\\s\\p{P}]|['\u2019*]){0,30}";
       } else {
         // Middle wildcard: bounded. Allow apostrophes for contractions.
-        result += "(?:[^\\s\\p{P}]|['\u2019]){0,30}";
+        result += "(?:[^\\s\\p{P}]|['\u2019*]){0,30}";
       }
     } else if (ch === "?") {
       result += "[\\s\\S]";
