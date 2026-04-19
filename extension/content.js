@@ -111,13 +111,13 @@
     return "Default";
   }
 
-  function getCmsContentRoot() {
-    return (
-      document.querySelector("div.ugcAndDetails") ||
-      document.querySelector("dd.moderatable") ||
-      document.querySelector("div.read") ||
-      document.body
-    );
+  function getCmsContentRoots() {
+    const selectors = ["div.ugcAndDetails", "dd.moderatable", "div.read"];
+    for (const sel of selectors) {
+      const els = document.querySelectorAll(sel);
+      if (els.length > 0) return Array.from(els);
+    }
+    return [document.body];
   }
 
   function globToRegex(pattern) {
@@ -534,6 +534,13 @@
     }
   }
 
+  function highlightAllRoots() {
+    const roots = getCmsContentRoots();
+    for (const root of roots) {
+      highlightAllChunked(root);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Clear highlights
   // ---------------------------------------------------------------------------
@@ -631,7 +638,7 @@
           removeAllHighlights();
           applyClientHighlight();
           _hlGeneration++;
-          highlightAllChunked(document.body);
+          highlightAllRoots();
           return;
         }
 
@@ -648,7 +655,7 @@
           if (item.type === "element") {
             if (hasAncestorInSet(item.node, elementRootSet, true)) continue;
             if (item.node === document.body || item.node === document.documentElement) {
-              highlightAllChunked(getCmsContentRoot());
+              highlightAllRoots();
             } else {
               highlightAllChunked(item.node);
             }
@@ -662,7 +669,7 @@
           removeAllHighlights();
           applyClientHighlight();
           _hlGeneration++;
-          highlightAllChunked(document.body);
+          highlightAllRoots();
         }
       }, MUTATION_DEBOUNCE_MS);
     });
@@ -771,7 +778,7 @@
       if (globalEnabled) {
         applyClientHighlight(); // sets currentMentionMatcher before highlighting
         _hlGeneration++;
-        highlightAllChunked(getCmsContentRoot());
+        highlightAllRoots();
         startObserver();
       }
     });
@@ -791,7 +798,7 @@
           removeAllHighlights();
           applyClientHighlight(); // sets currentMentionMatcher before highlighting
           _hlGeneration++;
-          highlightAllChunked(getCmsContentRoot());
+          highlightAllRoots();
           startObserver();
         } else {
           stopObserver();
@@ -814,7 +821,7 @@
           if (globalEnabled) {
             applyClientHighlight(); // sets currentMentionMatcher before highlighting
             _hlGeneration++;
-            highlightAllChunked(getCmsContentRoot());
+            highlightAllRoots();
             startObserver();
           } else {
             stopObserver();
@@ -886,7 +893,7 @@
       if (globalEnabled) {
         applyClientHighlight();
         _hlGeneration++;
-        highlightAllChunked(getCmsContentRoot());
+        highlightAllRoots();
         startObserver();
       } else {
         stopObserver();
