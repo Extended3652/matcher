@@ -22,6 +22,8 @@
   const IDLE_CALLBACK_TIMEOUT_MS = 500;
   const MUTATION_DEBOUNCE_MS = 80;
   const STORAGE_CHANGE_DEBOUNCE_MS = 150;
+  const MAX_PENDING_NODES = 500;
+  const MAX_HIGHLIGHT_SPANS = 5000;
 
   let globalEnabled = true;
 
@@ -337,10 +339,8 @@
           return NodeFilter.FILTER_REJECT;
         }
 
-        // Skip contenteditable regions (user-editable rich text, e.g. TinyMCE body).
-        // Traverse ancestors because the editable attribute may be on a grandparent.
-        for (let ce = node.parentElement; ce; ce = ce.parentElement) {
-          if (ce.isContentEditable) return NodeFilter.FILTER_REJECT;
+        if (node.parentElement.isContentEditable) {
+          return NodeFilter.FILTER_REJECT;
         }
 
         // Skip already-processed parents
@@ -558,15 +558,28 @@
   let observer = null;
   let debounceTimer = null;
   let pendingNodes = [];
+  let _pendingOverflow = false;
   let _storageChangeTimer = null;
+
+  function hasAncestorInSet(node, rootSet, skipSelf) {
+    let cur = skipSelf ? node.parentNode : node;
+    while (cur) {
+      if (rootSet.has(cur)) return true;
+      cur = cur.parentNode;
+    }
+    return false;
+  }
 
   function startObserver() {
     if (observer) return;
 
     observer = new MutationObserver((mutations) => {
       if (isBlockedRoute()) return;
+      if (_pendingOverflow) return;
 
       for (const mutation of mutations) {
+        if (_pendingOverflow) break;
+
         // Text node content changed in-place (e.g. SPA framework updating nodeValue/data)
         if (mutation.type === "characterData") {
           const node = mutation.target;
@@ -591,23 +604,32 @@
             }
           }
         }
+
+        if (pendingNodes.length >= MAX_PENDING_NODES) {
+          _pendingOverflow = true;
+        }
       }
 
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const batch = pendingNodes;
         pendingNodes = [];
+        const overflow = _pendingOverflow;
+        _pendingOverflow = false;
 
-        // Update client highlight + mention matcher FIRST so new nodes are
-        // highlighted with the correct patterns for the current client.
         applyClientHighlight();
 
-        // Deduplicate: skip nodes whose ancestor is already in the batch,
-        // since highlightAllChunked on the ancestor covers descendants.
-        const elementRoots = [];
+        if (overflow) {
+          removeAllHighlights();
+          applyClientHighlight();
+          highlightAllChunked(getCmsContentRoot());
+          return;
+        }
+
+        const elementRootSet = new Set();
         for (const item of batch) {
           if (item.type === "element" && item.node && item.node.parentNode) {
-            elementRoots.push(item.node);
+            elementRootSet.add(item.node);
           }
         }
 
@@ -615,18 +637,22 @@
           if (!item.node || !item.node.parentNode) continue;
 
           if (item.type === "element") {
-            // Skip if a parent element is already queued (it will cover this node)
-            if (elementRoots.some((r) => r !== item.node && r.contains(item.node))) continue;
+            if (hasAncestorInSet(item.node, elementRootSet, true)) continue;
             if (item.node === document.body || item.node === document.documentElement) {
               highlightAllChunked(getCmsContentRoot());
             } else {
               highlightAllChunked(item.node);
             }
           } else {
-            // Skip text nodes inside an element that's already queued
-            if (elementRoots.some((r) => r.contains(item.node))) continue;
+            if (hasAncestorInSet(item.node, elementRootSet, false)) continue;
             highlightTextNode(item.node);
           }
+        }
+
+        if (_highlightCount > MAX_HIGHLIGHT_SPANS) {
+          removeAllHighlights();
+          applyClientHighlight();
+          highlightAllChunked(getCmsContentRoot());
         }
       }, MUTATION_DEBOUNCE_MS);
     });
@@ -644,6 +670,7 @@
       debounceTimer = null;
     }
     pendingNodes = [];
+    _pendingOverflow = false;
   }
 
   // ---------------------------------------------------------------------------
