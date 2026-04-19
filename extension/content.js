@@ -622,7 +622,7 @@
         if (overflow) {
           removeAllHighlights();
           applyClientHighlight();
-          highlightAllChunked(getCmsContentRoot());
+          highlightAllChunked(document.body);
           return;
         }
 
@@ -652,7 +652,7 @@
         if (_highlightCount > MAX_HIGHLIGHT_SPANS) {
           removeAllHighlights();
           applyClientHighlight();
-          highlightAllChunked(getCmsContentRoot());
+          highlightAllChunked(document.body);
         }
       }, MUTATION_DEBOUNCE_MS);
     });
