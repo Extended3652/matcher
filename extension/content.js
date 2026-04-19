@@ -36,6 +36,7 @@
   let currentMentionMatcher = null; // compiled mention patterns for the current page's client
   let _cachedMentionKey = null; // "<clientName>|<contentType>" — skip recompile when unchanged
   let _highlightCount = 0; // cached count of highlight spans on the page
+  let _hlGeneration = 0; // incremented on full re-highlights to cancel stale async chunks
   let _clientNameEl = null; // cached .navbar-inner .client-name element
 
   // ---------------------------------------------------------------------------
@@ -436,6 +437,7 @@
     if (!compiledMatcher) return;
 
     if (!textNode || !textNode.parentNode) return;
+    if (textNode.parentNode.hasAttribute && textNode.parentNode.hasAttribute(MARKER_ATTR)) return;
 
     const text = textNode.textContent;
     if (!text || text.trim().length === 0) return;
@@ -510,7 +512,9 @@
 
     if (i >= nodes.length) return;
 
+    const gen = _hlGeneration;
     function next() {
+      if (gen !== _hlGeneration) return;
       const end = Math.min(i + NODE_BATCH_SIZE, nodes.length);
       while (i < end) {
         highlightTextNode(nodes[i++]);
@@ -599,7 +603,11 @@
             if (node.classList && node.classList.contains(HL_CLASS)) continue;
             pendingNodes.push({ type: "element", node });
           } else if (node.nodeType === Node.TEXT_NODE) {
-            if (node.parentElement && !node.parentElement.classList.contains(HL_CLASS)) {
+            if (
+              node.parentElement &&
+              !node.parentElement.classList.contains(HL_CLASS) &&
+              !node.parentElement.hasAttribute(MARKER_ATTR)
+            ) {
               pendingNodes.push({ type: "text", node });
             }
           }
@@ -622,6 +630,7 @@
         if (overflow) {
           removeAllHighlights();
           applyClientHighlight();
+          _hlGeneration++;
           highlightAllChunked(document.body);
           return;
         }
@@ -652,6 +661,7 @@
         if (_highlightCount > MAX_HIGHLIGHT_SPANS) {
           removeAllHighlights();
           applyClientHighlight();
+          _hlGeneration++;
           highlightAllChunked(document.body);
         }
       }, MUTATION_DEBOUNCE_MS);
@@ -760,6 +770,7 @@
 
       if (globalEnabled) {
         applyClientHighlight(); // sets currentMentionMatcher before highlighting
+        _hlGeneration++;
         highlightAllChunked(getCmsContentRoot());
         startObserver();
       }
@@ -779,6 +790,7 @@
         if (globalEnabled) {
           removeAllHighlights();
           applyClientHighlight(); // sets currentMentionMatcher before highlighting
+          _hlGeneration++;
           highlightAllChunked(getCmsContentRoot());
           startObserver();
         } else {
@@ -801,6 +813,7 @@
           removeAllHighlights();
           if (globalEnabled) {
             applyClientHighlight(); // sets currentMentionMatcher before highlighting
+            _hlGeneration++;
             highlightAllChunked(getCmsContentRoot());
             startObserver();
           } else {
@@ -872,6 +885,7 @@
       removeAllHighlights();
       if (globalEnabled) {
         applyClientHighlight();
+        _hlGeneration++;
         highlightAllChunked(getCmsContentRoot());
         startObserver();
       } else {
