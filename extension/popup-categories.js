@@ -36,6 +36,19 @@ function saveDictionary() {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-select state
+// ---------------------------------------------------------------------------
+let selectedItems = new Set();
+let isDragging = false;
+let dragMoved = false;
+let dragStartRaw = null;
+
+document.addEventListener("mouseup", () => {
+  isDragging = false;
+  // dragMoved is intentionally NOT reset here; the click handler resets it
+});
+
+// ---------------------------------------------------------------------------
 // Drag reorder (categories only)
 // ---------------------------------------------------------------------------
 let dragIndex = null;
@@ -99,6 +112,10 @@ function renderAll() {
 }
 
 function setOpenEditor(nextKey, skipRender) {
+  selectedItems.clear();
+  isDragging = false;
+  dragMoved = false;
+  dragStartRaw = null;
   if (openEditorKey === nextKey) {
     openEditorKey = null;
     editing = null;
@@ -196,7 +213,71 @@ function renderEditableRow(listEl, scopeLabel, scope, catIndex, entryIndex, raw,
     text.textContent = raw;
     row.appendChild(text);
 
+    row.dataset.raw = raw;
+    if (selectedItems.has(raw)) row.classList.add("selected");
+
     row.addEventListener("click", (e) => {
+      // Suppress click if a cross-row drag just finished
+      if (dragMoved) {
+        dragMoved = false;
+        return;
+      }
+
+      // In selection mode: Alt/Shift operate on the whole selection; plain click toggles
+      if (selectedItems.size > 0) {
+        if (e.altKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          const excludeCatId = (catIndex == null ? null : currentDict.categories[catIndex]?.id) || null;
+          showMoveToCategoryDialog(excludeCatId).then((destCat) => {
+            if (!destCat) return;
+            if (!destCat.words) destCat.words = [];
+            [...selectedItems].forEach((r) => {
+              if (!destCat.words.includes(r)) insertAlphabetically(destCat.words, r);
+              if (scope === "ignore") {
+                const i = currentDict.ignoreList.indexOf(r);
+                if (i !== -1) currentDict.ignoreList.splice(i, 1);
+              } else {
+                const src = currentDict.categories[catIndex].words;
+                const i = src.indexOf(r);
+                if (i !== -1) src.splice(i, 1);
+              }
+            });
+            selectedItems.clear();
+            saveDictionary();
+            renderAll();
+          });
+          return;
+        }
+        if (e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          confirmRemove(scopeLabel, `${selectedItems.size} items`).then((yes) => {
+            if (!yes) return;
+            [...selectedItems].forEach((r) => {
+              if (scope === "ignore") {
+                const i = currentDict.ignoreList.indexOf(r);
+                if (i !== -1) currentDict.ignoreList.splice(i, 1);
+              } else {
+                const src = currentDict.categories[catIndex].words;
+                const i = src.indexOf(r);
+                if (i !== -1) src.splice(i, 1);
+              }
+            });
+            selectedItems.clear();
+            saveDictionary();
+            renderAll();
+          });
+          return;
+        }
+        // Plain click: toggle this item in/out of selection
+        if (selectedItems.has(raw)) selectedItems.delete(raw);
+        else selectedItems.add(raw);
+        row.classList.toggle("selected", selectedItems.has(raw));
+        row.closest(".word-list")?.dispatchEvent(new CustomEvent("selectionchange"));
+        return;
+      }
+
       // Alt+click = move entry to another category
       if (e.altKey) {
         e.preventDefault();
@@ -354,12 +435,105 @@ function renderIgnoreRow() {
 
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move.";
+    hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move. Drag to multi-select.";
     editor.appendChild(hint);
 
     const list = document.createElement("div");
     list.className = "word-list";
     editor.appendChild(list);
+
+    const actionBar = document.createElement("div");
+    actionBar.className = "selection-bar";
+    actionBar.style.display = "none";
+    editor.appendChild(actionBar);
+
+    function updateActionBar() {
+      const n = selectedItems.size;
+      actionBar.innerHTML = "";
+      actionBar.style.display = n > 0 ? "" : "none";
+      if (n === 0) return;
+
+      const countSpan = document.createElement("span");
+      countSpan.textContent = `${n} selected`;
+      actionBar.appendChild(countSpan);
+
+      const moveBtn = document.createElement("button");
+      moveBtn.type = "button";
+      moveBtn.textContent = "Move to category…";
+      moveBtn.addEventListener("click", () => {
+        showMoveToCategoryDialog(null).then((destCat) => {
+          if (!destCat) return;
+          if (!destCat.words) destCat.words = [];
+          [...selectedItems].forEach((r) => {
+            if (!destCat.words.includes(r)) insertAlphabetically(destCat.words, r);
+            const i = currentDict.ignoreList.indexOf(r);
+            if (i !== -1) currentDict.ignoreList.splice(i, 1);
+          });
+          selectedItems.clear();
+          saveDictionary();
+          renderAll();
+        });
+      });
+      actionBar.appendChild(moveBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", () => {
+        confirmRemove("Ignore List", `${n} items`).then((yes) => {
+          if (!yes) return;
+          [...selectedItems].forEach((r) => {
+            const i = currentDict.ignoreList.indexOf(r);
+            if (i !== -1) currentDict.ignoreList.splice(i, 1);
+          });
+          selectedItems.clear();
+          saveDictionary();
+          renderAll();
+        });
+      });
+      actionBar.appendChild(deleteBtn);
+
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.textContent = "✕";
+      clearBtn.title = "Clear selection";
+      clearBtn.addEventListener("click", () => {
+        selectedItems.clear();
+        renderIgnoreWords();
+      });
+      actionBar.appendChild(clearBtn);
+    }
+
+    list.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      const row = e.target.closest(".word-row");
+      if (!row || row.querySelector("input")) return;
+      e.preventDefault();
+      isDragging = true;
+      dragMoved = false;
+      dragStartRaw = row.dataset.raw || null;
+    });
+
+    list.addEventListener("mouseover", (e) => {
+      if (!isDragging) return;
+      const row = e.target.closest(".word-row");
+      if (!row || !row.dataset.raw) return;
+      const r = row.dataset.raw;
+      if (!dragMoved && r !== dragStartRaw) {
+        dragMoved = true;
+        if (dragStartRaw) {
+          selectedItems.add(dragStartRaw);
+          list.querySelector(`[data-raw="${CSS.escape(dragStartRaw)}"]`)?.classList.add("selected");
+        }
+      }
+      if (dragMoved && !selectedItems.has(r)) {
+        selectedItems.add(r);
+        row.classList.add("selected");
+        updateActionBar();
+      }
+    });
+
+    list.addEventListener("selectionchange", updateActionBar);
 
     function renderIgnoreWords() {
       const wq = normalizeTrim(searchInput.value);
@@ -378,6 +552,7 @@ function renderIgnoreRow() {
         t.textContent = wq ? "No matches" : "No ignore entries";
         empty.appendChild(t);
         list.appendChild(empty);
+        updateActionBar();
         return;
       }
 
@@ -410,6 +585,8 @@ function renderIgnoreRow() {
           }
         );
       });
+
+      updateActionBar();
     }
 
     searchInput.addEventListener("input", renderIgnoreWords);
@@ -620,12 +797,107 @@ function renderCategoryRow(cat, index) {
 
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move.";
+    hint.textContent = "Tip: click to edit, Shift+click to remove, Alt+click to move. Drag to multi-select.";
     editor.appendChild(hint);
 
     const list = document.createElement("div");
     list.className = "word-list";
     editor.appendChild(list);
+
+    const actionBar = document.createElement("div");
+    actionBar.className = "selection-bar";
+    actionBar.style.display = "none";
+    editor.appendChild(actionBar);
+
+    function updateActionBar() {
+      const n = selectedItems.size;
+      actionBar.innerHTML = "";
+      actionBar.style.display = n > 0 ? "" : "none";
+      if (n === 0) return;
+
+      const countSpan = document.createElement("span");
+      countSpan.textContent = `${n} selected`;
+      actionBar.appendChild(countSpan);
+
+      const moveBtn = document.createElement("button");
+      moveBtn.type = "button";
+      moveBtn.textContent = "Move to…";
+      moveBtn.addEventListener("click", () => {
+        const excludeCatId = cat.id || null;
+        showMoveToCategoryDialog(excludeCatId).then((destCat) => {
+          if (!destCat) return;
+          if (!destCat.words) destCat.words = [];
+          [...selectedItems].forEach((r) => {
+            if (!destCat.words.includes(r)) insertAlphabetically(destCat.words, r);
+            const src = cat.words;
+            const i = src.indexOf(r);
+            if (i !== -1) src.splice(i, 1);
+          });
+          selectedItems.clear();
+          saveDictionary();
+          renderAll();
+        });
+      });
+      actionBar.appendChild(moveBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", () => {
+        confirmRemove(cat.name, `${n} items`).then((yes) => {
+          if (!yes) return;
+          [...selectedItems].forEach((r) => {
+            const i = cat.words.indexOf(r);
+            if (i !== -1) cat.words.splice(i, 1);
+          });
+          selectedItems.clear();
+          saveDictionary();
+          renderAll();
+        });
+      });
+      actionBar.appendChild(deleteBtn);
+
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.textContent = "✕";
+      clearBtn.title = "Clear selection";
+      clearBtn.addEventListener("click", () => {
+        selectedItems.clear();
+        renderWordList();
+      });
+      actionBar.appendChild(clearBtn);
+    }
+
+    list.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      const row = e.target.closest(".word-row");
+      if (!row || row.querySelector("input")) return;
+      e.preventDefault();
+      isDragging = true;
+      dragMoved = false;
+      dragStartRaw = row.dataset.raw || null;
+    });
+
+    list.addEventListener("mouseover", (e) => {
+      if (!isDragging) return;
+      const row = e.target.closest(".word-row");
+      if (!row || !row.dataset.raw) return;
+      const r = row.dataset.raw;
+      if (!dragMoved && r !== dragStartRaw) {
+        dragMoved = true;
+        if (dragStartRaw) {
+          selectedItems.add(dragStartRaw);
+          list.querySelector(`[data-raw="${CSS.escape(dragStartRaw)}"]`)?.classList.add("selected");
+        }
+      }
+      if (dragMoved && !selectedItems.has(r)) {
+        selectedItems.add(r);
+        row.classList.add("selected");
+        updateActionBar();
+      }
+    });
+
+    list.addEventListener("selectionchange", updateActionBar);
 
     function renderWordList() {
       const wq = normalizeTrim(searchInput.value);
@@ -644,6 +916,7 @@ function renderCategoryRow(cat, index) {
         t.textContent = wq ? "No matches" : "No words";
         empty.appendChild(t);
         list.appendChild(empty);
+        updateActionBar();
         return;
       }
 
@@ -675,6 +948,8 @@ function renderCategoryRow(cat, index) {
           }
         );
       });
+
+      updateActionBar();
     }
 
     searchInput.addEventListener("input", renderWordList);
