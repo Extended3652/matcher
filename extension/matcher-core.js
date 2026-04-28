@@ -173,7 +173,7 @@
           result += "(?:[^\\s\\p{P}]|['\u2019*]){0,30}";
         }
       } else if (ch === "?") {
-        result += "[\\s\\S]";
+        result += "[\\s\\S]?";
       } else if (ch === " ") {
         result += "\\s+";
       } else {
