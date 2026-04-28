@@ -234,12 +234,9 @@ function renderEditableRow(listEl, scopeLabel, scope, catIndex, entryIndex, raw,
           // Editor keys are "cat:INDEX", not the category's uuid.
           const destIndex = currentDict.categories.indexOf(destCat);
 
-          // One save, one render, one editor open.
+          // One save, one render — source drawer stays open for further moves.
           saveDictionary();
           renderAll();
-          if (destIndex !== -1) {
-            setOpenEditor(`cat:${destIndex}`);
-          }
         });
 
         return;
@@ -317,6 +314,7 @@ function renderIgnoreRow() {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.placeholder = "Search ignore list";
+    searchInput.value = normalizeTrim(popupSearch.value);
     searchRow.appendChild(searchInput);
     editor.appendChild(searchRow);
 
@@ -582,6 +580,7 @@ function renderCategoryRow(cat, index) {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.placeholder = "Search words in this category";
+    searchInput.value = normalizeTrim(popupSearch.value);
     searchRow.appendChild(searchInput);
     editor.appendChild(searchRow);
 
